@@ -16,59 +16,59 @@
       </div>
     </div>
     <ol id="pipeline" class="pipeline"></ol>
-    <div id="conn" class="conn off">offline</div>
+    <div id="conn" class="conn off">연결 끊김</div>
   </header>
 
   <main>
     <section class="card map-card">
       <div class="card-head">
-        <h2>Arena map · LiDAR</h2>
+        <h2>아레나 지도 · LiDAR</h2>
         <div class="legend">
           <span><i class="dot k-lidar"></i>LiDAR</span>
-          <span><i class="dot k-dog"></i>Dogs</span>
-          <span><i class="dot k-intr"></i>Intruder</span>
-          <span><i class="dot k-sound"></i>Sound DOA</span>
+          <span><i class="dot k-dog"></i>로봇견</span>
+          <span><i class="dot k-intr"></i>침입자</span>
+          <span><i class="dot k-sound"></i>소리 방향</span>
         </div>
       </div>
       <canvas id="map"></canvas>
       <div class="map-foot">
-        <span id="lidar-meta">no scan yet</span>
+        <span id="lidar-meta">스캔 없음</span>
         <span id="intruder-meta"></span>
       </div>
     </section>
 
     <section class="side">
       <div class="card">
-        <div class="card-head"><h2>Dogs</h2></div>
+        <div class="card-head"><h2>로봇견</h2></div>
         <div id="dogs" class="dogs"></div>
       </div>
 
       <div class="card">
-        <div class="card-head"><h2>Sound</h2><span id="sound-label" class="pill">—</span></div>
+        <div class="card-head"><h2>소리</h2><span id="sound-label" class="pill">—</span></div>
         <div class="sound">
           <canvas id="compass" width="120" height="120"></canvas>
           <dl>
-            <dt>Direction</dt><dd id="sound-doa">—</dd>
-            <dt>Level</dt><dd id="sound-level">—</dd>
-            <dt>Confidence</dt><dd id="sound-conf">—</dd>
-            <dt>Last alert</dt><dd id="sound-last">none</dd>
+            <dt>방향</dt><dd id="sound-doa">—</dd>
+            <dt>크기</dt><dd id="sound-level">—</dd>
+            <dt>신뢰도</dt><dd id="sound-conf">—</dd>
+            <dt>마지막 경보</dt><dd id="sound-last">없음</dd>
           </dl>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-head"><h2>Camera · Dog A</h2><span id="cam-meta" class="muted">—</span></div>
-        <div class="camera"><img id="cam" alt="Dog A camera"><span id="cam-empty">waiting for frames</span></div>
+        <div class="card-head"><h2>카메라 · Dog A</h2><span id="cam-meta" class="muted">—</span></div>
+        <div class="camera"><img id="cam" alt="Dog A 카메라"><span id="cam-empty">영상 대기 중</span></div>
       </div>
     </section>
 
     <section class="card timeline-card">
-      <div class="card-head"><h2>Event timeline</h2></div>
+      <div class="card-head"><h2>이벤트 타임라인</h2></div>
       <ul id="events" class="events"></ul>
     </section>
 
     <section class="card evidence-card">
-      <div class="card-head"><h2>Evidence snapshots</h2><span id="ev-count" class="muted">0</span></div>
+      <div class="card-head"><h2>증거 스냅샷</h2><span id="ev-count" class="muted">0</span></div>
       <div id="evidence" class="evidence"></div>
     </section>
   </main>

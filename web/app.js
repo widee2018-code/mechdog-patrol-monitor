@@ -1,10 +1,10 @@
-// MechDog Patrol Monitor: dashboard client.
-// Listens on /ws and renders every message type listed in docs/message_schema.md.
+// MechDog Patrol Monitor: 대시보드 클라이언트.
+// /ws 로 메시지를 받아 docs/message_schema.md 의 모든 메시지 종류를 화면에 그린다.
 
 const STATES = ["PATROL", "SUSPECT", "ALERT", "INTERCEPT", "CONTAIN", "HANDOVER", "RETURN"];
 const HOT = new Set(["ALERT", "INTERCEPT", "CONTAIN"]);
 const DOG_COLOR = { A: "#4da3ff", B: "#3ecf8e", C: "#f5b942" };
-const DOG_ROLE = { A: "추적견 Tracker", B: "봉쇄견 1 Blocker", C: "봉쇄견 2 Blocker" };
+const DOG_ROLE = { A: "추적견", B: "봉쇄견 1", C: "봉쇄견 2" };
 const STALE_MS = 2000;
 const TRAIL_LEN = 150;
 
@@ -12,8 +12,8 @@ const S = {
   arena: null,
   mission: "PATROL",
   dogs: {},          // name -> {msg, seen}
-  lidar: null,       // last lidar msg
-  intruder: null,    // last intruder msg
+  lidar: null,       // 마지막 LiDAR 메시지
+  intruder: null,    // 마지막 침입자 메시지
   trail: [],         // [[x, y], ...]
   sound: null,
   lastAlertSound: null,
@@ -24,7 +24,7 @@ const $ = (id) => document.getElementById(id);
 const num = (v, d) => (typeof v === "number" ? v.toFixed(d) : "—");
 const fmtTime = (ts) => new Date(ts * 1000).toLocaleTimeString("en-GB");
 
-// ------------------------------------------------------------------ pipeline
+// ------------------------------------------------------------------ 미션 단계 표시
 
 $("pipeline").innerHTML = STATES.map((s) => `<li data-s="${s}">${s}</li>`).join("");
 function renderPipeline() {
@@ -36,33 +36,33 @@ function renderPipeline() {
 }
 renderPipeline();
 
-// ------------------------------------------------------------------ handlers
+// ------------------------------------------------------------------ 메시지 처리
 
 const handlers = {
   mission(m) { S.mission = m.state; renderPipeline(); if (m.state === "PATROL") S.trail = []; },
   dog(m) {
     const prev = S.dogs[m.from];
     const first = !prev;
-    // Partial updates merge: the Pi sends x/y/heading, the dog sends battery/front_cm/tilt/state.
+    // 부분 업데이트를 합친다: Pi는 x/y/heading, 로봇견은 battery/front_cm/tilt/state를 보낸다.
     S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now() };
     if (first || Date.now() - lastDogRender > 250) renderDogs();
   },
   lidar(m) {
     S.lidar = m;
-    $("lidar-meta").textContent = `LiDAR ${m.points.length} pts · ${fmtTime(m.ts)}`;
+    $("lidar-meta").textContent = `LiDAR 점 ${m.points.length}개 · ${fmtTime(m.ts)}`;
   },
   intruder(m) {
     S.intruder = { ...m, seen: Date.now() };
     S.trail.push([m.x, m.y]);
     if (S.trail.length > TRAIL_LEN) S.trail.shift();
-    $("intruder-meta").textContent = `Intruder (${m.x.toFixed(2)}, ${m.y.toFixed(2)}) m · conf ${m.confidence}`;
+    $("intruder-meta").textContent = `침입자 (${m.x.toFixed(2)}, ${m.y.toFixed(2)}) m · 신뢰도 ${m.confidence}`;
   },
   sound(m) {
     if (m.alert) {
       S.lastAlertSound = m;
       $("sound-last").textContent = `${m.label} · ${fmtTime(m.ts)}`;
     }
-    if (S.sound && S.sound.ts > m.ts) return;  // replayed alert older than the live reading
+    if (S.sound && S.sound.ts > m.ts) return;  // 다시 보낸 경보가 실시간 값보다 오래된 경우
     S.sound = m;
     $("sound-label").textContent = m.label;
     $("sound-label").classList.toggle("alert", !!m.alert);
@@ -90,13 +90,13 @@ function addEvidence(m) {
   if (S.evidenceKeys.has(key)) return;
   S.evidenceKeys.add(key);
   const fig = document.createElement("figure");
-  fig.innerHTML = `<img alt="evidence"><figcaption>Dog ${m.from} · ${fmtTime(m.ts)} · ${m.note ?? ""}</figcaption>`;
+  fig.innerHTML = `<img alt="증거"><figcaption>Dog ${m.from} · ${fmtTime(m.ts)} · ${m.note ?? ""}</figcaption>`;
   fig.firstChild.src = m.image;
   $("evidence").prepend(fig);
   $("ev-count").textContent = S.evidenceKeys.size;
 }
 
-// ------------------------------------------------------------------ dogs panel
+// ------------------------------------------------------------------ 로봇견 패널
 
 let lastDogRender = 0;
 function renderDogs() {
@@ -104,21 +104,21 @@ function renderDogs() {
   $("dogs").innerHTML = ["A", "B", "C"].map((n) => {
     const d = S.dogs[n];
     if (!d) return `<div class="dog stale"><span class="badge" style="background:${DOG_COLOR[n]}">${n}</span>
-      <span class="role">${DOG_ROLE[n]}</span><span></span><span class="stats">no data</span></div>`;
+      <span class="role">${DOG_ROLE[n]}</span><span></span><span class="stats">데이터 없음</span></div>`;
     const m = d.msg;
     const stale = now - d.seen > STALE_MS;
     const pct = Math.max(0, Math.min(100, (((m.battery_v ?? 6.4) - 6.4) / (8.4 - 6.4)) * 100));
     return `<div class="dog ${stale ? "stale" : ""}">
       <span class="badge" style="background:${DOG_COLOR[n]}">${n}</span>
-      <span class="role">${DOG_ROLE[n]} · ${stale ? "LOST" : m.state ?? "—"}</span>
+      <span class="role">${DOG_ROLE[n]} · ${stale ? "연결 끊김" : m.state ?? "—"}</span>
       <span class="batt" title="${m.battery_v} V"><i style="width:${pct}%"></i></span>
-      <span class="stats">(${num(m.x, 2)}, ${num(m.y, 2)}) m · ${num(m.heading_deg, 0)}° · front ${m.front_cm ?? "—"} cm · tilt ${m.tilt ?? "—"}</span>
+      <span class="stats">(${num(m.x, 2)}, ${num(m.y, 2)}) m · ${num(m.heading_deg, 0)}° · 전방 ${m.front_cm ?? "—"} cm · 기울기 ${m.tilt ?? "—"}</span>
       <span class="stats">${num(m.battery_v, 2)} V · Wi-Fi ${m.rssi ?? "—"} dBm</span>
     </div>`;
   }).join("");
 }
 
-// ------------------------------------------------------------------ map
+// ------------------------------------------------------------------ 지도
 
 const canvas = $("map");
 const ctx = canvas.getContext("2d");
@@ -152,22 +152,22 @@ function drawMap() {
   ctx.clearRect(0, 0, W, H);
   const px = devicePixelRatio;
 
-  // grid (0.5 m)
+  // 격자 (0.5 m)
   ctx.strokeStyle = "#151c27"; ctx.lineWidth = 1;
   for (let x = 0; x <= a.width + 1e-6; x += 0.5) { ctx.beginPath(); ctx.moveTo(...P(x, 0)); ctx.lineTo(...P(x, a.height)); ctx.stroke(); }
   for (let y = 0; y <= a.height + 1e-6; y += 0.5) { ctx.beginPath(); ctx.moveTo(...P(0, y)); ctx.lineTo(...P(a.width, y)); ctx.stroke(); }
 
-  // patrol zones
+  // 순찰 구역
   for (const z of a.zones) {
     const [x0, y0] = P(z.x, z.y + z.h);
     ctx.fillStyle = DOG_COLOR[z.dog] + "10";
     ctx.fillRect(x0, y0, z.w * scale, z.h * scale);
     ctx.fillStyle = DOG_COLOR[z.dog] + "70";
     ctx.font = `${11 * px}px sans-serif`;
-    ctx.fillText(`zone ${z.dog}`, x0 + 6 * px, y0 + 14 * px);
+    ctx.fillText(`구역 ${z.dog}`, x0 + 6 * px, y0 + 14 * px);
   }
 
-  // walls, obstacles, exits
+  // 벽, 장애물, 출구
   ctx.strokeStyle = "#5b6b82"; ctx.lineWidth = 3 * px;
   for (const [p, q] of wallSegments(a)) { ctx.beginPath(); ctx.moveTo(...P(...p)); ctx.lineTo(...P(...q)); ctx.stroke(); }
   ctx.fillStyle = "#2a3446";
@@ -182,7 +182,7 @@ function drawMap() {
   }
   ctx.setLineDash([]); ctx.textAlign = "left";
 
-  // sound DOA ray (strong for 5 s after an alert)
+  // 소리 방향 광선 (경보 후 8초간 표시)
   const lo = a.lidar_origin;
   const snd = S.lastAlertSound && Date.now() / 1000 - S.lastAlertSound.ts < 8 ? S.lastAlertSound : null;
   if (snd) {
@@ -194,7 +194,7 @@ function drawMap() {
     ctx.beginPath(); ctx.moveTo(...P(...lo)); ctx.lineTo(...P(lo[0] + Math.cos(rad) * r, lo[1] + Math.sin(rad) * r)); ctx.stroke();
   }
 
-  // LiDAR points
+  // LiDAR 점
   if (S.lidar) {
     const [lx, ly] = S.lidar.origin;
     ctx.fillStyle = "#7ee0ff";
@@ -204,12 +204,12 @@ function drawMap() {
       ctx.fillRect(x - 1.5 * px, y - 1.5 * px, 3 * px, 3 * px);
     }
   }
-  // Pi / LiDAR origin
+  // Pi / LiDAR 위치
   const [pX, pY] = P(...lo);
   ctx.fillStyle = "#e6edf3"; ctx.beginPath(); ctx.arc(pX, pY, 6 * px, 0, 7); ctx.fill();
   ctx.fillStyle = "#8b98a9"; ctx.font = `${11 * px}px sans-serif`; ctx.fillText("Pi + LiDAR", pX + 9 * px, pY - 4 * px);
 
-  // intruder trail + marker
+  // 침입자 이동 경로 + 표시
   if (S.trail.length > 1) {
     ctx.strokeStyle = "#ff4d4f88"; ctx.lineWidth = 2 * px; ctx.beginPath();
     S.trail.forEach(([x, y], i) => (i ? ctx.lineTo(...P(x, y)) : ctx.moveTo(...P(x, y))));
@@ -221,10 +221,10 @@ function drawMap() {
     ctx.strokeStyle = "#ff4d4f"; ctx.lineWidth = 2 * px;
     ctx.beginPath(); ctx.arc(x, y, 0.5 * scale, 0, 7); ctx.setLineDash([3 * px, 5 * px]); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = "#ff4d4f"; ctx.beginPath(); ctx.arc(x, y, 9 * px * pulse, 0, 7); ctx.fill();
-    ctx.fillStyle = "#ff8a8b"; ctx.font = `600 ${11 * px}px sans-serif`; ctx.fillText("INTRUDER", x + 12 * px, y - 10 * px);
+    ctx.fillStyle = "#ff8a8b"; ctx.font = `600 ${11 * px}px sans-serif`; ctx.fillText("침입자", x + 12 * px, y - 10 * px);
   }
 
-  // dogs
+  // 로봇견
   for (const [n, d] of Object.entries(S.dogs)) {
     const m = d.msg;
     if (typeof m.x !== "number") continue;
@@ -239,14 +239,14 @@ function drawMap() {
     ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.globalAlpha = 1;
   }
 
-  // scale bar
+  // 축척 막대
   const [sx, sy] = P(0, 0);
   ctx.strokeStyle = "#8b98a9"; ctx.lineWidth = 2 * px;
   ctx.beginPath(); ctx.moveTo(sx, sy + 14 * px); ctx.lineTo(sx + scale, sy + 14 * px); ctx.stroke();
   ctx.fillStyle = "#8b98a9"; ctx.font = `${10 * px}px sans-serif`; ctx.fillText("1 m", sx + scale + 4 * px, sy + 17 * px);
 }
 
-// ------------------------------------------------------------------ compass
+// ------------------------------------------------------------------ 나침반
 
 function drawCompass() {
   const c = $("compass"), g = c.getContext("2d");
@@ -263,7 +263,7 @@ function drawCompass() {
   g.fillStyle = "#c084fc44"; g.beginPath(); g.arc(cx, cy, 6 + lvl * 30, 0, 7); g.fill();
 }
 
-// ------------------------------------------------------------------ loop + socket
+// ------------------------------------------------------------------ 루프 + 소켓
 
 function frame() {
   drawMap();
@@ -271,12 +271,12 @@ function frame() {
   requestAnimationFrame(frame);
 }
 renderDogs();
-setInterval(renderDogs, 1000);  // also marks dogs LOST when their messages stop
+setInterval(renderDogs, 1000);  // 메시지가 끊긴 로봇견을 '연결 끊김'으로 표시하는 역할도 한다
 
 function connect() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
-  ws.onopen = () => { $("conn").textContent = "live"; $("conn").className = "conn on"; };
-  ws.onclose = () => { $("conn").textContent = "offline"; $("conn").className = "conn off"; setTimeout(connect, 1500); };
+  ws.onopen = () => { $("conn").textContent = "연결됨"; $("conn").className = "conn on"; };
+  ws.onclose = () => { $("conn").textContent = "연결 끊김"; $("conn").className = "conn off"; setTimeout(connect, 1500); };
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
     handlers[m.type]?.(m);
