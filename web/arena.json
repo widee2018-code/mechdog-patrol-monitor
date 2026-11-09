@@ -1,0 +1,19 @@
+{
+  "_comment": "Arena layout in metres. Origin (0,0) is the bottom-left corner, x to the right, y up. Shared by the dashboard and the simulator.",
+  "width": 6.0,
+  "height": 4.0,
+  "lidar_origin": [3.0, 0.15],
+  "exits": [
+    {"id": "EXIT 1", "a": [0.0, 1.5], "b": [0.0, 2.3]},
+    {"id": "EXIT 2", "a": [6.0, 1.5], "b": [6.0, 2.3]}
+  ],
+  "obstacles": [
+    {"x": 1.6, "y": 2.6, "w": 0.5, "h": 0.5},
+    {"x": 3.9, "y": 0.9, "w": 0.6, "h": 0.4}
+  ],
+  "zones": [
+    {"dog": "A", "x": 2.0, "y": 0.0, "w": 2.0, "h": 4.0},
+    {"dog": "B", "x": 0.0, "y": 0.0, "w": 2.0, "h": 4.0},
+    {"dog": "C", "x": 4.0, "y": 0.0, "w": 2.0, "h": 4.0}
+  ]
+}

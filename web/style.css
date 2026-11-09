@@ -1,0 +1,110 @@
+:root {
+  --bg: #0d1117;
+  --card: #151b24;
+  --line: #263041;
+  --text: #e6edf3;
+  --muted: #8b98a9;
+  --accent: #4da3ff;
+  --dog-a: #4da3ff;
+  --dog-b: #3ecf8e;
+  --dog-c: #f5b942;
+  --intr: #ff4d4f;
+  --lidar: #7ee0ff;
+  --sound: #c084fc;
+  --info: #4da3ff;
+  --warn: #f5b942;
+  --alert: #ff4d4f;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+h1, h2 { margin: 0; font-weight: 600; }
+h1 { font-size: 17px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.muted { color: var(--muted); font-size: 12px; }
+
+header {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  padding: 12px 20px; border-bottom: 1px solid var(--line); background: #0f141c;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo { color: var(--accent); font-size: 22px; }
+.sub { margin: 0; color: var(--muted); font-size: 12px; }
+
+.pipeline { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; flex: 1; flex-wrap: wrap; }
+.pipeline li {
+  padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  background: #1c2430; color: var(--muted); border: 1px solid var(--line);
+}
+.pipeline li.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pipeline li.active.hot { background: var(--alert); border-color: var(--alert); animation: pulse 1s infinite alternate; }
+@keyframes pulse { to { opacity: .7; } }
+
+.conn { padding: 4px 10px; border-radius: 99px; font-size: 12px; }
+.conn.on { background: #12341f; color: #3ecf8e; }
+.conn.off { background: #3a1517; color: #ff7b7d; }
+
+main {
+  display: grid; gap: 14px; padding: 14px 20px 24px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+  grid-template-areas: "map side" "time side" "evid evid";
+}
+.map-card { grid-area: map; }
+.side { grid-area: side; display: flex; flex-direction: column; gap: 14px; }
+.timeline-card { grid-area: time; }
+.evidence-card { grid-area: evid; }
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; grid-template-areas: "map" "side" "time" "evid"; padding: 12px 16px; }
+}
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+
+#map { width: 100%; aspect-ratio: 6.6 / 4.6; display: block; background: #0b0f15; border-radius: 6px; }
+.map-foot { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.legend span { white-space: nowrap; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+.k-lidar { background: var(--lidar); } .k-dog { background: var(--dog-b); }
+.k-intr { background: var(--intr); } .k-sound { background: var(--sound); }
+
+.dogs { display: grid; gap: 8px; }
+.dog { display: grid; grid-template-columns: 34px 1fr auto; gap: 4px 10px; align-items: center;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
+.dog .badge { grid-row: span 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  font-weight: 700; color: #0d1117; }
+.dog .role { font-weight: 600; }
+.dog .stats { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.dog .batt { width: 60px; height: 6px; background: #263041; border-radius: 3px; overflow: hidden; }
+.dog .batt i { display: block; height: 100%; background: var(--dog-b); }
+.dog.stale { opacity: .45; }
+
+.pill { padding: 2px 8px; border-radius: 99px; font-size: 12px; background: #1c2430; color: var(--muted); }
+.pill.alert { background: var(--alert); color: #fff; }
+.sound { display: flex; gap: 14px; align-items: center; }
+.sound dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 13px; }
+.sound dt { color: var(--muted); }
+.sound dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.camera { position: relative; aspect-ratio: 4 / 3; background: #0b0f15; border-radius: 6px; overflow: hidden;
+  display: grid; place-items: center; color: var(--muted); }
+.camera img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.camera img:not([src]) { display: none; }
+
+.events { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; font-size: 13px; }
+.events li { display: grid; grid-template-columns: 70px 10px 1fr; gap: 8px; align-items: baseline;
+  padding: 5px 0; border-bottom: 1px solid #1c2430; }
+.events time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.events .lv { width: 8px; height: 8px; border-radius: 50%; }
+.lv.info { background: var(--info); } .lv.warn { background: var(--warn); } .lv.alert { background: var(--alert); }
+
+.evidence { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.evidence figure { margin: 0; }
+.evidence img { width: 100%; border-radius: 4px; display: block; border: 1px solid var(--line); }
+.evidence figcaption { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.evidence:empty::before { grid-column: 1 / -1; content: "No evidence yet. Dog A sends snapshots during ALERT / INTERCEPT / CONTAIN."; color: var(--muted); font-size: 13px; }

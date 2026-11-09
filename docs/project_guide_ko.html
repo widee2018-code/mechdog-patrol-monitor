@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MechDog 순찰 가이드</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --paper: #ffffff; --text: #1d2430; --muted: #5f6b7a; --line: #dfe3ea; --soft: #eef1f5;
+    --accent: #2563eb; --accent-soft: #e0eaff;
+    --a: #2563eb; --b: #10a36b; --c: #d48a00; --red: #dc2626; --purple: #8b5cf6; --cyan: #0891b2;
+    --code-bg: #f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1117; --paper: #151b24; --text: #e6edf3; --muted: #8b98a9; --line: #263041; --soft: #1b2230;
+      --accent: #4da3ff; --accent-soft: #15253d;
+      --a: #4da3ff; --b: #3ecf8e; --c: #f5b942; --red: #ff5a5c; --purple: #c084fc; --cyan: #7ee0ff;
+      --code-bg: #0f141c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1117; --paper: #151b24; --text: #e6edf3; --muted: #8b98a9; --line: #263041; --soft: #1b2230;
+    --accent: #4da3ff; --accent-soft: #15253d;
+    --a: #4da3ff; --b: #3ecf8e; --c: #f5b942; --red: #ff5a5c; --purple: #c084fc; --cyan: #7ee0ff;
+    --code-bg: #0f141c;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 80px; }
+  header.hero { padding: 56px 0 28px; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 12px; }
+  h2 { font-size: 24px; margin: 0 0 6px; }
+  h3 { font-size: 18px; margin: 22px 0 6px; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 720px; margin: 0; }
+  section { padding: 36px 0 8px; border-top: 1px solid var(--line); margin-top: 28px; }
+  section > .num { color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .06em; }
+  p { margin: 8px 0; }
+  a { color: var(--accent); }
+  code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto;
+    font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; }
+  .toc a { display: block; padding: 5px 12px; border: 1px solid var(--line); border-radius: 99px; text-decoration: none;
+    color: var(--text); font-size: 14px; background: var(--paper); }
+  .toc a:hover { border-color: var(--accent); color: var(--accent); }
+  figure { margin: 18px 0; }
+  figure.shot img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--line); }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .diagram { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card h4 { margin: 0 0 4px; font-size: 16px; }
+  .card p { margin: 4px 0; color: var(--muted); font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 12px 0; }
+  .tablewrap { overflow-x: auto; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--soft); color: var(--muted); }
+  .tag.a { color: var(--a); } .tag.b { color: var(--b); } .tag.c { color: var(--c); } .tag.r { color: var(--red); }
+  .phase { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 18px 0; border-bottom: 1px dashed var(--line); }
+  .phase:last-child { border-bottom: 0; }
+  .phase .badge { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; font-weight: 700;
+    background: var(--accent-soft); color: var(--accent); font-size: 15px; text-align: center; line-height: 1.1; }
+  .phase h3 { margin: 0 0 2px; }
+  .phase .when { color: var(--muted); font-size: 14px; }
+  .done { margin-top: 8px; padding: 8px 12px; border-left: 3px solid var(--b); background: var(--soft); border-radius: 0 6px 6px 0; font-size: 14.5px; }
+  ul.check { list-style: none; padding: 0; margin: 8px 0; }
+  ul.check li { padding: 3px 0; }
+  ul.check label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+  ul.check input { margin-top: 6px; accent-color: var(--accent); }
+  ul.check input:checked + span { color: var(--muted); text-decoration: line-through; }
+  .progress { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--b); transition: width .2s; }
+  .note { padding: 12px 16px; border-radius: 10px; background: var(--accent-soft); font-size: 15px; margin: 14px 0; }
+  .shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .shots img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--line); }
+  @media (max-width: 760px) { .shots { grid-template-columns: minmax(0, 1fr); } }
+  .shots figure { margin: 0; }
+  /* SVG classes */
+  .s-box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+  .s-soft { fill: var(--soft); stroke: var(--line); stroke-width: 1.5; }
+  .s-text { fill: var(--text); font: 600 14px -apple-system, "Segoe UI", sans-serif; }
+  .s-sub { fill: var(--muted); font: 12px -apple-system, "Segoe UI", sans-serif; }
+  .s-mono { fill: var(--muted); font: 11.5px ui-monospace, Menlo, monospace; }
+  .s-line { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .s-acc { stroke: var(--accent); stroke-width: 2; fill: none; }
+  .s-wall { stroke: var(--text); stroke-width: 4; }
+  .s-exit { stroke: var(--red); stroke-width: 4; stroke-dasharray: 6 5; }
+  .s-obst { fill: var(--muted); opacity: .35; }
+  .s-a { fill: var(--a); } .s-b { fill: var(--b); } .s-c { fill: var(--c); } .s-red { fill: var(--red); }
+  .s-za { fill: var(--a); opacity: .08; } .s-zb { fill: var(--b); opacity: .08; } .s-zc { fill: var(--c); opacity: .08; }
+  .s-ray { stroke: var(--cyan); stroke-width: 1; opacity: .45; }
+  .s-state { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+  .s-hot { fill: var(--paper); stroke: var(--red); stroke-width: 2; }
+  .s-bar { fill: var(--accent); opacity: .85; }
+  .s-bar2 { fill: var(--purple); opacity: .85; }
+  .s-bar3 { fill: var(--b); opacity: .85; }
+  .s-grid { stroke: var(--line); stroke-width: 1; }
+  footer { color: var(--muted); font-size: 14px; margin-top: 40px; }
+  body { word-break: keep-all; overflow-wrap: anywhere; }
+  pre, code { word-break: normal; overflow-wrap: normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">MechDog AI 협동로봇 공간서비스 · 프로젝트 가이드</div>
+  <h1>순찰 및 검거, 실시간 모니터와 함께</h1>
+  <p class="lead"><code>patrol_apprehension_plan.md</code>의 MechDog 3마리 보안 순찰 시스템을 만드는 방법과, 로봇이 감지하는 모든 것(LiDAR, 개 위치, 소리 경보, 카메라, 임무 상태)을 보여주는 웹 대시보드를 함께 안내합니다.</p>
+  <ul class="toc">
+    <li><a href="#goal">1 · 목표</a></li>
+    <li><a href="#arch">2 · 아키텍처</a></li>
+    <li><a href="#data">3 · 데이터</a></li>
+    <li><a href="#arena">4 · 아레나</a></li>
+    <li><a href="#states">5 · 상태 머신</a></li>
+    <li><a href="#monitor">6 · 모니터</a></li>
+    <li><a href="#roadmap">7 · 로드맵</a></li>
+    <li><a href="#steps">8 · 단계별 진행</a></li>
+    <li><a href="#team">9 · 팀 구성</a></li>
+    <li><a href="#code">10 · 하드웨어 연결</a></li>
+    <li><a href="#risks">11 · 리스크</a></li>
+  </ul>
+</header>
+
+<!-- 1 -->
+<section id="goal">
+  <div class="num">01</div>
+  <h2>무엇을 만드는가</h2>
+  <p>MechDog 3마리와 Raspberry Pi 관제탑이 아레나를 나눠 순찰합니다. 침입자가 나타나면 <b>쫓아가지 않습니다</b>. 침입자가 향하는 곳을 예측해 출구를 먼저 막고, 안전 거리를 두고 포위한 뒤, 경고하고 증거를 확보해 관제에 인계합니다. <b>검거 = 탐지 → 확인 → 출구 봉쇄 → 포위 → 경고 → 증거 확보 → 관제 인계.</b></p>
+  <p>새로 추가되는 부분은 <b>순찰 모니터(Patrol Monitor)</b>입니다. 시스템이 보고 판단하는 모든 것을 실시간으로 보여주는 웹 페이지로, 시연에서는 "관제실" 역할을 하고 개발 중에는 가장 중요한 디버깅 도구가 됩니다.</p>
+  <figure class="shot">
+    <img src="images/dashboard_contain.png" alt="CONTAIN 단계의 순찰 모니터 대시보드: 아레나 지도에서 개 3마리가 침입자를 포위하고, 오른쪽과 아래에 개 상태, 소리, 카메라, 이벤트 타임라인 패널이 있음">
+    <figcaption>이 폴더에 이미 있는 모니터를 시뮬레이션 데이터로 실행한 <b>CONTAIN(포위)</b> 단계 화면입니다. 개 3마리가 침입자를 둘러싼 LiDAR 지도, 개 상태, 소리 방향, A 개의 카메라, 이벤트 타임라인이 보입니다.</figcaption>
+  </figure>
+  <div class="note">모니터는 계획서의 3분 데모를 재현하는 시뮬레이터와 함께 <b>이미 동작합니다</b>. 할 일은 시뮬레이터를 데이터 스트림 하나씩 실제 하드웨어로 바꾸는 것입니다. 방법은 10절에 있습니다.</div>
+</section>
+
+<!-- 2 -->
+<section id="arch">
+  <div class="num">02</div>
+  <h2>시스템 아키텍처</h2>
+  <p>기존 계획과 같이 <b>Pi가 두뇌, 개가 몸통</b>입니다. 모니터 서버는 Pi나 노트북에서 도는 별도의 작은 프로세스로, 데이터를 <i>듣기만</i> 합니다. 로봇에 명령을 내리지 않으므로 대시보드가 멈춰도 시연에는 영향이 없습니다.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 920 470" role="img" aria-label="아키텍처: 개와 Pi가 Wi-Fi로 모니터 서버에 텔레메트리를 보내고, 서버가 브라우저 대시보드로 전달">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+    </defs>
+    <g>
+      <rect x="20" y="30" width="230" height="110" rx="12" class="s-box"/>
+      <circle cx="52" cy="62" r="16" class="s-a"/><text x="52" y="67" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">A</text>
+      <text x="78" y="60" class="s-text">A 개 · 추적견</text><text x="78" y="78" class="s-sub">추적 담당</text>
+      <text x="36" y="104" class="s-sub">ESP32-S3 카메라, 초음파, IMU</text>
+      <text x="36" y="122" class="s-mono">→ 상태, 스냅샷</text>
+
+      <rect x="20" y="170" width="230" height="110" rx="12" class="s-box"/>
+      <circle cx="52" cy="202" r="16" class="s-b"/><text x="52" y="207" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">B</text>
+      <text x="78" y="200" class="s-text">B 개 · 봉쇄견 1</text><text x="78" y="218" class="s-sub">출구 1 봉쇄</text>
+      <text x="36" y="244" class="s-sub">MP3, 도트매트릭스, 초음파, IMU</text>
+      <text x="36" y="262" class="s-mono">→ 상태</text>
+
+      <rect x="20" y="310" width="230" height="110" rx="12" class="s-box"/>
+      <circle cx="52" cy="342" r="16" class="s-c"/><text x="52" y="347" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">C</text>
+      <text x="78" y="340" class="s-text">C 개 · 봉쇄견 2</text><text x="78" y="358" class="s-sub">출구 2 봉쇄</text>
+      <text x="36" y="384" class="s-sub">MP3, 도트매트릭스, 초음파, IMU</text>
+      <text x="36" y="402" class="s-mono">→ 상태</text>
+    </g>
+    <rect x="330" y="80" width="250" height="290" rx="14" class="s-soft"/>
+    <text x="455" y="110" text-anchor="middle" class="s-text">Raspberry Pi · 관제탑</text>
+    <rect x="350" y="126" width="210" height="96" rx="8" class="s-box"/>
+    <text x="362" y="146" class="s-sub" font-weight="600">센서</text>
+    <text x="362" y="166" class="s-sub">2D LiDAR (고정, 높이 10–15 cm)</text>
+    <text x="362" y="184" class="s-sub">카메라 + YOLO</text>
+    <text x="362" y="202" class="s-sub">ReSpeaker 마이크 어레이 (DOA)</text>
+    <rect x="350" y="234" width="210" height="120" rx="8" class="s-box"/>
+    <text x="362" y="254" class="s-sub" font-weight="600">두뇌 (patrol_brain)</text>
+    <text x="362" y="274" class="s-sub">지도 + 개 위치 추적</text>
+    <text x="362" y="292" class="s-sub">침입자 = 매칭 안 된 덩어리</text>
+    <text x="362" y="310" class="s-sub">상태 머신, 출구 선점,</text>
+    <text x="362" y="328" class="s-sub">포위 (헝가리안 알고리즘)</text>
+    <text x="362" y="346" class="s-mono">5–10 Hz 루프</text>
+    <path d="M252,85 C300,85 300,170 328,170" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <path d="M252,225 L328,225" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <path d="M252,365 C300,365 300,290 328,290" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <text x="262" y="215" class="s-mono">명령 ↔ 상태</text>
+    <text x="262" y="455" class="s-sub">같은 Wi-Fi 공유기 · JSON over UDP</text>
+    <rect x="660" y="120" width="240" height="120" rx="14" class="s-box" style="stroke:var(--accent);stroke-width:2"/>
+    <text x="780" y="148" text-anchor="middle" class="s-text">모니터 서버</text>
+    <text x="780" y="168" text-anchor="middle" class="s-mono">server/app.py</text>
+    <text x="678" y="196" class="s-sub">수신: UDP :9000 + POST /api/ingest</text>
+    <text x="678" y="216" class="s-sub">송신: WebSocket /ws</text>
+    <rect x="660" y="300" width="240" height="100" rx="14" class="s-box"/>
+    <text x="780" y="330" text-anchor="middle" class="s-text">브라우저 대시보드</text>
+    <text x="780" y="350" text-anchor="middle" class="s-mono">http://&lt;ip&gt;:8000</text>
+    <text x="780" y="378" text-anchor="middle" class="s-sub">노트북, 태블릿, 프로젝터</text>
+    <path d="M582,180 L656,180" class="s-acc" marker-end="url(#arA)"/>
+    <text x="590" y="170" class="s-mono">텔레메트리</text>
+    <path d="M780,242 L780,296" class="s-acc" marker-end="url(#arA)"/>
+    <text x="790" y="275" class="s-mono">실시간 전송</text>
+    <path d="M252,60 C470,10 640,40 700,116" class="s-line" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+    <text x="330" y="66" class="s-mono">개 상태와 스냅샷은 직접 보내도 됨</text>
+  </svg>
+  </div>
+  <p><b>기본 원칙:</b> 로봇을 움직이는 것은 모두 Pi 두뇌를 거칩니다. <i>보기만</i> 할 데이터는 모니터에도 보냅니다. 개발 중에는 두뇌가 완성되기 전이라도 개가 모니터로 직접 데이터를 보내게 해서 센서 값을 확인할 수 있습니다.</p>
+</section>
+
+<!-- 3 -->
+<section id="data">
+  <div class="num">03</div>
+  <h2>모니터가 보여주는 데이터</h2>
+  <p>메시지 종류 7가지로 모든 데이터를 다룹니다. 예시가 포함된 전체 명세는 <code>docs/message_schema.md</code>에 있습니다.</p>
+  <div class="tablewrap"><table>
+    <tr><th>종류</th><th>보내는 쪽</th><th>주기</th><th>표시 방식</th><th>주요 필드</th></tr>
+    <tr><td><code>lidar</code></td><td>Pi</td><td>5 Hz</td><td>지도 위 하늘색 점</td><td><code>origin</code>, <code>points [[deg, m]…]</code></td></tr>
+    <tr><td><code>dog</code></td><td>Pi (x, y) + 각 개 (센서)</td><td>10 Hz</td><td>방향이 표시된 개 마커, 상태 카드</td><td><code>x y heading_deg state battery_v front_cm tilt</code></td></tr>
+    <tr><td><code>intruder</code></td><td>Pi</td><td>5 Hz</td><td>빨간 마커, 0.5 m 원, 이동 궤적</td><td><code>x y confidence</code></td></tr>
+    <tr><td><code>sound</code></td><td>Pi (ReSpeaker)</td><td>1 Hz + 경보 시</td><td>나침반, 지도 위 DOA 선</td><td><code>label doa_deg level_db alert</code></td></tr>
+    <tr><td><code>camera</code></td><td>A 개</td><td>약 1 Hz</td><td>실시간 화면, 증거 갤러리</td><td><code>image</code> (data URL), <code>evidence</code></td></tr>
+    <tr><td><code>mission</code></td><td>Pi</td><td>변경 시</td><td>상단 상태 단계 표시</td><td><code>state</code></td></tr>
+    <tr><td><code>event</code></td><td>Pi</td><td>발생 시</td><td>타임라인</td><td><code>level text</code></td></tr>
+  </table></div>
+  <p><span class="tag">왜 개 데이터를 나누나요?</span> MechDog은 자기가 어디 있는지 모릅니다. <b>위치</b>는 Pi의 LiDAR 추적에서 오고, <b>배터리, 초음파, 기울기</b>는 개에서 옵니다. 양쪽이 각각 일부 필드만 담은 <code>dog</code> 메시지를 보내고, 모니터가 이를 합칩니다.</p>
+</section>
+
+<!-- 4 -->
+<section id="arena">
+  <div class="num">04</div>
+  <h2>아레나와 좌표계</h2>
+  <p>모든 것이 하나의 좌표계를 씁니다. 단위는 미터, 원점은 왼쪽 아래 모서리, x는 오른쪽, y는 위쪽, 각도는 +x에서 반시계 방향입니다. 배치 정보는 <code>web/arena.json</code>에 있습니다. 실제 아레나를 측정해 이 파일을 수정하면 대시보드와 시뮬레이터가 모두 따라갑니다.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 760 520" role="img" aria-label="6 × 4 m 아레나: 좌우 벽에 출구 2개, 장애물 2개, 순찰 구역 3개, 아래 중앙에 Pi LiDAR">
+    <g transform="translate(80,40)">
+      <rect x="0" y="0" width="200" height="400" class="s-zb"/>
+      <rect x="200" y="0" width="200" height="400" class="s-za"/>
+      <rect x="400" y="0" width="200" height="400" class="s-zc"/>
+      <g class="s-grid">
+        <line x1="100" y1="0" x2="100" y2="400"/><line x1="200" y1="0" x2="200" y2="400"/><line x1="300" y1="0" x2="300" y2="400"/>
+        <line x1="400" y1="0" x2="400" y2="400"/><line x1="500" y1="0" x2="500" y2="400"/>
+        <line x1="0" y1="100" x2="600" y2="100"/><line x1="0" y1="200" x2="600" y2="200"/><line x1="0" y1="300" x2="600" y2="300"/>
+      </g>
+      <text x="10" y="20" class="s-sub">구역 B</text><text x="210" y="20" class="s-sub">구역 A</text><text x="410" y="20" class="s-sub">구역 C</text>
+      <g class="s-ray">
+        <line x1="300" y1="385" x2="0" y2="270"/><line x1="300" y1="385" x2="0" y2="40"/><line x1="300" y1="385" x2="160" y2="0"/>
+        <line x1="300" y1="385" x2="300" y2="0"/><line x1="300" y1="385" x2="480" y2="0"/><line x1="300" y1="385" x2="600" y2="60"/>
+        <line x1="300" y1="385" x2="600" y2="300"/><line x1="300" y1="385" x2="160" y2="140"/>
+      </g>
+      <rect x="160" y="90" width="50" height="50" class="s-obst"/>
+      <rect x="390" y="270" width="60" height="40" class="s-obst"/>
+      <line x1="0" y1="0" x2="600" y2="0" class="s-wall"/><line x1="0" y1="400" x2="600" y2="400" class="s-wall"/>
+      <line x1="0" y1="0" x2="0" y2="170" class="s-wall"/><line x1="0" y1="250" x2="0" y2="400" class="s-wall"/>
+      <line x1="600" y1="0" x2="600" y2="170" class="s-wall"/><line x1="600" y1="250" x2="600" y2="400" class="s-wall"/>
+      <line x1="0" y1="170" x2="0" y2="250" class="s-exit"/><line x1="600" y1="170" x2="600" y2="250" class="s-exit"/>
+      <text x="-12" y="168" text-anchor="end" class="s-text" style="fill:var(--red)">출구 1</text>
+      <text x="612" y="168" class="s-text" style="fill:var(--red)">출구 2</text>
+      <path d="M-40,210 C80,205 200,200 260,230 S400,215 440,210" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+      <circle cx="440" cy="210" r="9" class="s-red"/>
+      <circle cx="440" cy="210" r="50" fill="none" stroke="var(--red)" stroke-dasharray="4 5" stroke-width="1.5"/>
+      <text x="440" y="282" text-anchor="middle" class="s-sub" style="fill:var(--red);paint-order:stroke;stroke:var(--paper);stroke-width:4px">침입자 정지 · 반경 0.5 m 포위</text>
+      <circle cx="40" cy="210" r="13" class="s-b"/><text x="40" y="215" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">B</text>
+      <circle cx="560" cy="210" r="13" class="s-c"/><text x="560" y="215" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">C</text>
+      <circle cx="380" cy="235" r="13" class="s-a"/><text x="380" y="240" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">A</text>
+      <circle cx="300" cy="385" r="9" fill="var(--text)"/>
+      <text x="314" y="380" class="s-sub">Pi + LiDAR (3.0, 0.15)</text>
+      <g transform="translate(0,440)">
+        <line x1="0" y1="0" x2="100" y2="0" stroke="var(--text)" stroke-width="2"/>
+        <text x="106" y="4" class="s-sub">1 m</text>
+        <text x="0" y="24" class="s-mono">원점 (0,0) = 왼쪽 아래 · x → · y ↑ · 6 × 4 m</text>
+      </g>
+    </g>
+  </svg>
+  </div>
+  <p>LiDAR는 개와 침입자의 다리나 RC카가 보이도록 <b>개 몸통 높이(10–15 cm)</b>에 설치하세요. 두 출구가 모두 보이고 그림자가 최소인 곳에 둡니다. 상자 뒤는 사각지대가 되며, 대시보드에서 하늘색 점이 비는 부분으로 확인할 수 있습니다.</p>
+</section>
+
+<!-- 5 -->
+<section id="states">
+  <div class="num">05</div>
+  <h2>임무 상태 머신</h2>
+  <p>상태 머신은 Pi에서 실행됩니다. 상태가 바뀔 때마다 <code>mission</code> 메시지를 보내고, 대시보드 상단에 현재 상태가 강조됩니다.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 900 300" role="img" aria-label="상태 머신: PATROL → SUSPECT → ALERT → INTERCEPT → CONTAIN → HANDOVER → RETURN → PATROL, SUSPECT에서 오탐이면 RETURN">
+    <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+    <g font-family="-apple-system, Segoe UI, sans-serif">
+      <rect x="20" y="40" width="140" height="64" rx="10" class="s-state"/><text x="90" y="68" text-anchor="middle" class="s-text">PATROL</text><text x="90" y="88" text-anchor="middle" class="s-sub">3구역 웨이포인트 순찰</text>
+      <rect x="250" y="40" width="140" height="64" rx="10" class="s-state"/><text x="320" y="68" text-anchor="middle" class="s-text">SUSPECT</text><text x="320" y="88" text-anchor="middle" class="s-sub">센서 1개 감지</text>
+      <rect x="480" y="40" width="140" height="64" rx="10" class="s-hot"/><text x="550" y="68" text-anchor="middle" class="s-text">ALERT</text><text x="550" y="88" text-anchor="middle" class="s-sub">센서 2개 이상 일치</text>
+      <rect x="710" y="40" width="170" height="64" rx="10" class="s-hot"/><text x="795" y="68" text-anchor="middle" class="s-text">INTERCEPT</text><text x="795" y="88" text-anchor="middle" class="s-sub">B, C → 출구 · A 추적</text>
+      <rect x="710" y="190" width="170" height="64" rx="10" class="s-hot"/><text x="795" y="218" text-anchor="middle" class="s-text">CONTAIN</text><text x="795" y="238" text-anchor="middle" class="s-sub">120° 포위, 경고, STOP</text>
+      <rect x="480" y="190" width="140" height="64" rx="10" class="s-state"/><text x="550" y="218" text-anchor="middle" class="s-text">HANDOVER</text><text x="550" y="238" text-anchor="middle" class="s-sub">증거 → 관제 인계</text>
+      <rect x="250" y="190" width="140" height="64" rx="10" class="s-state"/><text x="320" y="218" text-anchor="middle" class="s-text">RETURN</text><text x="320" y="238" text-anchor="middle" class="s-sub">순찰 경로 복귀</text>
+      <path d="M162,72 L246,72" class="s-line" marker-end="url(#ar2)"/><text x="204" y="62" text-anchor="middle" class="s-mono">이상 징후</text>
+      <path d="M392,72 L476,72" class="s-line" marker-end="url(#ar2)"/><text x="434" y="62" text-anchor="middle" class="s-mono">확인됨</text>
+      <path d="M622,72 L706,72" class="s-line" marker-end="url(#ar2)"/><text x="664" y="62" text-anchor="middle" class="s-mono">즉시</text>
+      <path d="M795,106 L795,186" class="s-line" marker-end="url(#ar2)"/><text x="785" y="150" text-anchor="end" class="s-mono">정지 / 출구 차단</text>
+      <path d="M708,222 L624,222" class="s-line" marker-end="url(#ar2)"/><text x="666" y="212" text-anchor="middle" class="s-mono">N초 유지</text>
+      <path d="M478,222 L394,222" class="s-line" marker-end="url(#ar2)"/><text x="436" y="212" text-anchor="middle" class="s-mono">인계 완료</text>
+      <path d="M248,222 C120,222 90,180 90,108" class="s-line" marker-end="url(#ar2)"/>
+      <path d="M300,106 C280,150 300,170 310,186" class="s-line" stroke-dasharray="4 4" marker-end="url(#ar2)"/><text x="286" y="150" text-anchor="end" class="s-mono">오탐</text>
+      <text x="20" y="290" class="s-sub">빨간 테두리 = 대시보드 상태 표시가 빨갛게 깜박이는 단계</text>
+    </g>
+  </svg>
+  </div>
+  <div class="tablewrap"><table>
+    <tr><th>이상 징후 출처</th><th>신호</th><th>모니터 표시</th></tr>
+    <tr><td>LiDAR</td><td>개 3마리 중 어느 것과도 매칭되지 않는 움직이는 덩어리</td><td>침입자 마커 (신뢰도 0.6)</td></tr>
+    <tr><td>소리</td><td>유리 깨짐 / 문 소리 + DOA</td><td>Pi에서 소리 방향으로 뻗는 보라색 선</td></tr>
+    <tr><td>비전</td><td>YOLO person, ArUco 마커 또는 미등록 얼굴</td><td>A 개 카메라 화면의 박스</td></tr>
+  </table></div>
+  <p><b>두 출처가 같은 위치를 가리킬 때만 ALERT</b>로 넘어갑니다. 모니터에서 DOA 선이 실제로 침입자 마커 근처를 지나는지 확인하세요. 교차 확인을 눈으로 볼 수 있게 한 것입니다.</p>
+</section>
+
+<!-- 6 -->
+<section id="monitor">
+  <div class="num">06</div>
+  <h2>장면별 모니터 화면</h2>
+  <p>아래는 계획서 5절의 데모 시나리오를 따르는 <code>server/simulator.py</code>로 <code>web/index.html</code>을 실행해 찍은 실제 화면입니다. 각 단계에서 목표로 삼을 그림으로 활용하세요.</p>
+  <div class="shots">
+    <figure><img src="images/dashboard_patrol.png" alt="PATROL: 개 3마리가 각자 구역에 있고 LiDAR로 방 윤곽이 보임"><figcaption><b>0:00 PATROL.</b> 각 개가 자기 구역을 돕니다. LiDAR 윤곽이 벽과 일치하면 설치 위치와 각도 변환이 맞다는 뜻입니다.</figcaption></figure>
+    <figure><img src="images/dashboard_alert.png" alt="SUSPECT: 출구 1의 침입자, Pi에서 침입자를 향하는 보라색 소리 방향 선"><figcaption><b>0:45 SUSPECT.</b> 유리 깨지는 소리: DOA 선이 출구 1을 가리키고, LiDAR도 그곳에서 매칭되지 않는 덩어리를 봅니다. A 개가 확인하러 회전합니다.</figcaption></figure>
+    <figure><img src="images/dashboard_intercept.png" alt="INTERCEPT: B는 출구 1, C는 출구 2, A는 침입자를 따라가며 카메라에 사람 박스가 보임"><figcaption><b>1:00 INTERCEPT.</b> B와 C는 출구로 가고, A는 약 60 cm 거리에서 따라가며, 카메라가 사람을 확인합니다. 증거 갤러리에 스냅샷이 쌓이기 시작합니다.</figcaption></figure>
+    <figure><img src="images/dashboard_contain.png" alt="CONTAIN: 정지한 침입자 주위의 개 3마리"><figcaption><b>1:40 CONTAIN.</b> 침입자가 멈추면 개들이 0.5 m 거리에서 120° 간격으로 포위합니다. 음성 경고와 STOP 표시가 타임라인에 기록됩니다.</figcaption></figure>
+  </div>
+  <h3>직접 실행해 보기</h3>
+<pre><code>cd mechdog-patrol-monitor
+pip install -r requirements.txt
+uvicorn server.app:app --host 0.0.0.0 --port 8000   # 터미널 1
+python -m server.simulator --speed 3                 # 터미널 2
+# http://localhost:8000 열기</code></pre>
+</section>
+
+<!-- 7 -->
+<section id="roadmap">
+  <div class="num">07</div>
+  <h2>로드맵</h2>
+  <p>계획서의 개발 단계(MVP → 확장 1–3)를 바탕으로 한 8주 일정 제안입니다. 모니터 작업은 전 기간에 걸쳐 함께 진행합니다. 매주 시뮬레이션 스트림 하나를 실제 데이터로 바꿉니다.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 900 330" role="img" aria-label="간트 차트: 1주차 준비, 1–2주차 통신, 2–3주차 Pi 센싱, 3–4주차 MVP, 5주차 소리, 6주차 포위, 7주차 얼굴 인식, 8주차 시연 리허설, 전 기간 모니터 연동">
+    <g font-family="-apple-system, Segoe UI, sans-serif">
+      <g class="s-grid">
+        <line x1="200" y1="20" x2="200" y2="300"/><line x1="287" y1="20" x2="287" y2="300"/><line x1="375" y1="20" x2="375" y2="300"/>
+        <line x1="462" y1="20" x2="462" y2="300"/><line x1="550" y1="20" x2="550" y2="300"/><line x1="637" y1="20" x2="637" y2="300"/>
+        <line x1="725" y1="20" x2="725" y2="300"/><line x1="812" y1="20" x2="812" y2="300"/><line x1="900" y1="20" x2="900" y2="300"/>
+      </g>
+      <g class="s-sub" text-anchor="middle">
+        <text x="243" y="14">1주</text><text x="331" y="14">2주</text><text x="418" y="14">3주</text><text x="506" y="14">4주</text>
+        <text x="593" y="14">5주</text><text x="681" y="14">6주</text><text x="768" y="14">7주</text><text x="856" y="14">8주</text>
+      </g>
+      <g class="s-text" style="font-size:13px">
+        <text x="0" y="44">0 · 준비 및 측정</text>
+        <text x="0" y="76">1 · Pi ↔ 개 통신</text>
+        <text x="0" y="108">2 · Pi 센싱</text>
+        <text x="0" y="140">3 · MVP: 출구 봉쇄</text>
+        <text x="0" y="172">확장 1 · 소리 + 교차 확인</text>
+        <text x="0" y="204">확장 2 · 3마리 포위</text>
+        <text x="0" y="236">확장 3 · 얼굴 인식</text>
+        <text x="0" y="268">시연 리허설</text>
+        <text x="0" y="300">모니터 연동</text>
+      </g>
+      <rect x="202" y="30" width="84" height="20" rx="5" class="s-bar"/>
+      <rect x="230" y="62" width="143" height="20" rx="5" class="s-bar"/>
+      <rect x="289" y="94" width="172" height="20" rx="5" class="s-bar"/>
+      <rect x="377" y="126" width="172" height="20" rx="5" class="s-bar"/>
+      <text x="556" y="141" class="s-sub" style="fill:var(--red)">◆ MVP 시연</text>
+      <rect x="552" y="158" width="84" height="20" rx="5" class="s-bar2"/>
+      <rect x="639" y="190" width="84" height="20" rx="5" class="s-bar2"/>
+      <rect x="727" y="222" width="84" height="20" rx="5" class="s-bar2"/>
+      <rect x="814" y="254" width="84" height="20" rx="5" class="s-bar3"/>
+      <rect x="202" y="286" width="696" height="20" rx="5" class="s-bar3" opacity=".35"/>
+      <text x="210" y="300" class="s-sub" style="fill:var(--text)">시뮬레이터 스트림을 하나씩 실제 데이터로 교체 →</text>
+    </g>
+  </svg>
+  </div>
+  <p class="s-sub" style="color:var(--muted);font-size:14px">주 단위 기간은 실제 일정에 맞게 조정하세요. 날짜보다 순서가 중요합니다. <b>MVP가 실제 로봇으로 처음부터 끝까지 동작하기 전에는 확장 2를 시작하지 마세요.</b></p>
+</section>
+
+<!-- 8 -->
+<section id="steps">
+  <div class="num">08</div>
+  <h2>단계별 진행</h2>
+  <p>진행하면서 항목을 체크하세요. 체크 상태는 이 브라우저에만 저장됩니다.</p>
+  <div class="progress"><i id="prog"></i></div>
+  <p id="progtext" style="color:var(--muted);font-size:14px"></p>
+
+  <div class="phase">
+    <div class="badge">0</div>
+    <div>
+      <h3>준비 및 측정</h3>
+      <div class="when">1주차 · 전원</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>로봇 전용 Wi-Fi 공유기를 준비합니다. Pi와 각 개에 고정 IP를 주고 기록해 둡니다.</span></label></li>
+        <li><label><input type="checkbox"><span>노트북과 Pi에서 모니터 + 시뮬레이터를 실행합니다. 팀원 모두 대시보드를 열어 봅니다.</span></label></li>
+        <li><label><input type="checkbox"><span>MechDog의 보행 속도와 회전 속도(m/s, °/s)를 측정합니다. 실측값을 시뮬레이터의 <code>DOG_SPEED</code>에 넣고, 개가 침입자보다 먼저 출구에 도착할 수 있는지 확인합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>아레나를 만듭니다: 출구 2개, 상자 몇 개. 크기를 재서 <code>web/arena.json</code>을 수정합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>계획서 11절의 결정 사항을 정합니다: 침입자는 RC카 먼저, 다음에 사람. 모드는 하나로 할지 둘 다 할지(수색구조 + 순찰).</span></label></li>
+      </ul>
+      <div class="done"><b>완료 기준:</b> 대시보드에 실제 아레나 윤곽이 나오고, 출구 선점이 물리적으로 가능한지 알고 있다.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">1</div>
+    <div>
+      <h3>Pi ↔ 개 통신</h3>
+      <div class="when">1–2주차 · 개 펌웨어 + 두뇌</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>각 개의 MicroPython: Wi-Fi에 접속해 <code>dog</code> 상태 메시지(배터리, front_cm, 기울기, 상태)를 10 Hz로 모니터에 보냅니다. 10절 참고.</span></label></li>
+        <li><label><input type="checkbox"><span>개가 Pi로부터 <code>{"to":"B","cmd":"move",...}</code>를 받아 걷습니다.</span></label></li>
+        <li><label><input type="checkbox"><span>개의 안전 반사: 10 cm 이내 장애물이면 정지, 넘어지면(IMU) 정지, 1초간 명령이 없으면 정지.</span></label></li>
+        <li><label><input type="checkbox"><span>개가 걷는 중에 공유기 전원을 뽑아 봅니다. 1초 안에 멈춰야 하고, 대시보드의 해당 카드가 <b>LOST</b>로 바뀌어야 합니다.</span></label></li>
+      </ul>
+      <div class="done"><b>완료 기준:</b> 개 3마리 카드에 배터리/초음파/기울기가 실시간으로 나오고, Pi가 명령으로 각 개를 걷게 할 수 있다.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">2</div>
+    <div>
+      <h3>Pi 센싱: LiDAR 지도와 개 위치 추적</h3>
+      <div class="when">2–3주차 · 인식</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>Pi에서 LiDAR를 읽어 아레나 각도로 변환하고 <code>lidar</code> 메시지를 보냅니다. 하늘색 윤곽이 그려진 벽과 일치해야 합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>빈 아레나 스캔을 약 10초간 기록해 정적 배경으로 씁니다. 움직이는 점 = 스캔 − 배경.</span></label></li>
+        <li><label><input type="checkbox"><span>움직이는 점을 군집화하고(예: DBSCAN, eps ≈ 8 cm) 각 개의 마지막 위치 + 마지막 명령으로 군집과 개를 매칭합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>Pi에서 각 개의 <code>x, y, heading_deg</code>를 <code>dog</code> 메시지로 보냅니다. 이제 지도 위 마커가 움직입니다.</span></label></li>
+        <li><label><input type="checkbox"><span>A 개 카메라: 1초에 한 장씩 JPEG을 <code>camera</code> 메시지로 POST합니다.</span></label></li>
+      </ul>
+      <div class="done"><b>완료 기준:</b> 개를 손으로 옮기면 지도 위 마커가 약 10 cm 오차 안에서 따라온다.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">3</div>
+    <div>
+      <h3>MVP: 탐지와 출구 봉쇄</h3>
+      <div class="when">3–4주차 · 두뇌 + 전원</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>매칭되지 않는 움직이는 덩어리 → <code>intruder</code> 메시지 → SUSPECT.</span></label></li>
+        <li><label><input type="checkbox"><span>상태 머신 PATROL → SUSPECT → ALERT → INTERCEPT가 <code>mission</code>과 <code>event</code> 메시지를 보냅니다.</span></label></li>
+        <li><label><input type="checkbox"><span>INTERCEPT: B와 C를 출구 웨이포인트로 보냅니다. A는 50–80 cm 거리에서 따라가며 최소 30 cm를 유지합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>매 실행을 기록합니다: 모든 텔레메트리를 <code>.jsonl</code> 파일에 이어 저장해 재생과 디버깅에 씁니다.</span></label></li>
+        <li><label><input type="checkbox"><span>RC카 + ArUco 마커로 10회 테스트하고 성공 횟수를 셉니다.</span></label></li>
+      </ul>
+      <div class="done"><b>완료 기준 (계획서 8절):</b> RC카가 진입하면 개 2마리가 출구에 도착하고, 대시보드에서 확인된다. <span class="tag r">MVP 시연</span></div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">E1</div>
+    <div>
+      <h3>소리 방향과 교차 확인</h3>
+      <div class="when">5주차 · 인식 (<code>siren-alert-edge-ai/</code> 재활용)</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>ReSpeaker DOA + 유리/문 소리 분류기 → <code>alert: true</code>인 <code>sound</code> 메시지.</span></label></li>
+        <li><label><input type="checkbox"><span>LiDAR 침입자가 DOA 선의 ±20° 안에 있을 때만 ALERT.</span></label></li>
+        <li><label><input type="checkbox"><span>오탐 테스트: 아레나에 아무도 없을 때 유리 깨지는 소리를 재생합니다. SUSPECT → RETURN이 되고 ALERT는 없어야 합니다.</span></label></li>
+      </ul>
+      <div class="done"><b>완료 기준:</b> 오탐 시 ALERT가 발생하지 않는다.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">E2</div>
+    <div>
+      <h3>진행 방향 예측과 3마리 포위</h3>
+      <div class="when">6주차 · 두뇌</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>최근 약 1초간의 위치로 침입자 속도를 추정합니다. 출구별로 침입자 도착 시간과 각 개의 도착 시간을 비교합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>CONTAIN: 반경 약 0.5 m의 포위 지점 3개를 <code>scipy.optimize.linear_sum_assignment</code>로 개와 매칭하고 5 Hz로 갱신합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>경고: B와 C에서 MP3 "멈춰" + 도트매트릭스 STOP. <code>event</code>로 기록합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>HANDOVER: A 개 스냅샷에 <code>evidence: true</code>를 표시한 뒤 RETURN.</span></label></li>
+      </ul>
+      <div class="done"><b>완료 기준:</b> 움직이는 침입자를 포위하고, 대시보드에 궤적, 증거, 타임라인이 나온다.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">E3</div>
+    <div>
+      <h3>얼굴 인식</h3>
+      <div class="when">7주차 · 인식 (<code>Real-Time_Face-Recognition…</code> 재활용)</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>등록된 사람 → 인사 이벤트(ALERT 없음). 미등록 사람 → ALERT.</span></label></li>
+        <li><label><input type="checkbox"><span>카메라 화면에 이름 또는 "unknown"을 그린 뒤 전송합니다.</span></label></li>
+      </ul>
+      <div class="done"><b>완료 기준:</b> 두 경우에 서로 다른 반응을 보인다.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">D</div>
+    <div>
+      <h3>시연 리허설</h3>
+      <div class="when">8주차 · 전원</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>배터리를 충전한 상태로 3분 시나리오(계획서 5절)를 연속 5회 실행합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>대시보드를 프로젝터에 띄웁니다. 관객이 로봇의 "생각"을 보는 화면입니다.</span></label></li>
+        <li><label><input type="checkbox"><span>성공한 실행을 백업 영상으로 녹화하고, 만일을 위해 시뮬레이터도 준비해 둡니다.</span></label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section id="team">
+  <div class="num">09</div>
+  <h2>팀 구성 제안</h2>
+  <p>메시지 형식이 트랙 간의 약속이므로 네 트랙이 병렬로 작업할 수 있습니다. 1주차에 <code>docs/message_schema.md</code>를 합의하고, 바꿀 때는 반드시 모두에게 알리세요.</p>
+  <div class="grid2">
+    <div class="card"><h4><span class="tag a">트랙 1</span> 개 펌웨어</h4><p>ESP32-S3 개 3마리의 MicroPython: Wi-Fi, 명령 파서, 보행 호출, 안전 반사, 상태 메시지, MP3와 도트매트릭스, A 개 카메라.</p></div>
+    <div class="card"><h4><span class="tag b">트랙 2</span> 인식 (Pi)</h4><p>LiDAR 드라이버, 배경 제거, 군집화, 개/침입자 매칭, YOLO, ReSpeaker DOA와 소리 분류.</p></div>
+    <div class="card"><h4><span class="tag c">트랙 3</span> 두뇌 (Pi)</h4><p>상태 머신, 출구 예측, 헝가리안 배정, 웨이포인트 이동, 인계. <code>mission</code>, <code>intruder</code>, <code>event</code>를 보냅니다.</p></div>
+    <div class="card"><h4><span class="tag r">트랙 4</span> 모니터 및 통합</h4><p>이 폴더: 대시보드, 시뮬레이터, 기록/재생, 아레나 설정, 시연 화면. 전체 통합 테스트도 담당합니다.</p></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="code">
+  <div class="num">10</div>
+  <h2>실제 하드웨어 연결</h2>
+  <p>각 코드 조각이 시뮬레이터의 한 부분을 대체합니다. <code>server/app.py</code>를 실행 중인 기기의 IP로 보내세요.</p>
+
+  <h3>개 상태 (각 MechDog의 MicroPython)</h3>
+<pre><code>import network, socket, ujson, time
+MONITOR = ("192.168.0.10", 9000)   # 모니터 IP
+NAME = "B"
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+while True:
+    msg = {"type": "dog", "from": NAME,
+           "battery_v": read_battery(), "front_cm": ultrasonic.distance_cm(),
+           "tilt": "ok" if upright() else "fallen", "state": current_state}
+    sock.sendto(ujson.dumps(msg), MONITOR)
+    time.sleep_ms(100)</code></pre>
+  <p><code>read_battery</code>, <code>ultrasonic</code>, <code>upright</code>는 사용하는 펌웨어 버전의 Hiwonder MechDog 라이브러리 호출로 바꿔 넣을 자리입니다.</p>
+
+  <h3>LiDAR 스캔 (Pi의 Python, RPLIDAR 예시)</h3>
+<pre><code>import json, socket
+from rplidar import RPLidar           # pip install rplidar-roboticia
+
+MONITOR = ("127.0.0.1", 9000)
+ORIGIN, MOUNT_DEG = [3.0, 0.15], 90  # 센서 정면이 향하는 아레나 기준 각도
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+lidar = RPLidar("/dev/ttyUSB0")
+
+for scan in lidar.iter_scans():
+    pts = [[round((MOUNT_DEG - a) % 360, 1), round(d / 1000, 3)] for _, a, d in scan if d > 0]
+    sock.sendto(json.dumps({"type": "lidar", "from": "pi", "origin": ORIGIN, "points": pts}).encode(), MONITOR)</code></pre>
+
+  <h3>A 개 카메라 스냅샷 (Pi가 ESP32-S3 카메라에서 받아 모니터로 전송)</h3>
+<pre><code>import base64, requests, time
+CAM = "http://192.168.0.21/capture"        # ESP32 카메라 스냅샷 URL
+while True:
+    jpg = requests.get(CAM, timeout=2).content
+    requests.post("http://127.0.0.1:8000/api/ingest", json={
+        "type": "camera", "from": "A", "note": state,
+        "image": "data:image/jpeg;base64," + base64.b64encode(jpg).decode(),
+        "evidence": state in ("INTERCEPT", "CONTAIN")})
+    time.sleep(1)</code></pre>
+
+  <h3>두뇌 → 모니터</h3>
+<pre><code>def emit(msg):
+    sock.sendto(json.dumps(msg).encode(), MONITOR)
+
+emit({"type": "mission", "from": "pi", "state": "ALERT"})
+emit({"type": "intruder", "from": "pi", "x": 2.41, "y": 1.98, "confidence": 0.95})
+emit({"type": "event", "from": "pi", "level": "alert", "text": "LiDAR + sound agree -> ALERT"})
+emit({"type": "dog", "from": "B", "x": 1.20, "y": 0.35, "heading_deg": 90})   # 추적된 위치</code></pre>
+  <div class="note">스트림은 한 번에 하나씩 바꾸고 나머지는 시뮬레이터를 유지하세요. 예: 개 상태는 실제, LiDAR는 시뮬레이션. 대시보드에서 이상한 점이 보이면 어느 스트림이 원인인지 바로 알 수 있습니다.</div>
+</section>
+
+<!-- 11 -->
+<section id="risks">
+  <div class="num">11</div>
+  <h2>리스크와 모니터에서 확인할 점</h2>
+  <div class="tablewrap"><table>
+    <tr><th>리스크</th><th>대응</th><th>모니터에서 보이는 모습</th></tr>
+    <tr><td>개가 느려 출구 도달 실패</td><td>개 대기 위치를 출구 가까이, 침입자 속도 제한</td><td>"Intruder heading to EXIT 2 (ETA …, Dog C ETA …)" 이벤트</td></tr>
+    <tr><td>LiDAR에서 개와 침입자 혼동</td><td>명령 기반으로 개 위치 예측, 반사 마커 부착</td><td>침입자 마커가 개 위로 튐</td></tr>
+    <tr><td>Wi-Fi 지연·끊김</td><td>1초 무명령 정지, 전용 공유기</td><td>개 카드가 <b>LOST</b>로 바뀌고 마커가 흐려짐</td></tr>
+    <tr><td>Pi에서 YOLO가 느림</td><td>경량 모델 또는 OAK-D Lite</td><td>카메라 시각이 뒤처짐</td></tr>
+    <tr><td>사람 안전</td><td>30 cm 접근 금지 반사, 시연 시 저속 보행</td><td>침입자 주위 0.5 m 원: 개가 원 위에 머물러야 함</td></tr>
+    <tr><td>시연 중 배터리 방전</td><td>예비 배터리, 매 실행 전 확인</td><td>배터리 막대 (6.4–8.4 V)</td></tr>
+  </table></div>
+</section>
+
+<footer>
+  폴더: <code>mechdog-patrol-monitor/</code> · 기반 문서: <code>patrol_apprehension_plan.md</code> (2026-11-06), <code>project_plan_summary.md</code> · 가이드 작성일 2026-11-09.
+</footer>
+</div>
+
+<script>
+  (function () {
+    const boxes = [...document.querySelectorAll("ul.check input")];
+    const KEY = "mechdog-guide-checks-ko";
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
+    boxes.forEach((b, i) => { b.checked = !!saved[i]; });
+    function update() {
+      const n = boxes.filter((b) => b.checked).length;
+      document.getElementById("prog").style.width = (100 * n / boxes.length) + "%";
+      document.getElementById("progtext").textContent = "전체 " + boxes.length + "개 중 " + n + "개 완료";
+      try { localStorage.setItem(KEY, JSON.stringify(boxes.map((b) => b.checked))); } catch (e) {}
+    }
+    boxes.forEach((b) => b.addEventListener("change", update));
+    update();
+  })();
+</script>
+</body>
+</html>

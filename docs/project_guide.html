@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MechDog Patrol Guide</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --paper: #ffffff; --text: #1d2430; --muted: #5f6b7a; --line: #dfe3ea; --soft: #eef1f5;
+    --accent: #2563eb; --accent-soft: #e0eaff;
+    --a: #2563eb; --b: #10a36b; --c: #d48a00; --red: #dc2626; --purple: #8b5cf6; --cyan: #0891b2;
+    --code-bg: #f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1117; --paper: #151b24; --text: #e6edf3; --muted: #8b98a9; --line: #263041; --soft: #1b2230;
+      --accent: #4da3ff; --accent-soft: #15253d;
+      --a: #4da3ff; --b: #3ecf8e; --c: #f5b942; --red: #ff5a5c; --purple: #c084fc; --cyan: #7ee0ff;
+      --code-bg: #0f141c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1117; --paper: #151b24; --text: #e6edf3; --muted: #8b98a9; --line: #263041; --soft: #1b2230;
+    --accent: #4da3ff; --accent-soft: #15253d;
+    --a: #4da3ff; --b: #3ecf8e; --c: #f5b942; --red: #ff5a5c; --purple: #c084fc; --cyan: #7ee0ff;
+    --code-bg: #0f141c;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 80px; }
+  header.hero { padding: 56px 0 28px; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 12px; }
+  h2 { font-size: 24px; margin: 0 0 6px; }
+  h3 { font-size: 18px; margin: 22px 0 6px; }
+  .lead { font-size: 18px; color: var(--muted); max-width: 720px; margin: 0; }
+  section { padding: 36px 0 8px; border-top: 1px solid var(--line); margin-top: 28px; }
+  section > .num { color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .06em; }
+  p { margin: 8px 0; }
+  a { color: var(--accent); }
+  code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto;
+    font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre code { background: none; padding: 0; }
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; }
+  .toc a { display: block; padding: 5px 12px; border: 1px solid var(--line); border-radius: 99px; text-decoration: none;
+    color: var(--text); font-size: 14px; background: var(--paper); }
+  .toc a:hover { border-color: var(--accent); color: var(--accent); }
+  figure { margin: 18px 0; }
+  figure.shot img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--line); }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .diagram { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card h4 { margin: 0 0 4px; font-size: 16px; }
+  .card p { margin: 4px 0; color: var(--muted); font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 12px 0; }
+  .tablewrap { overflow-x: auto; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--soft); color: var(--muted); }
+  .tag.a { color: var(--a); } .tag.b { color: var(--b); } .tag.c { color: var(--c); } .tag.r { color: var(--red); }
+  .phase { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 18px 0; border-bottom: 1px dashed var(--line); }
+  .phase:last-child { border-bottom: 0; }
+  .phase .badge { width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center; font-weight: 700;
+    background: var(--accent-soft); color: var(--accent); font-size: 15px; text-align: center; line-height: 1.1; }
+  .phase h3 { margin: 0 0 2px; }
+  .phase .when { color: var(--muted); font-size: 14px; }
+  .done { margin-top: 8px; padding: 8px 12px; border-left: 3px solid var(--b); background: var(--soft); border-radius: 0 6px 6px 0; font-size: 14.5px; }
+  ul.check { list-style: none; padding: 0; margin: 8px 0; }
+  ul.check li { padding: 3px 0; }
+  ul.check label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+  ul.check input { margin-top: 6px; accent-color: var(--accent); }
+  ul.check input:checked + span { color: var(--muted); text-decoration: line-through; }
+  .progress { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--b); transition: width .2s; }
+  .note { padding: 12px 16px; border-radius: 10px; background: var(--accent-soft); font-size: 15px; margin: 14px 0; }
+  .shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .shots img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--line); }
+  @media (max-width: 760px) { .shots { grid-template-columns: minmax(0, 1fr); } }
+  .shots figure { margin: 0; }
+  /* SVG classes */
+  .s-box { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+  .s-soft { fill: var(--soft); stroke: var(--line); stroke-width: 1.5; }
+  .s-text { fill: var(--text); font: 600 14px -apple-system, "Segoe UI", sans-serif; }
+  .s-sub { fill: var(--muted); font: 12px -apple-system, "Segoe UI", sans-serif; }
+  .s-mono { fill: var(--muted); font: 11.5px ui-monospace, Menlo, monospace; }
+  .s-line { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .s-acc { stroke: var(--accent); stroke-width: 2; fill: none; }
+  .s-wall { stroke: var(--text); stroke-width: 4; }
+  .s-exit { stroke: var(--red); stroke-width: 4; stroke-dasharray: 6 5; }
+  .s-obst { fill: var(--muted); opacity: .35; }
+  .s-a { fill: var(--a); } .s-b { fill: var(--b); } .s-c { fill: var(--c); } .s-red { fill: var(--red); }
+  .s-za { fill: var(--a); opacity: .08; } .s-zb { fill: var(--b); opacity: .08; } .s-zc { fill: var(--c); opacity: .08; }
+  .s-ray { stroke: var(--cyan); stroke-width: 1; opacity: .45; }
+  .s-state { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+  .s-hot { fill: var(--paper); stroke: var(--red); stroke-width: 2; }
+  .s-bar { fill: var(--accent); opacity: .85; }
+  .s-bar2 { fill: var(--purple); opacity: .85; }
+  .s-bar3 { fill: var(--b); opacity: .85; }
+  .s-grid { stroke: var(--line); stroke-width: 1; }
+  footer { color: var(--muted); font-size: 14px; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">MechDog AI 협동로봇 공간서비스 · Project guide</div>
+  <h1>Patrol &amp; apprehension, with a live monitor</h1>
+  <p class="lead">How to build the 3-dog security patrol from <code>patrol_apprehension_plan.md</code>, plus a web dashboard that shows everything the robots sense: LiDAR, dog positions, sound alerts, camera and mission state.</p>
+  <ul class="toc">
+    <li><a href="#goal">1 · Goal</a></li>
+    <li><a href="#arch">2 · Architecture</a></li>
+    <li><a href="#data">3 · Data</a></li>
+    <li><a href="#arena">4 · Arena</a></li>
+    <li><a href="#states">5 · State machine</a></li>
+    <li><a href="#monitor">6 · Monitor</a></li>
+    <li><a href="#roadmap">7 · Roadmap</a></li>
+    <li><a href="#steps">8 · Step by step</a></li>
+    <li><a href="#team">9 · Team</a></li>
+    <li><a href="#code">10 · Connect hardware</a></li>
+    <li><a href="#risks">11 · Risks</a></li>
+  </ul>
+</header>
+
+<!-- 1 -->
+<section id="goal">
+  <div class="num">01</div>
+  <h2>What you are building</h2>
+  <p>Three MechDogs and a Raspberry Pi control tower split the arena and patrol it. When an intruder appears, they <b>don't chase it</b>. They predict where it is going, block the exits first, surround it at a safe distance, warn it and collect evidence, then hand over to the control room. <b>검거 = 탐지 → 확인 → 출구 봉쇄 → 포위 → 경고 → 증거 확보 → 관제 인계.</b></p>
+  <p>The new piece is the <b>Patrol Monitor</b>: a web page that shows, live, everything the system sees and decides. It is the "control room" in the demo, and your main debugging tool while you build.</p>
+  <figure class="shot">
+    <img src="images/dashboard_contain.png" alt="Patrol Monitor dashboard during CONTAIN: three dogs surround the intruder on the arena map; dog status, sound, camera and event timeline panels on the right and below">
+    <figcaption>The monitor already in this folder, running on simulated data during <b>CONTAIN</b>: the LiDAR map with three dogs ringing the intruder, dog status, sound direction, Dog A's camera and the event timeline.</figcaption>
+  </figure>
+  <div class="note">The monitor is <b>already working</b> with a simulator that plays the 3-minute demo from the plan. Your job is to replace the simulator, one data stream at a time, with real hardware. Section 10 shows how.</div>
+</section>
+
+<!-- 2 -->
+<section id="arch">
+  <div class="num">02</div>
+  <h2>System architecture</h2>
+  <p>As in the original plan, <b>the Pi is the brain and the dogs are the body</b>. The monitor server is a separate small process (on the Pi or a laptop) that only <i>listens</i>. It never commands the robots, so a dashboard crash cannot affect the demo.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 920 470" role="img" aria-label="Architecture: dogs and Pi send telemetry over Wi-Fi to the monitor server, which pushes it to the browser dashboard">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+    </defs>
+    <!-- dogs -->
+    <g>
+      <rect x="20" y="30" width="230" height="110" rx="12" class="s-box"/>
+      <circle cx="52" cy="62" r="16" class="s-a"/><text x="52" y="67" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">A</text>
+      <text x="78" y="60" class="s-text">Dog A · 추적견</text><text x="78" y="78" class="s-sub">Tracker</text>
+      <text x="36" y="104" class="s-sub">ESP32-S3 camera, ultrasonic, IMU</text>
+      <text x="36" y="122" class="s-mono">→ status, snapshots</text>
+
+      <rect x="20" y="170" width="230" height="110" rx="12" class="s-box"/>
+      <circle cx="52" cy="202" r="16" class="s-b"/><text x="52" y="207" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">B</text>
+      <text x="78" y="200" class="s-text">Dog B · 봉쇄견 1</text><text x="78" y="218" class="s-sub">Blocker, exit 1</text>
+      <text x="36" y="244" class="s-sub">MP3, dot matrix, ultrasonic, IMU</text>
+      <text x="36" y="262" class="s-mono">→ status</text>
+
+      <rect x="20" y="310" width="230" height="110" rx="12" class="s-box"/>
+      <circle cx="52" cy="342" r="16" class="s-c"/><text x="52" y="347" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">C</text>
+      <text x="78" y="340" class="s-text">Dog C · 봉쇄견 2</text><text x="78" y="358" class="s-sub">Blocker, exit 2</text>
+      <text x="36" y="384" class="s-sub">MP3, dot matrix, ultrasonic, IMU</text>
+      <text x="36" y="402" class="s-mono">→ status</text>
+    </g>
+    <!-- pi -->
+    <rect x="330" y="80" width="250" height="290" rx="14" class="s-soft"/>
+    <text x="455" y="110" text-anchor="middle" class="s-text">Raspberry Pi · 관제탑</text>
+    <rect x="350" y="126" width="210" height="96" rx="8" class="s-box"/>
+    <text x="362" y="146" class="s-sub" font-weight="600">Sensors</text>
+    <text x="362" y="166" class="s-sub">2D LiDAR (fixed, 10–15 cm high)</text>
+    <text x="362" y="184" class="s-sub">Camera + YOLO</text>
+    <text x="362" y="202" class="s-sub">ReSpeaker mic array (DOA)</text>
+    <rect x="350" y="234" width="210" height="120" rx="8" class="s-box"/>
+    <text x="362" y="254" class="s-sub" font-weight="600">Brain (patrol_brain)</text>
+    <text x="362" y="274" class="s-sub">Map + dog tracking</text>
+    <text x="362" y="292" class="s-sub">Intruder = unmatched cluster</text>
+    <text x="362" y="310" class="s-sub">State machine, intercept,</text>
+    <text x="362" y="328" class="s-sub">contain (Hungarian)</text>
+    <text x="362" y="346" class="s-mono">5–10 Hz loop</text>
+    <!-- arrows dogs <-> pi -->
+    <path d="M252,85 C300,85 300,170 328,170" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <path d="M252,225 L328,225" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <path d="M252,365 C300,365 300,290 328,290" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
+    <text x="262" y="215" class="s-mono">cmd ↔ status</text>
+    <text x="262" y="455" class="s-sub">Same Wi-Fi router · JSON over UDP</text>
+    <!-- monitor -->
+    <rect x="660" y="120" width="240" height="120" rx="14" class="s-box" style="stroke:var(--accent);stroke-width:2"/>
+    <text x="780" y="148" text-anchor="middle" class="s-text">Monitor server</text>
+    <text x="780" y="168" text-anchor="middle" class="s-mono">server/app.py</text>
+    <text x="678" y="196" class="s-sub">UDP :9000 + POST /api/ingest in</text>
+    <text x="678" y="216" class="s-sub">WebSocket /ws out</text>
+    <rect x="660" y="300" width="240" height="100" rx="14" class="s-box"/>
+    <text x="780" y="330" text-anchor="middle" class="s-text">Browser dashboard</text>
+    <text x="780" y="350" text-anchor="middle" class="s-mono">http://&lt;ip&gt;:8000</text>
+    <text x="780" y="378" text-anchor="middle" class="s-sub">laptop, tablet, projector</text>
+    <path d="M582,180 L656,180" class="s-acc" marker-end="url(#arA)"/>
+    <text x="590" y="170" class="s-mono">telemetry</text>
+    <path d="M780,242 L780,296" class="s-acc" marker-end="url(#arA)"/>
+    <text x="790" y="275" class="s-mono">live push</text>
+    <path d="M252,60 C470,10 640,40 700,116" class="s-line" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+    <text x="330" y="66" class="s-mono">dog status + snapshots can also go direct</text>
+  </svg>
+  </div>
+  <p><b>Rule of thumb:</b> anything that moves a robot goes through the Pi brain. Anything you only want to <i>see</i> also goes to the monitor. During development you can point the dogs straight at the monitor to watch their sensors before the brain exists.</p>
+</section>
+
+<!-- 3 -->
+<section id="data">
+  <div class="num">03</div>
+  <h2>What data the monitor shows</h2>
+  <p>Seven message types cover everything. The full spec with examples is in <code>docs/message_schema.md</code>.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Type</th><th>From</th><th>Rate</th><th>Shown as</th><th>Key fields</th></tr>
+    <tr><td><code>lidar</code></td><td>Pi</td><td>5 Hz</td><td>Cyan points on the map</td><td><code>origin</code>, <code>points [[deg, m]…]</code></td></tr>
+    <tr><td><code>dog</code></td><td>Pi (x, y) + each dog (sensors)</td><td>10 Hz</td><td>Dog markers with heading; status cards</td><td><code>x y heading_deg state battery_v front_cm tilt</code></td></tr>
+    <tr><td><code>intruder</code></td><td>Pi</td><td>5 Hz</td><td>Red marker, 0.5 m ring, trail</td><td><code>x y confidence</code></td></tr>
+    <tr><td><code>sound</code></td><td>Pi (ReSpeaker)</td><td>1 Hz + alerts</td><td>Compass, DOA ray on the map</td><td><code>label doa_deg level_db alert</code></td></tr>
+    <tr><td><code>camera</code></td><td>Dog A</td><td>~1 Hz</td><td>Live frame, evidence gallery</td><td><code>image</code> (data URL), <code>evidence</code></td></tr>
+    <tr><td><code>mission</code></td><td>Pi</td><td>on change</td><td>State pipeline in the header</td><td><code>state</code></td></tr>
+    <tr><td><code>event</code></td><td>Pi</td><td>on change</td><td>Timeline</td><td><code>level text</code></td></tr>
+  </table></div>
+  <p><span class="tag">Why split dog data?</span> A MechDog does not know where it is. Its <b>position</b> comes from the Pi's LiDAR tracking, while <b>battery, ultrasonic and tilt</b> come from the dog. Both send partial <code>dog</code> messages and the monitor merges them.</p>
+</section>
+
+<!-- 4 -->
+<section id="arena">
+  <div class="num">04</div>
+  <h2>Arena and coordinates</h2>
+  <p>Everything uses one coordinate system: metres, origin at the bottom-left corner, x to the right, y up, angles counter-clockwise from +x. The layout lives in <code>web/arena.json</code>. Measure your real arena and edit that file, and both the dashboard and the simulator follow.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 760 520" role="img" aria-label="Arena 6 by 4 metres with two exits on the left and right walls, two obstacles, three patrol zones and the Pi LiDAR at the bottom centre">
+    <g transform="translate(80,40)">
+      <!-- zones: 100px per metre, y flipped -->
+      <rect x="0" y="0" width="200" height="400" class="s-zb"/>
+      <rect x="200" y="0" width="200" height="400" class="s-za"/>
+      <rect x="400" y="0" width="200" height="400" class="s-zc"/>
+      <g class="s-grid">
+        <line x1="100" y1="0" x2="100" y2="400"/><line x1="200" y1="0" x2="200" y2="400"/><line x1="300" y1="0" x2="300" y2="400"/>
+        <line x1="400" y1="0" x2="400" y2="400"/><line x1="500" y1="0" x2="500" y2="400"/>
+        <line x1="0" y1="100" x2="600" y2="100"/><line x1="0" y1="200" x2="600" y2="200"/><line x1="0" y1="300" x2="600" y2="300"/>
+      </g>
+      <text x="10" y="20" class="s-sub">zone B</text><text x="210" y="20" class="s-sub">zone A</text><text x="410" y="20" class="s-sub">zone C</text>
+      <!-- lidar rays -->
+      <g class="s-ray">
+        <line x1="300" y1="385" x2="0" y2="270"/><line x1="300" y1="385" x2="0" y2="40"/><line x1="300" y1="385" x2="160" y2="0"/>
+        <line x1="300" y1="385" x2="300" y2="0"/><line x1="300" y1="385" x2="480" y2="0"/><line x1="300" y1="385" x2="600" y2="60"/>
+        <line x1="300" y1="385" x2="600" y2="300"/><line x1="300" y1="385" x2="160" y2="140"/>
+      </g>
+      <!-- obstacles -->
+      <rect x="160" y="90" width="50" height="50" class="s-obst"/>
+      <rect x="390" y="270" width="60" height="40" class="s-obst"/>
+      <!-- walls with exit gaps (exits y 1.5–2.3 m => 170–250 px) -->
+      <line x1="0" y1="0" x2="600" y2="0" class="s-wall"/><line x1="0" y1="400" x2="600" y2="400" class="s-wall"/>
+      <line x1="0" y1="0" x2="0" y2="170" class="s-wall"/><line x1="0" y1="250" x2="0" y2="400" class="s-wall"/>
+      <line x1="600" y1="0" x2="600" y2="170" class="s-wall"/><line x1="600" y1="250" x2="600" y2="400" class="s-wall"/>
+      <line x1="0" y1="170" x2="0" y2="250" class="s-exit"/><line x1="600" y1="170" x2="600" y2="250" class="s-exit"/>
+      <text x="-12" y="168" text-anchor="end" class="s-text" style="fill:var(--red)">EXIT 1</text>
+      <text x="612" y="168" class="s-text" style="fill:var(--red)">EXIT 2</text>
+      <!-- intruder path -->
+      <path d="M-40,210 C80,205 200,200 260,230 S400,215 440,210" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
+      <circle cx="440" cy="210" r="9" class="s-red"/>
+      <circle cx="440" cy="210" r="50" fill="none" stroke="var(--red)" stroke-dasharray="4 5" stroke-width="1.5"/>
+      <text x="440" y="282" text-anchor="middle" class="s-sub" style="fill:var(--red);paint-order:stroke;stroke:var(--paper);stroke-width:4px">intruder stops · r = 0.5 m ring</text>
+      <!-- dogs blocking -->
+      <circle cx="40" cy="210" r="13" class="s-b"/><text x="40" y="215" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">B</text>
+      <circle cx="560" cy="210" r="13" class="s-c"/><text x="560" y="215" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">C</text>
+      <circle cx="380" cy="235" r="13" class="s-a"/><text x="380" y="240" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">A</text>
+      <!-- pi -->
+      <circle cx="300" cy="385" r="9" fill="var(--text)"/>
+      <text x="314" y="380" class="s-sub">Pi + LiDAR (3.0, 0.15)</text>
+      <!-- axes -->
+      <g transform="translate(0,440)">
+        <line x1="0" y1="0" x2="100" y2="0" stroke="var(--text)" stroke-width="2"/>
+        <text x="106" y="4" class="s-sub">1 m</text>
+        <text x="0" y="24" class="s-mono">origin (0,0) = bottom-left · x → · y ↑ · 6 × 4 m</text>
+      </g>
+    </g>
+  </svg>
+  </div>
+  <p>Mount the LiDAR at <b>dog body height (10–15 cm)</b> so it sees the dogs and the intruder's legs or RC car. Put it where it sees both exits with as few shadows as possible. The boxes cast blind spots, which you can see in the dashboard as gaps in the cyan points.</p>
+</section>
+
+<!-- 5 -->
+<section id="states">
+  <div class="num">05</div>
+  <h2>Mission state machine</h2>
+  <p>This runs on the Pi. Every transition is sent as a <code>mission</code> message, and the dashboard header highlights the current state.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 900 300" role="img" aria-label="State machine: PATROL to SUSPECT to ALERT to INTERCEPT to CONTAIN to HANDOVER to RETURN and back to PATROL; SUSPECT can return to PATROL on a false alarm">
+    <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+    <g font-family="-apple-system, Segoe UI, sans-serif">
+      <rect x="20" y="40" width="140" height="64" rx="10" class="s-state"/><text x="90" y="68" text-anchor="middle" class="s-text">PATROL</text><text x="90" y="88" text-anchor="middle" class="s-sub">3 zones, waypoints</text>
+      <rect x="250" y="40" width="140" height="64" rx="10" class="s-state"/><text x="320" y="68" text-anchor="middle" class="s-text">SUSPECT</text><text x="320" y="88" text-anchor="middle" class="s-sub">1 sensor triggered</text>
+      <rect x="480" y="40" width="140" height="64" rx="10" class="s-hot"/><text x="550" y="68" text-anchor="middle" class="s-text">ALERT</text><text x="550" y="88" text-anchor="middle" class="s-sub">≥ 2 sensors agree</text>
+      <rect x="710" y="40" width="170" height="64" rx="10" class="s-hot"/><text x="795" y="68" text-anchor="middle" class="s-text">INTERCEPT</text><text x="795" y="88" text-anchor="middle" class="s-sub">B, C → exits · A tracks</text>
+      <rect x="710" y="190" width="170" height="64" rx="10" class="s-hot"/><text x="795" y="218" text-anchor="middle" class="s-text">CONTAIN</text><text x="795" y="238" text-anchor="middle" class="s-sub">120° ring, warn, STOP</text>
+      <rect x="480" y="190" width="140" height="64" rx="10" class="s-state"/><text x="550" y="218" text-anchor="middle" class="s-text">HANDOVER</text><text x="550" y="238" text-anchor="middle" class="s-sub">evidence → control</text>
+      <rect x="250" y="190" width="140" height="64" rx="10" class="s-state"/><text x="320" y="218" text-anchor="middle" class="s-text">RETURN</text><text x="320" y="238" text-anchor="middle" class="s-sub">back to route</text>
+      <path d="M162,72 L246,72" class="s-line" marker-end="url(#ar2)"/><text x="204" y="62" text-anchor="middle" class="s-mono">anomaly</text>
+      <path d="M392,72 L476,72" class="s-line" marker-end="url(#ar2)"/><text x="434" y="62" text-anchor="middle" class="s-mono">confirmed</text>
+      <path d="M622,72 L706,72" class="s-line" marker-end="url(#ar2)"/><text x="664" y="62" text-anchor="middle" class="s-mono">at once</text>
+      <path d="M795,106 L795,186" class="s-line" marker-end="url(#ar2)"/><text x="785" y="150" text-anchor="end" class="s-mono">stopped / exit held</text>
+      <path d="M708,222 L624,222" class="s-line" marker-end="url(#ar2)"/><text x="666" y="212" text-anchor="middle" class="s-mono">N s held</text>
+      <path d="M478,222 L394,222" class="s-line" marker-end="url(#ar2)"/><text x="436" y="212" text-anchor="middle" class="s-mono">ack</text>
+      <path d="M248,222 C120,222 90,180 90,108" class="s-line" marker-end="url(#ar2)"/>
+      <path d="M300,106 C280,150 300,170 310,186" class="s-line" stroke-dasharray="4 4" marker-end="url(#ar2)"/><text x="286" y="150" text-anchor="end" class="s-mono">false alarm</text>
+      <text x="20" y="290" class="s-sub">Red border = states where the dashboard pipeline pulses red.</text>
+    </g>
+  </svg>
+  </div>
+  <div class="tablewrap"><table>
+    <tr><th>Anomaly source</th><th>Signal</th><th>What the monitor shows</th></tr>
+    <tr><td>LiDAR</td><td>Moving cluster that matches none of the 3 dogs</td><td>Intruder marker (confidence 0.6)</td></tr>
+    <tr><td>Sound</td><td>Glass break / door + DOA</td><td>Purple ray from the Pi toward the sound</td></tr>
+    <tr><td>Vision</td><td>YOLO person, ArUco marker or unknown face</td><td>Box in Dog A's camera frame</td></tr>
+  </table></div>
+  <p>Go to <b>ALERT only when two sources point at the same place</b>. In the monitor, check that the DOA ray actually passes near the intruder marker. That is the cross-check, made visible.</p>
+</section>
+
+<!-- 6 -->
+<section id="monitor">
+  <div class="num">06</div>
+  <h2>The monitor, scene by scene</h2>
+  <p>These are real screenshots of <code>web/index.html</code> driven by <code>server/simulator.py</code>, which follows the demo script in section 5 of the plan. Use them as the target picture for each stage.</p>
+  <div class="shots">
+    <figure><img src="images/dashboard_patrol.png" alt="PATROL: three dogs in their zones, LiDAR outline of the room"><figcaption><b>0:00 PATROL.</b> Each dog loops its own zone. The LiDAR outline matches the walls, which checks your mounting and angle conversion.</figcaption></figure>
+    <figure><img src="images/dashboard_alert.png" alt="SUSPECT: intruder at exit 1, purple sound direction ray from the Pi pointing at it"><figcaption><b>0:45 SUSPECT.</b> Glass-break sound: the DOA ray points at exit 1, where LiDAR sees an unmatched cluster. Dog A turns to look.</figcaption></figure>
+    <figure><img src="images/dashboard_intercept.png" alt="INTERCEPT: B at exit 1, C at exit 2, A following the intruder, camera shows a person box"><figcaption><b>1:00 INTERCEPT.</b> B and C go to the exits, A follows at about 60 cm, and the camera confirms a person. Snapshots start filling the evidence gallery.</figcaption></figure>
+    <figure><img src="images/dashboard_contain.png" alt="CONTAIN: three dogs around the stopped intruder"><figcaption><b>1:40 CONTAIN.</b> The intruder stops and the dogs form a 120° ring at 0.5 m. Voice warning and STOP are logged in the timeline.</figcaption></figure>
+  </div>
+  <h3>Run it yourself</h3>
+<pre><code>cd mechdog-patrol-monitor
+pip install -r requirements.txt
+uvicorn server.app:app --host 0.0.0.0 --port 8000   # terminal 1
+python -m server.simulator --speed 3                 # terminal 2
+# open http://localhost:8000</code></pre>
+</section>
+
+<!-- 7 -->
+<section id="roadmap">
+  <div class="num">07</div>
+  <h2>Roadmap</h2>
+  <p>A suggested 8-week plan built from the plan's development stages (MVP → extensions 1–3). The monitor track runs alongside the whole time: each week, replace one simulated stream with the real one.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 900 330" role="img" aria-label="Gantt chart: setup week 1, communication weeks 1-2, Pi sensing weeks 2-3, MVP weeks 3-4, sound week 5, containment week 6, face recognition week 7, demo rehearsal week 8, monitor integration across all weeks">
+    <g font-family="-apple-system, Segoe UI, sans-serif">
+      <g class="s-grid">
+        <line x1="200" y1="20" x2="200" y2="300"/><line x1="287" y1="20" x2="287" y2="300"/><line x1="375" y1="20" x2="375" y2="300"/>
+        <line x1="462" y1="20" x2="462" y2="300"/><line x1="550" y1="20" x2="550" y2="300"/><line x1="637" y1="20" x2="637" y2="300"/>
+        <line x1="725" y1="20" x2="725" y2="300"/><line x1="812" y1="20" x2="812" y2="300"/><line x1="900" y1="20" x2="900" y2="300"/>
+      </g>
+      <g class="s-sub" text-anchor="middle">
+        <text x="243" y="14">W1</text><text x="331" y="14">W2</text><text x="418" y="14">W3</text><text x="506" y="14">W4</text>
+        <text x="593" y="14">W5</text><text x="681" y="14">W6</text><text x="768" y="14">W7</text><text x="856" y="14">W8</text>
+      </g>
+      <g class="s-text" style="font-size:13px">
+        <text x="0" y="44">0 · Setup &amp; measure</text>
+        <text x="0" y="76">1 · Pi ↔ dog comms</text>
+        <text x="0" y="108">2 · Pi sensing</text>
+        <text x="0" y="140">3 · MVP: block exits</text>
+        <text x="0" y="172">Ext 1 · Sound + cross-check</text>
+        <text x="0" y="204">Ext 2 · 3-dog contain</text>
+        <text x="0" y="236">Ext 3 · Face recognition</text>
+        <text x="0" y="268">Demo rehearsal</text>
+        <text x="0" y="300">Monitor integration</text>
+      </g>
+      <rect x="202" y="30" width="84" height="20" rx="5" class="s-bar"/>
+      <rect x="230" y="62" width="143" height="20" rx="5" class="s-bar"/>
+      <rect x="289" y="94" width="172" height="20" rx="5" class="s-bar"/>
+      <rect x="377" y="126" width="172" height="20" rx="5" class="s-bar"/>
+      <text x="556" y="141" class="s-sub" style="fill:var(--red)">◆ MVP demo</text>
+      <rect x="552" y="158" width="84" height="20" rx="5" class="s-bar2"/>
+      <rect x="639" y="190" width="84" height="20" rx="5" class="s-bar2"/>
+      <rect x="727" y="222" width="84" height="20" rx="5" class="s-bar2"/>
+      <rect x="814" y="254" width="84" height="20" rx="5" class="s-bar3"/>
+      <rect x="202" y="286" width="696" height="20" rx="5" class="s-bar3" opacity=".35"/>
+      <text x="210" y="300" class="s-sub" style="fill:var(--text)">swap simulator streams for real data, one by one →</text>
+    </g>
+  </svg>
+  </div>
+  <p class="s-sub" style="color:var(--muted);font-size:14px">Adjust the week lengths to your real schedule. The order matters more than the dates: <b>don't start Ext 2 before the MVP works end to end on real robots.</b></p>
+</section>
+
+<!-- 8 -->
+<section id="steps">
+  <div class="num">08</div>
+  <h2>Step by step</h2>
+  <p>Tick items as you go. Ticks are saved in this browser only.</p>
+  <div class="progress"><i id="prog"></i></div>
+  <p id="progtext" style="color:var(--muted);font-size:14px"></p>
+
+  <div class="phase">
+    <div class="badge">0</div>
+    <div>
+      <h3>Setup and measurements</h3>
+      <div class="when">Week 1 · everyone</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>Dedicated Wi-Fi router for the robots. Give the Pi and each dog a fixed IP and write them down.</span></label></li>
+        <li><label><input type="checkbox"><span>Run the monitor + simulator on a laptop and on the Pi. Everyone opens the dashboard.</span></label></li>
+        <li><label><input type="checkbox"><span>Measure MechDog walking speed and turn rate (m/s, °/s). Put the real value into <code>DOG_SPEED</code> in the simulator and check whether a dog can still reach an exit before the intruder.</span></label></li>
+        <li><label><input type="checkbox"><span>Build the arena: 2 exits, a few boxes. Measure it and update <code>web/arena.json</code>.</span></label></li>
+        <li><label><input type="checkbox"><span>Decide the open questions from plan §11: intruder = RC car first, then a person; one mode or both (search &amp; rescue + patrol).</span></label></li>
+      </ul>
+      <div class="done"><b>Done when:</b> the dashboard shows the real arena outline, and you know whether exit pre-positioning is physically possible.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">1</div>
+    <div>
+      <h3>Pi ↔ dog communication</h3>
+      <div class="when">Weeks 1–2 · dog firmware + brain</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>MicroPython on each dog: join Wi-Fi and send a <code>dog</code> status message (battery, front_cm, tilt, state) at 10 Hz to the monitor. See section 10.</span></label></li>
+        <li><label><input type="checkbox"><span>Dog receives <code>{"to":"B","cmd":"move",...}</code> from the Pi and walks.</span></label></li>
+        <li><label><input type="checkbox"><span>Safety reflexes on the dog: stop below 10 cm, stop if tipped (IMU), stop if no command for 1 s.</span></label></li>
+        <li><label><input type="checkbox"><span>Pull the router's plug while a dog walks. It must stop within 1 s, and its card on the dashboard must turn <b>LOST</b>.</span></label></li>
+      </ul>
+      <div class="done"><b>Done when:</b> all 3 dog cards show live battery/ultrasonic/tilt, and the Pi can walk each dog by command.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">2</div>
+    <div>
+      <h3>Pi sensing: LiDAR map and dog tracking</h3>
+      <div class="when">Weeks 2–3 · perception</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>Read the LiDAR on the Pi, convert to arena angles and send <code>lidar</code> messages. The cyan outline must line up with the drawn walls.</span></label></li>
+        <li><label><input type="checkbox"><span>Record ~10 s of empty-arena scans as the static background. Moving points = scan − background.</span></label></li>
+        <li><label><input type="checkbox"><span>Cluster moving points (e.g. DBSCAN, eps ≈ 8 cm) and match clusters to dogs using their last position + last command.</span></label></li>
+        <li><label><input type="checkbox"><span>Send each dog's <code>x, y, heading_deg</code> as a <code>dog</code> message from the Pi. Markers now move on the map.</span></label></li>
+        <li><label><input type="checkbox"><span>Dog A camera: POST one JPEG per second as a <code>camera</code> message.</span></label></li>
+      </ul>
+      <div class="done"><b>Done when:</b> you walk a dog by hand and its marker follows it on the map within ~10 cm.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">3</div>
+    <div>
+      <h3>MVP: detect and block exits</h3>
+      <div class="when">Weeks 3–4 · brain + everyone</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>Unmatched moving cluster → <code>intruder</code> message → SUSPECT.</span></label></li>
+        <li><label><input type="checkbox"><span>State machine PATROL → SUSPECT → ALERT → INTERCEPT sends <code>mission</code> and <code>event</code> messages.</span></label></li>
+        <li><label><input type="checkbox"><span>INTERCEPT: send B and C to the exit waypoints. A follows at 50–80 cm and keeps 30 cm minimum.</span></label></li>
+        <li><label><input type="checkbox"><span>Log every run: save all telemetry (append the UDP stream to a <code>.jsonl</code> file) so you can replay and debug.</span></label></li>
+        <li><label><input type="checkbox"><span>Test with the RC car + ArUco marker, 10 runs. Count successes.</span></label></li>
+      </ul>
+      <div class="done"><b>Done when (plan §8):</b> RC car enters → 2 dogs reach the exits, visible on the dashboard. <span class="tag r">MVP demo</span></div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">E1</div>
+    <div>
+      <h3>Sound direction and cross-check</h3>
+      <div class="when">Week 5 · perception (reuse <code>siren-alert-edge-ai/</code>)</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>ReSpeaker DOA + glass/door classifier → <code>sound</code> messages with <code>alert: true</code>.</span></label></li>
+        <li><label><input type="checkbox"><span>ALERT only if the LiDAR intruder lies within ±20° of the DOA ray.</span></label></li>
+        <li><label><input type="checkbox"><span>False-alarm test: play the glass sound with nobody in the arena. Expect SUSPECT → RETURN and no ALERT.</span></label></li>
+      </ul>
+      <div class="done"><b>Done when:</b> a false alarm does not trigger ALERT.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">E2</div>
+    <div>
+      <h3>Prediction and 3-dog containment</h3>
+      <div class="when">Week 6 · brain</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>Estimate intruder velocity from the last ~1 s of positions. Compare intruder ETA with each dog's ETA per exit.</span></label></li>
+        <li><label><input type="checkbox"><span>CONTAIN: 3 ring targets at r ≈ 0.5 m, matched with <code>scipy.optimize.linear_sum_assignment</code>, updated at 5 Hz.</span></label></li>
+        <li><label><input type="checkbox"><span>Warn: MP3 "stop" + dot-matrix STOP on B and C. Log it as an <code>event</code>.</span></label></li>
+        <li><label><input type="checkbox"><span>HANDOVER: mark Dog A snapshots with <code>evidence: true</code>, then RETURN.</span></label></li>
+      </ul>
+      <div class="done"><b>Done when:</b> a moving intruder is surrounded, and the dashboard shows the trail, evidence and timeline.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">E3</div>
+    <div>
+      <h3>Face recognition</h3>
+      <div class="when">Week 7 · perception (reuse <code>Real-Time_Face-Recognition…</code>)</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>Registered person → greet event (no ALERT). Unknown person → ALERT.</span></label></li>
+        <li><label><input type="checkbox"><span>Draw the name or "unknown" on the camera frame before sending it.</span></label></li>
+      </ul>
+      <div class="done"><b>Done when:</b> the two cases produce different reactions.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">D</div>
+    <div>
+      <h3>Demo rehearsal</h3>
+      <div class="when">Week 8 · everyone</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>Run the 3-minute script (plan §5) 5 times in a row with charged batteries.</span></label></li>
+        <li><label><input type="checkbox"><span>Put the dashboard on a projector. It is the audience's view of what the robots "think".</span></label></li>
+        <li><label><input type="checkbox"><span>Record a backup video of a successful run, and keep the simulator ready as a fallback.</span></label></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section id="team">
+  <div class="num">09</div>
+  <h2>Suggested team split</h2>
+  <p>Four tracks that can work in parallel because the message schema is the contract between them. Agree on <code>docs/message_schema.md</code> in week 1 and don't change it without telling everyone.</p>
+  <div class="grid2">
+    <div class="card"><h4><span class="tag a">Track 1</span> Dog firmware</h4><p>MicroPython on the 3 ESP32-S3 dogs: Wi-Fi, command parser, gait calls, safety reflexes, status messages, MP3 and dot-matrix, Dog A camera.</p></div>
+    <div class="card"><h4><span class="tag b">Track 2</span> Perception (Pi)</h4><p>LiDAR driver, background subtraction, clustering, dog/intruder matching, YOLO, ReSpeaker DOA and sound classification.</p></div>
+    <div class="card"><h4><span class="tag c">Track 3</span> Brain (Pi)</h4><p>State machine, exit prediction, Hungarian assignment, path to waypoint, handover. Emits <code>mission</code>, <code>intruder</code> and <code>event</code>.</p></div>
+    <div class="card"><h4><span class="tag r">Track 4</span> Monitor &amp; integration</h4><p>This folder: dashboard, simulator, logging/replay, arena config, demo screen. Also owns the end-to-end test runs.</p></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="code">
+  <div class="num">10</div>
+  <h2>Connecting real hardware</h2>
+  <p>Each snippet replaces one part of the simulator. Send to the IP of the machine running <code>server/app.py</code>.</p>
+
+  <h3>Dog status (MicroPython on each MechDog)</h3>
+<pre><code>import network, socket, ujson, time
+MONITOR = ("192.168.0.10", 9000)   # monitor IP
+NAME = "B"
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+while True:
+    msg = {"type": "dog", "from": NAME,
+           "battery_v": read_battery(), "front_cm": ultrasonic.distance_cm(),
+           "tilt": "ok" if upright() else "fallen", "state": current_state}
+    sock.sendto(ujson.dumps(msg), MONITOR)
+    time.sleep_ms(100)</code></pre>
+  <p><code>read_battery</code>, <code>ultrasonic</code> and <code>upright</code> stand for the Hiwonder MechDog library calls for your firmware version.</p>
+
+  <h3>LiDAR scan (Python on the Pi, RPLIDAR example)</h3>
+<pre><code>import json, socket
+from rplidar import RPLidar           # pip install rplidar-roboticia
+
+MONITOR = ("127.0.0.1", 9000)
+ORIGIN, MOUNT_DEG = [3.0, 0.15], 90  # where the sensor's front points, arena degrees
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+lidar = RPLidar("/dev/ttyUSB0")
+
+for scan in lidar.iter_scans():
+    pts = [[round((MOUNT_DEG - a) % 360, 1), round(d / 1000, 3)] for _, a, d in scan if d > 0]
+    sock.sendto(json.dumps({"type": "lidar", "from": "pi", "origin": ORIGIN, "points": pts}).encode(), MONITOR)</code></pre>
+
+  <h3>Dog A camera snapshot (Pi pulls from the ESP32-S3 camera, posts to the monitor)</h3>
+<pre><code>import base64, requests, time
+CAM = "http://192.168.0.21/capture"        # ESP32 camera snapshot URL
+while True:
+    jpg = requests.get(CAM, timeout=2).content
+    requests.post("http://127.0.0.1:8000/api/ingest", json={
+        "type": "camera", "from": "A", "note": state,
+        "image": "data:image/jpeg;base64," + base64.b64encode(jpg).decode(),
+        "evidence": state in ("INTERCEPT", "CONTAIN")})
+    time.sleep(1)</code></pre>
+
+  <h3>Brain → monitor</h3>
+<pre><code>def emit(msg):
+    sock.sendto(json.dumps(msg).encode(), MONITOR)
+
+emit({"type": "mission", "from": "pi", "state": "ALERT"})
+emit({"type": "intruder", "from": "pi", "x": 2.41, "y": 1.98, "confidence": 0.95})
+emit({"type": "event", "from": "pi", "level": "alert", "text": "LiDAR + sound agree -> ALERT"})
+emit({"type": "dog", "from": "B", "x": 1.20, "y": 0.35, "heading_deg": 90})   # tracked position</code></pre>
+  <div class="note">Swap one stream at a time and keep the simulator for the rest. Example: real dog status but simulated LiDAR. If something looks wrong on the dashboard, you know which stream is to blame.</div>
+</section>
+
+<!-- 11 -->
+<section id="risks">
+  <div class="num">11</div>
+  <h2>Risks and what to watch on the monitor</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Risk</th><th>Mitigation</th><th>How the monitor shows it</th></tr>
+    <tr><td>Dogs too slow to reach exits</td><td>Park dogs near exits, slow the intruder</td><td>"Intruder heading to EXIT 2 (ETA …, Dog C ETA …)" events</td></tr>
+    <tr><td>LiDAR confuses dog and intruder</td><td>Predict dog position from commands, add reflective markers</td><td>Intruder marker jumping onto a dog</td></tr>
+    <tr><td>Wi-Fi lag or drop</td><td>1 s no-command stop, dedicated router</td><td>Dog card turns <b>LOST</b>, faded marker</td></tr>
+    <tr><td>YOLO too slow on the Pi</td><td>Lighter model, or OAK-D Lite</td><td>Camera timestamp falls behind</td></tr>
+    <tr><td>Person safety</td><td>30 cm keep-out reflex, slow walking in the demo</td><td>0.5 m ring around the intruder: dogs should stay on it</td></tr>
+    <tr><td>Battery runs out mid-demo</td><td>Spares, check before each run</td><td>Battery bars (6.4–8.4 V)</td></tr>
+  </table></div>
+</section>
+
+<footer>
+  Folder: <code>mechdog-patrol-monitor/</code> · Based on <code>patrol_apprehension_plan.md</code> (2026-11-06) and <code>project_plan_summary.md</code> · Guide written 2026-11-09.
+</footer>
+</div>
+
+<script>
+  (function () {
+    const boxes = [...document.querySelectorAll("ul.check input")];
+    const KEY = "mechdog-guide-checks";
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
+    boxes.forEach((b, i) => { b.checked = !!saved[i]; });
+    function update() {
+      const n = boxes.filter((b) => b.checked).length;
+      document.getElementById("prog").style.width = (100 * n / boxes.length) + "%";
+      document.getElementById("progtext").textContent = n + " of " + boxes.length + " tasks done";
+      try { localStorage.setItem(KEY, JSON.stringify(boxes.map((b) => b.checked))); } catch (e) {}
+    }
+    boxes.forEach((b) => b.addEventListener("change", update));
+    update();
+  })();
+</script>
+</body>
+</html>
