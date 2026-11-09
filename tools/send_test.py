@@ -1,8 +1,8 @@
-"""Send fake `dog` messages to the monitor, to check the server before using real hardware.
+"""실제 하드웨어를 쓰기 전에 서버를 확인하려고 모니터에 가짜 `dog` 메시지를 보낸다.
 
-    python tools/send_test.py                 # Dog B walking a small circle
+    python tools/send_test.py                 # Dog B가 작은 원을 그리며 이동
     python tools/send_test.py --host 192.168.0.11 --dog A
-    python tools/send_test.py --x 1.2 --y 0.8 # position only, e.g. to place a real dog on the map
+    python tools/send_test.py --x 1.2 --y 0.8 # 위치만 전송, 예: 실제 로봇견을 지도에 표시
 """
 import argparse, json, math, socket, time
 
@@ -18,14 +18,14 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 send = lambda m: sock.sendto(json.dumps(m).encode(), (a.host, a.port))
 
 if a.x is not None and a.y is not None:
-    # Position only, sent repeatedly so the marker doesn't go stale. Ctrl+C to stop.
-    print(f"Holding Dog {a.dog} at ({a.x}, {a.y}). Ctrl+C to stop.")
+    # 위치만 반복해서 보내서 표시가 사라지지 않게 한다. Ctrl+C로 중지.
+    print(f"Dog {a.dog}를 ({a.x}, {a.y})에 고정 중. Ctrl+C로 중지.")
     while True:
         send({"type": "dog", "from": a.dog, "x": a.x, "y": a.y, "heading_deg": 90})
         time.sleep(0.5)
 
-send({"type": "event", "from": "test", "level": "info", "text": f"send_test.py talking to {a.host}:{a.port}"})
-print(f"Sending Dog {a.dog} to {a.host}:{a.port}. Ctrl+C to stop.")
+send({"type": "event", "from": "test", "level": "info", "text": f"send_test.py가 {a.host}:{a.port} 로 전송 중"})
+print(f"Dog {a.dog} 데이터를 {a.host}:{a.port} 로 전송 중. Ctrl+C로 중지.")
 t0 = time.time()
 while True:
     t = time.time() - t0

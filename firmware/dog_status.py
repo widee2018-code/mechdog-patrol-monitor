@@ -1,23 +1,23 @@
-# MicroPython for the MechDog (ESP32-S3): join Wi-Fi and send `dog` status to the monitor.
-# Open in Thonny, edit the four settings below, then press Run. Do not save it over the
-# dog's own main.py without first downloading a backup copy of that file.
+# MechDog(ESP32-S3)용 MicroPython: Wi-Fi에 연결해서 모니터로 `dog` 상태를 보낸다.
+# Thonny에서 열고 아래 설정 네 개를 고친 뒤 Run을 누른다. 로봇견의 원래 main.py를
+# 백업해 두기 전에는 이 파일을 main.py로 덮어쓰지 말 것.
 import network, socket, json, time
 
 WIFI_SSID = "YOUR_WIFI"
 WIFI_PASS = "YOUR_PASSWORD"
-MONITOR = ("192.168.0.11", 9000)   # IP of the computer running server/app.py
-NAME = "B"                          # A, B or C
+MONITOR = ("192.168.0.11", 9000)   # server/app.py를 실행하는 컴퓨터의 IP
+NAME = "B"                          # A, B 또는 C
 
-# Sensor hooks. Replace the bodies with the calls from Hiwonder's MechDog examples
-# for your firmware. Return None until then; the dashboard shows "—" for missing fields.
+# 센서 함수. 본문을 사용 중인 펌웨어에 맞는 Hiwonder MechDog 예제 코드로 바꾼다.
+# 그 전까지는 None을 반환하며, 대시보드는 값이 없는 항목을 "—"로 표시한다.
 def read_battery():
-    return None   # volts, e.g. 7.6
+    return None   # 볼트, 예: 7.6
 
 def read_front_cm():
-    return None   # ultrasonic distance in cm
+    return None   # 초음파 거리 (cm)
 
 def read_tilt():
-    return None   # "ok" or "fallen"
+    return None   # "ok" 또는 "fallen"
 
 
 def connect():
@@ -30,8 +30,8 @@ def connect():
                 break
             time.sleep_ms(250)
     if not wlan.isconnected():
-        raise RuntimeError("Wi-Fi failed. 2.4 GHz network? Right password?")
-    print("Wi-Fi OK, dog IP:", wlan.ifconfig()[0])
+        raise RuntimeError("Wi-Fi 연결 실패. 2.4 GHz 네트워크인가요? 비밀번호가 맞나요?")
+    print("Wi-Fi 연결됨, 로봇견 IP:", wlan.ifconfig()[0])
     return wlan
 
 
@@ -47,7 +47,7 @@ wlan = connect()
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 send = lambda msg: sock.sendto(json.dumps(msg).encode(), MONITOR)
 send({"type": "event", "from": NAME, "level": "info",
-      "text": "Dog %s online at %s" % (NAME, wlan.ifconfig()[0])})
+      "text": "Dog %s 온라인 (%s)" % (NAME, wlan.ifconfig()[0])})
 
 reported = set()
 while True:
@@ -61,10 +61,10 @@ while True:
     except Exception:
         pass
     send({k: v for k, v in msg.items() if v is not None})
-    for name, err in errors.items():   # report each broken sensor hook once
+    for name, err in errors.items():   # 고장 난 센서 함수는 한 번씩만 알린다
         if name not in reported:
             reported.add(name)
-            send({"type": "event", "from": NAME, "level": "warn", "text": "%s failed: %s" % (name, err)})
+            send({"type": "event", "from": NAME, "level": "warn", "text": "%s 실패: %s" % (name, err)})
     if not wlan.isconnected():
         wlan = connect()
     time.sleep_ms(100)

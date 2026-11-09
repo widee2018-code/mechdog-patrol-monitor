@@ -107,4 +107,4 @@ main {
 .evidence figure { margin: 0; }
 .evidence img { width: 100%; border-radius: 4px; display: block; border: 1px solid var(--line); }
 .evidence figcaption { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.evidence:empty::before { grid-column: 1 / -1; content: "No evidence yet. Dog A sends snapshots during ALERT / INTERCEPT / CONTAIN."; color: var(--muted); font-size: 13px; }
+.evidence:empty::before { grid-column: 1 / -1; content: "아직 증거가 없습니다. Dog A가 ALERT / INTERCEPT / CONTAIN 중에 스냅샷을 보냅니다."; color: var(--muted); font-size: 13px; }

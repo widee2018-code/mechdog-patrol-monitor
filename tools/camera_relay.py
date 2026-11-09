@@ -1,17 +1,17 @@
-"""Forward frames from a dog's camera module to the monitor dashboard.
+"""로봇견 카메라 모듈의 영상을 모니터 대시보드로 전달한다.
 
-Find the camera's picture address first:
+먼저 카메라의 사진 주소를 찾는다:
     python tools/camera_relay.py --probe 192.168.4.1
 
-Then relay it (a snapshot URL or an MJPEG stream URL both work):
+그다음 전달한다 (스냅샷 URL, MJPEG 스트림 URL 모두 가능):
     python tools/camera_relay.py --url http://192.168.4.1/capture
     python tools/camera_relay.py --url http://192.168.4.1:81/stream --fps 2 --dog A
 
-Uses only the standard library. Runs on the Mac now, on the Pi later.
+표준 라이브러리만 사용한다. 지금은 Mac에서, 나중에는 Pi에서 실행한다.
 """
 import argparse, base64, json, socket, time, urllib.error, urllib.request
 
-# Endpoints commonly used by ESP32 camera firmware (Espressif CameraWebServer and derivatives).
+# ESP32 카메라 펌웨어가 흔히 쓰는 주소 (Espressif CameraWebServer 및 파생 펌웨어).
 CANDIDATES = ["/capture", "/jpg", "/snapshot", "/cam-hi.jpg", "/cam-lo.jpg", ":81/stream", "/stream", "/mjpeg", "/"]
 
 
@@ -29,9 +29,9 @@ def local_ip_towards(host):
 def probe(host):
     host = host.removeprefix("http://").rstrip("/")
     mine = local_ip_towards(host)
-    print(f"This computer's IP towards {host}: {mine}")
+    print(f"{host} 쪽으로 향하는 이 컴퓨터의 IP: {mine}")
     if mine.rsplit(".", 1)[0] != host.split(":")[0].rsplit(".", 1)[0]:
-        print("  ! Not on the same network as the camera. Join the camera's Wi-Fi first.")
+        print("  ! 카메라와 같은 네트워크가 아닙니다. 먼저 카메라 Wi-Fi에 연결하세요.")
     found = []
     for path in CANDIDATES:
         url = f"http://{host}{path}"
@@ -40,17 +40,17 @@ def probe(host):
                 ctype = r.headers.get("Content-Type", "?")
                 head = r.read(4096)
         except urllib.error.HTTPError as e:
-            print(f"  {url:40s} -- HTTP {e.code} (camera answered, wrong path)")
+            print(f"  {url:40s} -- HTTP {e.code} (카메라 응답 있음, 잘못된 경로)")
             continue
         except Exception as e:
             print(f"  {url:40s} -- {getattr(e, 'reason', e)}")
             continue
-        kind = ("JPEG snapshot" if head[:2] == b"\xff\xd8" else
-                "MJPEG stream" if "multipart" in ctype else ctype)
+        kind = ("JPEG 스냅샷" if head[:2] == b"\xff\xd8" else
+                "MJPEG 스트림" if "multipart" in ctype else ctype)
         print(f"  {url:40s} OK  {kind}")
-        if kind in ("JPEG snapshot", "MJPEG stream"):
+        if kind in ("JPEG 스냅샷", "MJPEG 스트림"):
             found.append(url)
-    print("\nUse one with --url:" if found else "\nNo picture address found.", *found, sep="\n  ")
+    print("\n--url 에 사용할 주소:" if found else "\n사진 주소를 찾지 못했습니다.", *found, sep="\n  ")
 
 
 def snapshots(url):
@@ -60,7 +60,7 @@ def snapshots(url):
 
 
 def mjpeg_frames(url):
-    # Split the stream on JPEG start/end markers; works regardless of the multipart boundary.
+    # JPEG 시작/끝 표시로 스트림을 자른다. multipart 경계 문자열과 상관없이 동작한다.
     with urllib.request.urlopen(url, timeout=5) as r:
         buf = b""
         while chunk := r.read(4096):
@@ -70,7 +70,7 @@ def mjpeg_frames(url):
             if start != -1 and end != -1:
                 yield buf[start:end + 2]
                 buf = buf[end + 2:]
-            elif len(buf) > 2_000_000:   # no complete frame in 2 MB: drop and resync
+            elif len(buf) > 2_000_000:   # 2 MB 안에 완전한 프레임이 없으면 버리고 다시 맞춘다
                 buf = b""
 
 
@@ -82,30 +82,30 @@ def frames(url):
 
 def relay(a):
     ingest = f"http://{a.monitor}/api/ingest"
-    print(f"{a.url} -> {ingest} at {a.fps} fps. Ctrl+C to stop.")
+    print(f"{a.url} -> {ingest}, {a.fps} fps. Ctrl+C로 중지.")
     while True:
         try:
             last = 0.0
             for jpg in frames(a.url):
                 if time.time() - last < 1 / a.fps:
-                    continue   # MJPEG runs faster than we forward; skip extra frames
+                    continue   # MJPEG가 전달 속도보다 빠르므로 남는 프레임은 건너뛴다
                 last = time.time()
                 msg = {"type": "camera", "from": a.dog, "note": "live",
                        "image": "data:image/jpeg;base64," + base64.b64encode(jpg).decode()}
                 req = urllib.request.Request(ingest, json.dumps(msg).encode(), {"Content-Type": "application/json"})
                 urllib.request.urlopen(req, timeout=3).read()
-                print(f"\rsent {len(jpg) // 1024} KB frame at {time.strftime('%H:%M:%S')}", end="", flush=True)
+                print(f"\r{len(jpg) // 1024} KB 프레임 전송 {time.strftime('%H:%M:%S')}", end="", flush=True)
         except KeyboardInterrupt:
             return
         except Exception as e:
-            print(f"\n{type(e).__name__}: {e}. Retrying in 2 s")
+            print(f"\n{type(e).__name__}: {e}. 2초 후 재시도")
             time.sleep(2)
 
 
 p = argparse.ArgumentParser()
-p.add_argument("--probe", metavar="HOST", help="try common camera addresses on this host")
-p.add_argument("--url", help="snapshot or MJPEG stream URL")
-p.add_argument("--monitor", default="127.0.0.1:8000", help="monitor server host:port")
+p.add_argument("--probe", metavar="HOST", help="이 호스트에서 흔한 카메라 주소들을 시험")
+p.add_argument("--url", help="스냅샷 또는 MJPEG 스트림 URL")
+p.add_argument("--monitor", default="127.0.0.1:8000", help="모니터 서버 host:port")
 p.add_argument("--dog", default="A")
 p.add_argument("--fps", type=float, default=2)
 a = p.parse_args()
