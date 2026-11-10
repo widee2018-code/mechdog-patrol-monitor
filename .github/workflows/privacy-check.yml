@@ -1,0 +1,46 @@
+# 푸시와 PR에 들어온 모든 커밋을 .githooks/pre-commit 과 같은 규칙으로 검사한다.
+# 로컬 hook을 안 켰거나 --no-verify 로 건너뛴 커밋을 잡기 위한 것.
+# 팀 공통 금지어(이름 등)는 저장소 Settings → Secrets → Actions 의 PRIVACY_BLOCKLIST 에
+# 한 줄에 하나씩 넣는다. 로그에는 걸린 내용 없이 파일:줄번호만 나온다.
+name: privacy-check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Load team blocklist
+        env:
+          BLOCKLIST: ${{ secrets.PRIVACY_BLOCKLIST }}
+        run: printf '%s\n' "$BLOCKLIST" > .git-blocklist.local
+
+      - name: Pick commit range
+        id: range
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            range="$PR_BASE..HEAD"
+          elif [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..HEAD"
+          elif git rev-parse -q --verify "origin/$DEFAULT_BRANCH" >/dev/null; then
+            # 새 브랜치: 기본 브랜치에 없는 커밋만
+            range="origin/$DEFAULT_BRANCH..HEAD"
+          else
+            range="HEAD"
+          fi
+          echo "range=$range" >> "$GITHUB_OUTPUT"
+          echo "검사 범위: $range"
+
+      - name: Scan commits
+        run: bash .githooks/pre-commit --range "${{ steps.range.outputs.range }}"

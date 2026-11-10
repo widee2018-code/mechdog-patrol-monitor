@@ -99,3 +99,19 @@ CAMERAS="A=http://192.168.0.20:81/stream" uvicorn server.app:app --host 0.0.0.0 
    IP가 바뀌지 않게 하려면 스케치의 `USE_STATIC_IP` 를 켜거나 공유기에서 DHCP 예약을 합니다.
 
 시리얼 로그에 "카메라를 찾지 못함"이 나오면 이 모듈의 핀 배치가 `PIN_MAPS` 후보에 없는 것입니다. 백업한 원래 펌웨어의 부팅 로그나 모듈 회로도에서 핀을 확인해 추가하세요. 교체한 펌웨어에는 원래 펌웨어의 색 인식 등 메인보드 연동 기능이 없습니다.
+
+## 커밋 전 개인정보 검사
+
+저장소를 받은 뒤 한 번만 실행하세요. 커밋할 때마다 개인정보·비밀정보가 들어갔는지 검사하고, 찾으면 커밋을 막습니다.
+
+```bash
+git config core.hooksPath .githooks
+```
+
+- 공통 규칙(내 컴퓨터 경로, MAC 주소, API 키, 비밀번호 값 등): `.githooks/blocked-patterns.txt`
+- 나만의 금지어(이름, 이메일 등): 저장소 최상위에 `.git-blocklist.local` 을 만들고 한 줄에 하나씩 적습니다. 이 파일은 git에 올라가지 않습니다.
+- `secrets.h` 의 Wi-Fi 이름과 비밀번호는 자동으로 검사합니다.
+- 저장소 전체 검사: `.githooks/pre-commit --all`
+- 오탐인 줄은 끝에 `allow-secret` 주석을 달면 건너뜁니다.
+- GitHub에 푸시하거나 PR을 올리면 같은 검사가 GitHub Actions(`.github/workflows/privacy-check.yml`)에서 다시 돌아갑니다. hook을 안 켰거나 `--no-verify` 로 건너뛴 커밋도 여기서 잡힙니다. 로그에는 파일:줄번호만 나옵니다.
+- 팀 공통 금지어(팀원 이름 등)는 저장소 Settings → Secrets and variables → Actions 에 `PRIVACY_BLOCKLIST` 로 한 줄에 하나씩 넣습니다.

@@ -1,0 +1,22 @@
+# 커밋을 막을 정규식(ERE). 한 줄에 하나, #으로 시작하면 주석.
+# 팀 공통 규칙이므로 저장소에 올린다. 개인 이름·Wi-Fi 이름은 .git-blocklist.local 에 넣는다.
+
+# 내 컴퓨터 경로 (사용자 이름이 드러남)
+/Users/[A-Za-z0-9._-]+/
+/home/[A-Za-z0-9._-]+/
+[A-Za-z]:\\Users\\
+
+# 기기 고유 주소 (MAC)
+([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}
+
+# 개인 키
+-----BEGIN [A-Z ]*PRIVATE KEY-----
+
+# API 키 / 토큰
+ghp_[A-Za-z0-9]{36}
+github_pat_[A-Za-z0-9_]{20,}
+sk-ant-[A-Za-z0-9_-]{20,}
+sk-[A-Za-z0-9]{32,}
+AKIA[0-9A-Z]{16}
+xox[abprs]-[A-Za-z0-9-]{10,}
+AIza[0-9A-Za-z_-]{35}

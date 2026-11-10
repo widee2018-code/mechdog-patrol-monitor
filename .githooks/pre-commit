@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# 커밋 전에 개인정보·비밀정보가 들어갔는지 검사하고, 찾으면 커밋을 막는다.
+#   공통 규칙:   .githooks/blocked-patterns.txt  (정규식, 저장소에 포함)
+#   개인 금지어: .git-blocklist.local            (그대로 일치, 대소문자 무시, git에 올라가지 않음)
+#   secrets.h 의 WIFI_SSID / WIFI_PASS 값도 자동으로 금지어에 들어간다.
+# 켜기:          git config core.hooksPath .githooks
+# 저장소 전체 검사: .githooks/pre-commit --all
+# 커밋 범위 검사(CI): .githooks/pre-commit --range BASE..HEAD   (범위 안의 모든 커밋을 하나씩 본다)
+# 오탐인 줄은 끝에 allow-secret 주석을 달면 건너뛴다.
+# CI 로그는 공개될 수 있으므로 CI에서는 걸린 내용 없이 파일:줄번호만 출력한다.
+set -u
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+patterns=.githooks/blocked-patterns.txt
+personal=.git-blocklist.local
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# 올리면 안 되는 파일 이름
+blocked_files='(^|/)(secrets\.h|\.env(\..+)?|.*\.pem|.*\.key|id_rsa.*|\.git-blocklist\.local)$|^firmware/backup/'
+
+# diff에서 추가된 줄만 "파일:줄번호:내용" 형식으로 바꾼다.
+added_lines() {
+  awk '
+    /^\+\+\+ /  { f = substr($0, 7); next }
+    /^@@/       { match($0, /\+[0-9]+/); n = substr($0, RSTART + 1, RLENGTH - 1); next }
+    /^\+/       { print f ":" n ":" substr($0, 2); n++ }
+  '
+}
+
+# 검사할 줄을 모은다. 훅 자체 파일은 제외.
+case "${1:-}" in
+  --all)
+    git ls-files > "$tmp/files"
+    git grep -nI -e '' -- . ':!.githooks' > "$tmp/lines" || true
+    ;;
+  --range)
+    range=${2:?범위를 주세요. 예: --range origin/main..HEAD}
+    git log --no-merges --format= --name-only --diff-filter=ACMR "$range" | sort -u | grep -v '^$' > "$tmp/files"
+    git log --no-merges --format= -p -U0 --no-color --diff-filter=ACMR "$range" -- . ':!.githooks' \
+      | added_lines > "$tmp/lines"
+    ;;
+  *)
+    git diff --cached --name-only --diff-filter=ACMR > "$tmp/files"
+    git diff --cached -U0 --no-color --diff-filter=ACMR -- . ':!.githooks' | added_lines > "$tmp/lines"
+    ;;
+esac
+grep -v 'allow-secret' "$tmp/lines" > "$tmp/check" || true
+
+found=0
+report() {  # $1 = 제목, stdin = 걸린 줄
+  if [ -s "$tmp/hit" ]; then
+    echo "✗ $1" >&2
+    if [ -n "${CI:-}" ]; then
+      cut -d: -f1,2 "$tmp/hit" | sed 's/^/    /' >&2
+    else
+      sed 's/^/    /' "$tmp/hit" | cut -c1-200 >&2
+    fi
+    found=1
+  fi
+}
+
+grep -E "$blocked_files" "$tmp/files" | grep -v '\.example$' > "$tmp/hit"
+report "올리면 안 되는 파일"
+
+grep -vE '^[[:space:]]*(#|$)' "$patterns" > "$tmp/pat"
+if [ -s "$tmp/pat" ]; then
+  grep -E -f "$tmp/pat" "$tmp/check" > "$tmp/hit"
+  report "개인정보/비밀정보 패턴 (blocked-patterns.txt)"
+fi
+
+# 비밀번호·토큰 변수에 실제 값이 들어간 경우. YOUR_... 같은 예시 값은 통과.
+grep -E '(WIFI_SSID|PASS|PASSWORD|TOKEN|SECRET|API_KEY)[A-Za-z_]*[[:space:]]*[=:]?[[:space:]]*"[^"]+"' "$tmp/check" \
+  | grep -vE '"(YOUR_[A-Z_]*)?"' > "$tmp/hit"
+report "비밀번호/토큰 값"
+
+# 개인 금지어 + secrets.h 의 Wi-Fi 정보
+: > "$tmp/words"
+[ -f "$personal" ] && grep -vE '^[[:space:]]*(#|$)' "$personal" >> "$tmp/words"
+find . -name secrets.h -not -path './.git/*' -exec sed -nE 's/^#define[[:space:]]+WIFI_(SSID|PASS)[[:space:]]+"([^"]+)".*/\2/p' {} + \
+  | grep -v '^YOUR_' >> "$tmp/words"
+if [ -s "$tmp/words" ]; then
+  grep -F -i -f "$tmp/words" "$tmp/check" > "$tmp/hit"
+  report "개인 금지어 (.git-blocklist.local / secrets.h)"
+fi
+
+if [ "$found" = 1 ]; then
+  echo "" >&2
+  if [ -n "${CI:-}" ]; then
+    echo "개인정보/비밀정보가 의심되는 커밋이 있습니다. 로컬에서 .githooks/pre-commit --range 로 확인하세요." >&2
+  else
+    echo "커밋을 막았습니다. 위 내용을 지우고 다시 git add 하세요." >&2
+  fi
+  echo "오탐이면 그 줄 끝에 'allow-secret' 주석을 다세요." >&2
+  exit 1
+fi
+[ -n "${1:-}" ] && echo "✓ 문제 없음"
+exit 0

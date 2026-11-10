@@ -13,3 +13,6 @@ firmware/mechdog_cam/secrets.h
 
 # Local dev notes
 docs/camera_dev_log.md
+
+# Personal blocklist for the pre-commit hook
+.git-blocklist.local
