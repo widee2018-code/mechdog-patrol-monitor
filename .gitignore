@@ -10,3 +10,6 @@ firmware/backup/
 
 # Camera firmware Wi-Fi credentials
 firmware/mechdog_cam/secrets.h
+
+# Local dev notes
+docs/camera_dev_log.md
