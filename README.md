@@ -31,7 +31,8 @@ mechdog-patrol-monitor/
 │   ├── style.css
 │   └── arena.json      # 아레나 크기, 출구, 장애물, 구역, LiDAR 위치
 ├── firmware/
-│   └── dog_status.py   # MechDog(MicroPython)용 상태 전송 코드
+│   ├── dog_status.py   # MechDog(MicroPython)용 상태 전송 코드
+│   └── mechdog_cam/    # 카메라 모듈 펌웨어: 기존 Wi-Fi에 접속 (Arduino)
 ├── tools/
 │   ├── send_test.py    # 실제 하드웨어 없이 서버를 확인하는 테스트 송신기
 │   └── camera_relay.py # 로봇견 카메라 영상을 대시보드로 전달
@@ -64,3 +65,37 @@ Pi와 로봇견이 `udp://<모니터-IP>:9000` 으로 [docs/message_schema.md](d
    ```bash
    python tools/camera_relay.py --url http://192.168.5.1/capture --dog A --fps 2
    ```
+
+### 실시간 영상 (카메라가 같은 Wi-Fi에 있을 때)
+
+아래의 카메라 펌웨어를 구워 카메라가 공유기에 접속해 있으면, 서버가 카메라 스트림을 직접 받아 대시보드에 실시간 영상으로 보여 줍니다. 서버를 이렇게 실행합니다:
+
+```bash
+CAMERAS="A=http://192.168.0.20:81/stream" uvicorn server.app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 2
+```
+
+- 서버가 카메라와 연결을 하나만 유지하고 모든 대시보드에 나눠 줍니다(ESP32 카메라는 스트림을 한 곳에만 보낼 수 있음). 그래서 서버가 실행 중이면 브라우저에서 `http://<카메라-IP>:81/stream` 을 직접 열면 멈춰 있습니다. `/capture` 는 계속 쓸 수 있습니다.
+- 대시보드 카메라 칸에 "실시간"이 표시됩니다. 영상이 끊기면 타임라인에 알림이 뜨고, `camera_relay.py` 스냅샷이 있으면 그것으로 돌아갑니다.
+- 증거 스냅샷(`camera` 메시지의 `evidence`)은 예전과 같이 동작합니다.
+- macOS에서는 서버를 실행하는 터미널 앱에 **시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크** 권한이 있어야 카메라에 접속할 수 있습니다.
+
+## 카메라 펌웨어 교체 (카메라를 기존 Wi-Fi에 접속시키기)
+
+원래 카메라 펌웨어는 자기 Wi-Fi만 만들기 때문에 컴퓨터가 인터넷/모니터 네트워크에서 빠져야 합니다. `firmware/mechdog_cam/` 를 구우면 카메라가 공유기에 직접 접속하고, 같은 `/capture`, `:81/stream` 주소를 제공합니다. Wi-Fi 접속에 실패하면 AP `MechDog-Cam-A`(비밀번호 `mechdog123`, 192.168.4.1)로 열립니다.
+
+1. **원래 펌웨어 백업 (필수).** 카메라 모듈을 USB로 연결하고 포트를 확인(`ls /dev/cu.*`)한 뒤:
+   ```bash
+   pip install esptool
+   mkdir -p firmware/backup
+   python -m esptool --chip esp32s3 -p /dev/cu.usbmodemXXXX read_flash 0 ALL firmware/backup/cam_original.bin
+   ```
+   되돌릴 때: `python -m esptool --chip esp32s3 -p /dev/cu.usbmodemXXXX write_flash 0 firmware/backup/cam_original.bin`
+2. `firmware/mechdog_cam/secrets.h.example` 을 `secrets.h` 로 복사하고 2.4 GHz Wi-Fi 이름과 비밀번호를 넣습니다.
+3. Arduino IDE에서 `firmware/mechdog_cam/mechdog_cam.ino` 를 엽니다. 보드: **ESP32S3 Dev Module**, PSRAM: **OPI PSRAM** (부팅 로그에 PSRAM이 없다고 나오면 QSPI PSRAM으로 바꿈). 업로드합니다.
+4. 시리얼 모니터(115200)에 카메라 IP가 출력됩니다. 브라우저에서 `http://<카메라-IP>/` 로 확인한 뒤:
+   ```bash
+   python tools/camera_relay.py --url http://<카메라-IP>/capture --dog A --fps 2
+   ```
+   IP가 바뀌지 않게 하려면 스케치의 `USE_STATIC_IP` 를 켜거나 공유기에서 DHCP 예약을 합니다.
+
+시리얼 로그에 "카메라를 찾지 못함"이 나오면 이 모듈의 핀 배치가 `PIN_MAPS` 후보에 없는 것입니다. 백업한 원래 펌웨어의 부팅 로그나 모듈 회로도에서 핀을 확인해 추가하세요. 교체한 펌웨어에는 원래 펌웨어의 색 인식 등 메인보드 연동 기능이 없습니다.

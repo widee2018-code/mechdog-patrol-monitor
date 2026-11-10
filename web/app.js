@@ -18,7 +18,9 @@ const S = {
   sound: null,
   lastAlertSound: null,
   evidenceKeys: new Set(),
+  camLive: false,    // 서버가 카메라 실시간 스트림을 받고 있는지
 };
+const LIVE_CAM = "A";   // 실시간 영상을 보여 줄 로봇견 (서버의 CAMERAS 이름)
 
 const $ = (id) => document.getElementById(id);
 const num = (v, d) => (typeof v === "number" ? v.toFixed(d) : "—");
@@ -73,7 +75,7 @@ const handlers = {
   camera(m) {
     $("cam").src = m.image;
     $("cam-empty").hidden = true;
-    $("cam-meta").textContent = `${fmtTime(m.ts)} · ${m.note ?? ""}`;
+    if (!S.camLive) $("cam-meta").textContent = `${fmtTime(m.ts)} · ${m.note ?? ""}`;
     if (m.evidence) addEvidence(m);
   },
   event(m) {
@@ -282,6 +284,23 @@ function connect() {
     handlers[m.type]?.(m);
   };
 }
+
+// 서버가 카메라 스트림을 받고 있으면 스냅샷 위에 실시간 영상을 겹쳐 보여 준다.
+// 끊기면 src를 지워서 아래의 camera 메시지 스냅샷이 다시 보이게 한다.
+function pollLive() {
+  fetch("/api/cameras").then((r) => r.json()).then((cams) => {
+    const live = cams[LIVE_CAM]?.online === true;
+    const img = $("cam-live");
+    if (live && !img.getAttribute("src")) img.src = `/api/camera/${LIVE_CAM}/stream`;
+    if (!live) img.removeAttribute("src");
+    S.camLive = live;
+    if (live) {
+      $("cam-empty").hidden = true;
+      $("cam-meta").textContent = "실시간";
+    }
+  }).catch(() => {}).finally(() => setTimeout(pollLive, 3000));
+}
+pollLive();
 
 fetch("arena.json").then((r) => r.json()).then((a) => {
   S.arena = a;

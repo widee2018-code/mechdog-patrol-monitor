@@ -4,15 +4,23 @@ Pi 관제탑과 로봇견들이 보내는 JSON 메시지(UDP 또는 HTTP POST)�
 모든 메시지를 WebSocket으로 대시보드에 전달한다.
 
 실행:  uvicorn server.app:app --host 0.0.0.0 --port 8000
+
+로봇견 카메라 실시간 영상까지 보려면 CAMERAS 환경 변수에 스트림 주소를 넣는다.
+열린 영상 스트림 때문에 Ctrl+C 종료가 멈추지 않도록 --timeout-graceful-shutdown 을 붙인다:
+    CAMERAS="A=http://192.168.0.20:81/stream" uvicorn server.app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 2
 """
 
 import asyncio
 import json
+import os
+import threading
 import time
+import urllib.request
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 UDP_PORT = 9000
@@ -82,6 +90,90 @@ async def watch_dogs() -> None:
                         "text": f"Dog {name} 오프라인 ({DOG_TIMEOUT:.0f}초간 데이터 없음)"})
 
 
+def mjpeg_frames(url: str):
+    # JPEG 시작/끝 표시로 스트림을 자른다 (tools/camera_relay.py와 같은 방식).
+    with urllib.request.urlopen(url, timeout=5) as r:
+        buf = b""
+        while chunk := r.read1(65536):   # read1: 도착한 만큼 바로 받아서 지연을 줄인다
+            buf += chunk
+            start = buf.find(b"\xff\xd8")
+            end = buf.find(b"\xff\xd9", start + 2)
+            if start != -1 and end != -1:
+                yield buf[start:end + 2]
+                buf = buf[end + 2:]
+            elif len(buf) > 2_000_000:
+                buf = b""
+
+
+class CameraFeed:
+    """카메라 스트림 연결을 하나만 열어 두고 최신 프레임을 여러 대시보드에 나눠 준다.
+
+    ESP32 카메라는 스트림을 한 번에 한 곳에만 보낼 수 있으므로 브라우저가 직접 붙지 않게 한다.
+    """
+
+    def __init__(self, name: str, url: str):
+        self.name, self.url = name, url
+        self.frame: bytes | None = None
+        self.seq = 0
+        self.online = False
+        self.last_error: str | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._new: asyncio.Event | None = None
+
+    def start(self, loop: asyncio.AbstractEventLoop) -> None:
+        self._loop, self._new = loop, asyncio.Event()
+        threading.Thread(target=self._read, daemon=True).start()
+
+    def _read(self) -> None:
+        # urllib은 블로킹이라 별도 스레드에서 읽고, 프레임은 이벤트 루프로 넘긴다.
+        while True:
+            error = "스트림 종료"
+            try:
+                for jpg in mjpeg_frames(self.url):
+                    self._loop.call_soon_threadsafe(self._publish, jpg)
+            except Exception as e:
+                error = str(getattr(e, "reason", e))
+            self._loop.call_soon_threadsafe(self._went_offline, error)
+            time.sleep(2)
+
+    def _publish(self, jpg: bytes) -> None:
+        self.frame, self.seq = jpg, self.seq + 1
+        if not self.online:
+            self.online, self.last_error = True, None
+            ingest({"type": "event", "from": "monitor", "level": "info", "text": f"Dog {self.name} 카메라 실시간 영상 연결됨"})
+        self._new.set()
+        self._new = asyncio.Event()
+
+    def _went_offline(self, error: str) -> None:
+        print(f"[monitor] Dog {self.name} 카메라 연결 실패 ({self.url}): {error}. 2초 후 재시도")
+        # 연결돼 있다가 끊겼을 때와, 처음부터 연결이 안 될 때 모두 같은 오류는 한 번만 타임라인에 올린다.
+        if self.online or error != self.last_error:
+            ingest({"type": "event", "from": "monitor", "level": "warn", "text": f"Dog {self.name} 카메라 영상 연결 실패: {error}"})
+        self.online, self.last_error = False, error
+
+    async def frames(self):
+        seen = 0
+        while True:
+            if self.seq == seen:
+                try:
+                    await asyncio.wait_for(self._new.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    continue
+            seen = self.seq
+            yield self.frame
+
+
+def parse_cameras(spec: str) -> dict[str, CameraFeed]:
+    feeds = {}
+    for item in filter(None, (s.strip() for s in spec.split(","))):
+        name, _, url = item.partition("=")
+        feeds[name.strip()] = CameraFeed(name.strip(), url.strip())
+    return feeds
+
+
+feeds = parse_cameras(os.environ.get("CAMERAS", ""))
+
+
 class UDPReceiver(asyncio.DatagramProtocol):
     def datagram_received(self, data: bytes, addr) -> None:
         try:
@@ -96,6 +188,9 @@ async def lifespan(_app: FastAPI):
     transport, _ = await loop.create_datagram_endpoint(UDPReceiver, local_addr=("0.0.0.0", UDP_PORT))
     print(f"[monitor] UDP 텔레메트리 수신 대기 중 :{UDP_PORT}")
     watchdog = asyncio.create_task(watch_dogs())
+    for feed in feeds.values():
+        feed.start(loop)
+        print(f"[monitor] Dog {feed.name} 카메라 스트림: {feed.url}")
     yield
     watchdog.cancel()
     transport.close()
@@ -116,6 +211,25 @@ async def http_ingest(request: Request):
 @app.get("/api/state")
 async def state():
     return {"latest": latest, "events": history["event"], "evidence": history["evidence"]}
+
+
+@app.get("/api/cameras")
+async def cameras():
+    return {name: {"online": feed.online, "url": feed.url, "error": feed.last_error} for name, feed in feeds.items()}
+
+
+@app.get("/api/camera/{name}/stream")
+async def camera_stream(name: str):
+    feed = feeds.get(name)
+    if feed is None:
+        raise HTTPException(404, f"Dog {name} 카메라가 CAMERAS에 설정되지 않음")
+
+    async def body():
+        async for jpg in feed.frames():
+            yield b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n%s\r\n" % (len(jpg), jpg)
+
+    return StreamingResponse(body(), media_type="multipart/x-mixed-replace; boundary=frame",
+                             headers={"Cache-Control": "no-store"})
 
 
 @app.websocket("/ws")
