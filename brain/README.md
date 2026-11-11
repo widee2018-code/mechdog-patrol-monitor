@@ -4,7 +4,7 @@ Pi 또는 노트북에서 돌며 로봇견을 조종하는 코드입니다. 로�
 
 | 파일 | 하는 일 |
 |---|---|
-| `marker_follow.py` | 카메라로 ArUco 마커를 찾아 따라가기 (0.6 m 유지, 놓치면 멈춤 → 찾기 → 포기) |
+| `marker_follow.py` | 카메라로 ArUco 마커를 찾아 따라가기 (0.6 m 유지, 놓치면 멈춤 → 찾기 → 포기). 일시정지로 시작해서 시작 키를 눌러야 움직임 |
 | `teleop.py` | 키보드로 로봇견 조종 (회전 방향 확인, 행렬 연습 때 A 조종) |
 | `make_markers.py` | 출력용 마커 A4 시트 만들기 |
 | `../firmware/dog_cmd.py` | 로봇견 쪽: 명령 받기 + 안전 반사(1초 무명령 정지, 15 cm 이내 전진 금지) |
@@ -31,6 +31,8 @@ python brain/marker_follow.py --camera 0 --show
 
 `--dog`를 주지 않으면 명령을 보내지 않는 **연습 모드**입니다. 마커를 들고 움직이며 화면과 터미널의 명령을 확인하세요.
 
+**시작과 일시정지:** 프로그램은 항상 **일시정지 상태로 시작**합니다. 마커를 인식하면 화면에 `PAUSED - marker OK`가 초록색으로 뜨고, 이때 **스페이스(카메라 창)** 또는 **Enter(터미널)** 를 누르면 따라가기를 시작합니다. 같은 키를 다시 누르면 일시정지(정지 명령)입니다. 마커가 보이기 전에 시작을 누르면, 마커가 보이는 순간부터 따라갑니다. 시작 키 없이 바로 따라가게 하려면 `--autostart`를 붙입니다.
+
 - 마커를 화면 오른쪽으로 → `turn`이 +, 왼쪽으로 → −
 - 마커를 멀리 → `v`가 커짐, 0.6 m 근처 → `v=0`, 30 cm보다 가까이 → `v=-40` (후진)
 - 마커를 가리면 → `hold`(정지) → 0.7초 뒤 `search`(마지막 본 쪽으로 회전) → 12초 뒤 `gave_up`(정지)
@@ -51,7 +53,7 @@ python brain/marker_follow.py --camera http://localhost:8000/api/camera/B/stream
 
 ## 4. 로봇견이 명령 받기
 
-1. Thonny에서 `firmware/dog_cmd.py`를 열고 Wi-Fi, `MONITOR`, `NAME`을 고친 뒤 Run. 출력되는 로봇견 IP를 적어 둡니다. **실제 Wi-Fi 비밀번호를 넣은 상태로 커밋하지 마세요.**
+1. ([Thonny 연결 방법](../docs/mechdog_thonny_guide.md) 참고) Thonny에서 `firmware/dog_cmd.py`를 열고 Wi-Fi, `MONITOR`, `NAME`을 고친 뒤 Run. 출력되는 로봇견 IP를 적어 둡니다. **실제 Wi-Fi 비밀번호를 넣은 상태로 커밋하지 마세요.**
 2. 로봇견을 들어 올린 상태(다리가 허공)에서 키보드 조종으로 확인합니다.
    ```bash
    python brain/teleop.py --dog 192.168.0.31
@@ -68,7 +70,11 @@ python brain/marker_follow.py --camera http://localhost:8000/api/camera/B/stream
     --dog 192.168.0.31 --name B --monitor 127.0.0.1 --max-speed 80 --show
 ```
 
-처음에는 `--max-speed 80`처럼 느리게 시작하고, 사람이 마커를 들고 천천히 걸어 봅니다. Ctrl+C(또는 창에서 `q`)로 끄면 정지 명령을 보냅니다.
+1. 마커를 로봇견 카메라 앞 1 m 정도에 듭니다. 화면에 `PAUSED - marker OK`(초록)가 뜨는지 확인합니다.
+2. 스페이스(또는 터미널에서 Enter)를 눌러 시작하고, 마커를 들고 천천히 걸어 봅니다.
+3. 멈추게 하려면 같은 키를 다시 누릅니다(일시정지). Ctrl+C(또는 창에서 `q`)로 끄면 정지 명령을 보내고 종료합니다.
+
+처음에는 `--max-speed 80`처럼 느리게 시작하세요.
 
 ### 조정할 값
 

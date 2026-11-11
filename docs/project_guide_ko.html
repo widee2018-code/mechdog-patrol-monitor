@@ -1044,7 +1044,7 @@ while True:
   <p><code>read_battery</code>, <code>ultrasonic</code>, <code>upright</code>는 사용하는 펌웨어 버전의 Hiwonder MechDog 라이브러리 호출로 바꿔 넣을 자리입니다. 실제 파일은 <code>firmware/dog_status.py</code>입니다.</p>
 
   <h3>마커 따라가기 연습 (지금 하드웨어로)</h3>
-  <p>실제로 동작하는 코드가 저장소에 있습니다. 로봇견 쪽은 <code>firmware/dog_cmd.py</code>(명령 받기 + 1초 워치독 + 15 cm 전진 금지), Pi/노트북 쪽은 <code>brain/marker_follow.py</code>(ArUco 인식 → 회전·속도 계산 → 명령 전송), <code>brain/teleop.py</code>(키보드 조종), <code>brain/make_markers.py</code>(마커 출력)입니다. 자세한 순서는 <code>brain/README.md</code>를 보세요.</p>
+  <p>실제로 동작하는 코드가 저장소에 있습니다. 로봇견 쪽은 <code>firmware/dog_cmd.py</code>(명령 받기 + 1초 워치독 + 15 cm 전진 금지), Pi/노트북 쪽은 <code>brain/marker_follow.py</code>(ArUco 인식 → 회전·속도 계산 → 명령 전송, 일시정지로 시작해서 스페이스/Enter로 시작·정지), <code>brain/teleop.py</code>(키보드 조종), <code>brain/make_markers.py</code>(마커 출력)입니다. 자세한 순서는 <code>brain/README.md</code>를 보세요.</p>
 <pre><code>pip install -r brain/requirements.txt
 python brain/make_markers.py                       # 마커 A4 시트 → 실제 크기로 출력
 python brain/marker_follow.py --camera 0 --show    # 개 없이 웹캠으로 연습 (명령 전송 안 함)

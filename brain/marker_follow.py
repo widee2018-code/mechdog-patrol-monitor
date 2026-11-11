@@ -3,6 +3,9 @@
 마커가 화면 가운데에서 벗어난 정도는 회전으로, 마커 크기로 잰 거리는 속도로 바꾼다(P 제어).
 마커를 놓치면 멈추고, 잠시 뒤 마지막으로 본 쪽으로 돌며 다시 찾는다.
 
+일시정지 상태로 시작한다: 마커 인식 여부를 보여 주기만 하고, 스페이스(카메라 창) 또는
+Enter(터미널)를 누르면 따라가기 시작, 다시 누르면 일시정지. 바로 시작하려면 --autostart.
+
 개 없이 연습 (노트북 웹캠, 명령은 화면과 터미널에만 표시):
     python brain/marker_follow.py --camera 0 --show
 
@@ -14,6 +17,7 @@ import argparse
 import json
 import math
 import socket
+import sys
 import threading
 import time
 import urllib.request
@@ -50,7 +54,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dog", help="로봇견 IP. 없으면 명령을 보내지 않는 연습 모드")
     p.add_argument("--name", default="B", help="로봇견 이름 (모니터 표시용)")
     p.add_argument("--monitor", help="모니터 서버 IP. 주면 상태와 이벤트를 대시보드로 보낸다")
-    p.add_argument("--show", action="store_true", help="카메라 화면 창 띄우기 (q로 종료)")
+    p.add_argument("--show", action="store_true", help="카메라 화면 창 띄우기 (스페이스: 시작/일시정지, q: 종료)")
+    p.add_argument("--autostart", action="store_true",
+                   help="시작 키를 기다리지 않고 마커가 보이면 바로 따라가기 (기본은 일시정지 상태로 시작)")
     return p.parse_args()
 
 
@@ -197,7 +203,7 @@ class Follower:
         return 0, 0
 
 
-STATE_TEXT = {"wait": "마커 기다리는 중", "follow": "따라가는 중", "hold": "잠깐 놓침, 정지",
+STATE_TEXT = {"paused": "일시정지 (시작 대기)", "wait": "마커 기다리는 중", "follow": "따라가는 중", "hold": "잠깐 놓침, 정지",
               "search": "다시 찾는 중", "gave_up": "못 찾음, 정지", "no_video": "영상 끊김, 정지"}
 
 
@@ -210,6 +216,9 @@ def draw(frame: np.ndarray, corners: np.ndarray | None, seen, state: str, cmd: t
         cv2.line(frame, (w // 2, cy), (cx, cy), (0, 0, 255), 2)
     color = (0, 160, 0) if state == "follow" else (0, 140, 255)
     lines = [f"{state}  cmd v={cmd[0]} turn={cmd[1]}"]
+    if state == "paused":
+        color = (0, 160, 0) if seen else (0, 0, 220)
+        lines = [f"PAUSED - marker {'OK' if seen else 'NOT seen'}", "SPACE (or Enter in terminal) = start"]
     if seen:
         lines.append(f"dx={seen[0]:+.2f}  dist={seen[1]:.2f} m  (target {a.target_m} m)")
     for i, text in enumerate(lines):   # OpenCV 기본 글꼴은 한글을 못 그려서 영어로 표시한다
@@ -233,15 +242,38 @@ def main() -> None:
 
     mode = f"로봇견 {a.dog}:{CMD_PORT}로 명령 전송" if a.dog else "연습 모드 (명령 전송 안 함)"
     print(f"마커 ID {a.marker_id} 따라가기 · {mode} · 카메라 {a.camera} · Ctrl+C로 종료")
+    if not a.autostart:
+        print("일시정지 상태로 시작합니다. 마커가 보이면 스페이스(카메라 창) 또는 Enter(터미널)로 시작/일시정지.")
     to_monitor({"type": "event", "from": a.name, "level": "info",
-                "text": f"Dog {a.name} 마커 {a.marker_id} 따라가기 시작 ({'실제' if a.dog else '연습'})"})
+                "text": f"Dog {a.name} 마커 {a.marker_id} 따라가기 준비 ({'실제' if a.dog else '연습'})"})
+
+    # 시작/일시정지 신호: 카메라 창의 스페이스 키 또는 터미널의 Enter
+    toggle = threading.Event()
+
+    def read_enter() -> None:
+        try:
+            for _ in sys.stdin:
+                toggle.set()
+        except (OSError, ValueError):
+            pass   # 터미널 입력이 없는 환경(백그라운드 실행 등)
+
+    threading.Thread(target=read_enter, daemon=True).start()
 
     period = 1 / a.rate
+    running = a.autostart
     last_seq, last_state, last_print, last_frame_at = -1, None, 0.0, time.time()
     cmd, corners, seen = (0, 0), None, None
     try:
         while True:
             t0 = time.time()
+            if toggle.is_set():
+                toggle.clear()
+                running = not running
+                if running:
+                    follower = Follower(a)   # 이전에 놓쳤던 기록 없이 새로 시작
+                    print(f"\n[{time.strftime('%H:%M:%S')}] 시작" + ("" if seen else " (마커가 아직 안 보임: 보이면 따라감)"))
+                else:
+                    print(f"\n[{time.strftime('%H:%M:%S')}] 일시정지")
             seq, frame = cam.get()
             if frame is None:
                 if t0 - last_print > 2:
@@ -254,7 +286,10 @@ def main() -> None:
                 last_seq, last_frame_at = seq, t0
                 corners = find_marker(detector, frame, a.marker_id)
                 seen = measure(corners, frame.shape[1], a.hfov, a.marker_cm / 100) if corners is not None else None
-                cmd = follower.step(seen, t0)
+                if running:
+                    cmd = follower.step(seen, t0)
+                else:
+                    follower.state, cmd = "paused", (0, 0)   # 마커는 계속 인식하지만 움직이지 않는다
             elif t0 - last_frame_at > STALE_SEC:
                 # 영상이 멈췄으면 오래된 화면을 보고 움직이지 않도록 정지한다
                 follower.state, cmd = "no_video", (0, 0)
@@ -276,8 +311,11 @@ def main() -> None:
                 view = frame.copy()
                 draw(view, corners, seen, follower.state, cmd, a)
                 cv2.imshow(f"marker follow - Dog {a.name}", view)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
                     break
+                if key == ord(" "):
+                    toggle.set()
             time.sleep(max(0.0, period - (time.time() - t0)))
     except KeyboardInterrupt:
         pass
