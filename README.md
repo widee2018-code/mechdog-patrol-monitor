@@ -2,7 +2,7 @@
 
 `../patrol_apprehension_plan.md`의 MechDog 순찰 및 검거 시나리오를 위한 웹 대시보드입니다. 실시간 LiDAR 스캔, 로봇견 3대의 위치와 상태, 방향이 표시되는 소리 경보, Dog A 카메라 영상, 미션 상태, 이벤트 타임라인, 증거 스냅샷을 보여 줍니다.
 
-프로젝트 진행 가이드(다이어그램, 스크린샷 포함)는 **[docs/project_guide_ko.html](docs/project_guide_ko.html)**에 있습니다. (영문판: [docs/project_guide.html](docs/project_guide.html))
+프로젝트 진행 가이드(다이어그램, 스크린샷 포함)는 **[docs/project_guide_ko.html](docs/project_guide_ko.html)**에 있습니다. 2026-11-11부터 가이드는 **행렬 탐사 순찰** 시나리오(정찰견 등에 LiDAR, 확인견 2마리가 줄지어 따라가며 매핑 → 발견 → 포위 → 다시 탐사)를 기준으로 합니다. 대시보드와 시뮬레이터 코드는 아직 이전 시나리오 그대로입니다. (영문판 [docs/project_guide.html](docs/project_guide.html)은 이전 시나리오 기준)
 
 ## 빠른 시작 (시뮬레이션 로봇)
 

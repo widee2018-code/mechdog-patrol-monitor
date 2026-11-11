@@ -107,242 +107,627 @@
   body { word-break: keep-all; overflow-wrap: anywhere; }
   pre, code { word-break: normal; overflow-wrap: normal; }
 </style>
+<style>
+  .s-pts { fill: none; stroke: var(--muted); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 0.1 7; }
+  .s-pts-new { fill: none; stroke: var(--red); stroke-width: 5; stroke-linecap: round; stroke-dasharray: 0.1 6; }
+  .s-path { stroke: var(--a); stroke-width: 2; fill: none; stroke-dasharray: 7 6; }
+  .s-cone { fill: var(--b); opacity: .18; }
+  .s-redsoft { fill: var(--red); opacity: .12; stroke: var(--red); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .s-dog { fill: var(--soft); stroke: var(--text); stroke-width: 1.8; }
+  .s-leg { stroke: var(--text); stroke-width: 5; stroke-linecap: round; }
+  .s-unk { fill: var(--soft); }
+  .warn { padding: 12px 16px; border-radius: 10px; border-left: 3px solid var(--c); background: var(--soft); font-size: 15px; margin: 14px 0; }
+</style>
 </head>
 <body>
 <div class="wrap">
 
 <header class="hero">
   <div class="eyebrow">MechDog AI 협동로봇 공간서비스 · 프로젝트 가이드</div>
-  <h1>순찰 및 검거, 실시간 모니터와 함께</h1>
-  <p class="lead"><code>patrol_apprehension_plan.md</code>의 MechDog 3마리 보안 순찰 시스템을 만드는 방법과, 로봇이 감지하는 모든 것(LiDAR, 개 위치, 소리 경보, 카메라, 임무 상태)을 보여주는 웹 대시보드를 함께 안내합니다.</p>
+  <h1>행렬 탐사 순찰, 실시간 모니터와 함께</h1>
+  <p class="lead">LiDAR를 등에 얹은 정찰견이 앞장서고 확인견 2마리가 줄지어 따라가며 공간 지도를 만듭니다. 침입자를 발견하면 정찰견이 멈춰 관제탑이 되고 확인견들이 포위합니다. 인계가 끝나면 다시 줄을 서서 멈췄던 곳부터 탐사를 이어 갑니다. 이 가이드는 시나리오, 만드는 방법, 그리고 로봇이 감지하는 모든 것을 보여주는 웹 대시보드를 함께 안내합니다.</p>
+  <p class="lead" style="font-size:15px;margin-top:10px">하드웨어: MechDog 3마리(각각 ESP32 카메라 + 초음파) · Raspberry Pi 1대 · 2D LiDAR 1대 · ArUco 마커 종이 2장</p>
+  <div class="note"><b>2026-11-11 시나리오 변경:</b> 고정 LiDAR + 소리 센서(ReSpeaker) 방식에서 <b>정찰견 등에 LiDAR를 얹는 행렬 탐사</b>로 바꿨습니다. 원래 계획서(<code>patrol_apprehension_plan.md</code>)의 비접촉 원칙, 교차 확인, 포위 계산, 상태 머신 구조는 그대로 이어서 씁니다.</div>
   <ul class="toc">
-    <li><a href="#goal">1 · 목표</a></li>
-    <li><a href="#arch">2 · 아키텍처</a></li>
-    <li><a href="#data">3 · 데이터</a></li>
-    <li><a href="#arena">4 · 아레나</a></li>
-    <li><a href="#states">5 · 상태 머신</a></li>
-    <li><a href="#monitor">6 · 모니터</a></li>
-    <li><a href="#roadmap">7 · 로드맵</a></li>
-    <li><a href="#steps">8 · 단계별 진행</a></li>
-    <li><a href="#team">9 · 팀 구성</a></li>
-    <li><a href="#code">10 · 하드웨어 연결</a></li>
-    <li><a href="#risks">11 · 리스크</a></li>
+    <li><a href="#overview">1 · 한눈에 보기</a></li>
+    <li><a href="#system">2 · 구성</a></li>
+    <li><a href="#explore">3 · 행렬 탐사</a></li>
+    <li><a href="#detect">4 · 발견과 확인</a></li>
+    <li><a href="#contain">5 · 포위</a></li>
+    <li><a href="#regroup">6 · 다시 줄 서기</a></li>
+    <li><a href="#monitor">7 · 모니터와 데이터</a></li>
+    <li><a href="#hw">8 · 하드웨어 체크</a></li>
+    <li><a href="#roadmap">9 · 로드맵</a></li>
+    <li><a href="#steps">10 · 단계별 진행</a></li>
+    <li><a href="#team">11 · 팀 구성</a></li>
+    <li><a href="#code">12 · 하드웨어 연결</a></li>
+    <li><a href="#risk">13 · 리스크</a></li>
   </ul>
 </header>
 
-<!-- 1 -->
-<section id="goal">
+<section id="overview">
   <div class="num">01</div>
-  <h2>무엇을 만드는가</h2>
-  <p>MechDog 3마리와 Raspberry Pi 관제탑이 아레나를 나눠 순찰합니다. 침입자가 나타나면 <b>쫓아가지 않습니다</b>. 침입자가 향하는 곳을 예측해 출구를 먼저 막고, 안전 거리를 두고 포위한 뒤, 경고하고 증거를 확보해 관제에 인계합니다. <b>검거 = 탐지 → 확인 → 출구 봉쇄 → 포위 → 경고 → 증거 확보 → 관제 인계.</b></p>
-  <p>새로 추가되는 부분은 <b>순찰 모니터(Patrol Monitor)</b>입니다. 시스템이 보고 판단하는 모든 것을 실시간으로 보여주는 웹 페이지로, 시연에서는 "관제실" 역할을 하고 개발 중에는 가장 중요한 디버깅 도구가 됩니다.</p>
-  <figure class="shot">
-    <img src="images/dashboard_contain.png" alt="CONTAIN 단계의 순찰 모니터 대시보드: 아레나 지도에서 개 3마리가 침입자를 포위하고, 오른쪽과 아래에 개 상태, 소리, 카메라, 이벤트 타임라인 패널이 있음">
-    <figcaption>이 폴더에 이미 있는 모니터를 시뮬레이션 데이터로 실행한 <b>CONTAIN(포위)</b> 단계 화면입니다. 개 3마리가 침입자를 둘러싼 LiDAR 지도, 개 상태, 소리 방향, A 개의 카메라, 이벤트 타임라인이 보입니다.</figcaption>
-  </figure>
-  <div class="note">모니터는 계획서의 3분 데모를 재현하는 시뮬레이터와 함께 <b>이미 동작합니다</b>. 할 일은 시뮬레이터를 데이터 스트림 하나씩 실제 하드웨어로 바꾸는 것입니다. 방법은 10절에 있습니다.</div>
+  <h2>시나리오 한눈에 보기</h2>
+  <div class="diagram">
+  <svg viewBox="0 0 920 300" role="img" aria-label="네 장면: 1 행렬로 탐사하며 매핑, 2 정찰견이 멈춰 침입자 확인, 3 정찰견은 관제탑이 되고 확인견 두 마리가 120도 포위, 4 다시 줄 서서 매핑 재개">
+    <defs>
+      <marker id="arS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    </defs>
+    <!-- panel 1 -->
+    <g transform="translate(10,10)">
+      <rect width="210" height="270" rx="10" class="s-box"/>
+      <text x="14" y="24" class="s-text">① EXPLORE</text>
+      <rect x="110" y="36" width="90" height="170" class="s-unk"/>
+      <text x="155" y="126" text-anchor="middle" class="s-sub">미탐사</text>
+      <path d="M10,36 L110,36 M10,36 L10,206 L110,206" class="s-pts"/>
+      <path d="M110,36 L200,36 L200,206 L110,206" fill="none" class="s-grid" style="stroke-dasharray:4 4"/>
+      <line x1="108" y1="120" x2="132" y2="120" class="s-line" marker-end="url(#arS)"/>
+      <circle cx="96" cy="120" r="9" class="s-a"/><circle cx="70" cy="120" r="8" class="s-b"/><circle cx="46" cy="120" r="8" class="s-c"/>
+      <text x="96" y="124" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">A</text>
+      <text x="70" y="124" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">B</text>
+      <text x="46" y="124" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">C</text>
+      <text x="14" y="232" class="s-sub">행렬로 이동하며</text>
+      <text x="14" y="250" class="s-sub">A의 LiDAR로 매핑</text>
+    </g>
+    <!-- panel 2 -->
+    <g transform="translate(238,10)">
+      <rect width="210" height="270" rx="10" class="s-box"/>
+      <text x="14" y="24" class="s-text">② SUSPECT · CONFIRM</text>
+      <rect x="160" y="36" width="40" height="170" class="s-unk"/>
+      <path d="M10,36 L160,36 M10,36 L10,206 L160,206" class="s-pts"/>
+      <line x1="120" y1="120" x2="166" y2="80" class="s-ray" style="opacity:.9"/>
+      <line x1="120" y1="120" x2="160" y2="150" class="s-ray"/>
+      <line x1="120" y1="120" x2="140" y2="40" class="s-ray"/>
+      <circle cx="166" cy="80" r="16" class="s-redsoft"/>
+      <circle cx="166" cy="80" r="7" class="s-red"/>
+      <text x="166" y="58" text-anchor="middle" font-weight="700" style="fill:var(--red)">!</text>
+      <circle cx="120" cy="120" r="9" class="s-a"/><circle cx="94" cy="120" r="8" class="s-b"/><circle cx="70" cy="120" r="8" class="s-c"/>
+      <text x="120" y="124" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">A</text>
+      <text x="94" y="124" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">B</text>
+      <text x="70" y="124" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">C</text>
+      <text x="14" y="232" class="s-sub">A가 멈춰 재스캔,</text>
+      <text x="14" y="250" class="s-sub">카메라로 사람/마커 확인</text>
+    </g>
+    <!-- panel 3 -->
+    <g transform="translate(466,10)">
+      <rect width="210" height="270" rx="10" class="s-box" style="stroke:var(--red);stroke-width:2"/>
+      <text x="14" y="24" class="s-text">③ CONTAIN</text>
+      <rect x="160" y="36" width="40" height="170" class="s-unk"/>
+      <path d="M10,36 L160,36 M10,36 L10,206 L160,206" class="s-pts"/>
+      <circle cx="150" cy="110" r="44" fill="none" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="3 4"/>
+      <path d="M94,120 C110,90 140,66 168,72" stroke="var(--b)" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#arS)"/>
+      <path d="M70,124 C90,170 140,160 166,150" stroke="var(--c)" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#arS)"/>
+      <circle cx="150" cy="110" r="7" class="s-red"/>
+      <circle cx="106" cy="110" r="9" class="s-a"/><text x="106" y="114" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">A</text>
+      <circle cx="172" cy="72" r="8" class="s-b"/><text x="172" y="76" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">B</text>
+      <circle cx="172" cy="148" r="8" class="s-c"/><text x="172" y="152" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">C</text>
+      <text x="14" y="232" class="s-sub">A 정지 = 관제탑,</text>
+      <text x="14" y="250" class="s-sub">B·C가 120° 지점으로</text>
+    </g>
+    <!-- panel 4 -->
+    <g transform="translate(694,10)">
+      <rect width="210" height="270" rx="10" class="s-box" style="stroke:var(--b);stroke-width:2"/>
+      <text x="14" y="24" class="s-text">④ REGROUP → EXPLORE</text>
+      <rect x="180" y="36" width="20" height="170" class="s-unk"/>
+      <path d="M10,36 L180,36 M10,36 L10,206 L180,206" class="s-pts"/>
+      <text x="150" y="114" text-anchor="middle" font-size="16" style="fill:var(--muted)">✕</text>
+      <text x="150" y="134" text-anchor="middle" class="s-mono">인계 완료</text>
+      <circle cx="106" cy="160" r="9" class="s-a"/><text x="106" y="164" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">A</text>
+      <circle cx="80" cy="160" r="8" class="s-b"/><text x="80" y="164" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">B</text>
+      <circle cx="56" cy="160" r="8" class="s-c"/><text x="56" y="164" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">C</text>
+      <path d="M80,146 A14,14 0 1,1 66,160" fill="none" stroke="var(--b)" stroke-width="1.6" marker-end="url(#arS)"/>
+      <line x1="118" y1="160" x2="176" y2="160" class="s-line" marker-end="url(#arS)"/>
+      <text x="14" y="232" class="s-sub">다시 줄 서서</text>
+      <text x="14" y="250" class="s-sub">멈췄던 곳부터 매핑 재개</text>
+    </g>
+  </svg>
+  </div>
+
+  <h3>상태 머신 (Pi에서 실행)</h3>
+  <div class="diagram">
+  <svg viewBox="0 0 920 210" role="img" aria-label="상태 머신: EXPLORE, SUSPECT, CONFIRM, CONTAIN, HANDOVER, REGROUP 순서로 진행하고 다시 EXPLORE로 돌아감. SUSPECT와 CONFIRM에서 오탐이면 바로 EXPLORE로 돌아감">
+    <defs>
+      <marker id="arM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      <marker id="arMr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--b)"/></marker>
+    </defs>
+    <g font-family="-apple-system, 'Segoe UI', sans-serif">
+      <rect x="20" y="70" width="120" height="60" rx="10" class="s-state" style="stroke:var(--a);stroke-width:2"/>
+      <text x="80" y="96" text-anchor="middle" class="s-text">EXPLORE</text><text x="80" y="116" text-anchor="middle" class="s-sub">행렬 + 매핑</text>
+      <rect x="166" y="70" width="120" height="60" rx="10" class="s-state"/>
+      <text x="226" y="96" text-anchor="middle" class="s-text">SUSPECT</text><text x="226" y="116" text-anchor="middle" class="s-sub">A 정지, 재스캔</text>
+      <rect x="312" y="70" width="120" height="60" rx="10" class="s-state"/>
+      <text x="372" y="96" text-anchor="middle" class="s-text">CONFIRM</text><text x="372" y="116" text-anchor="middle" class="s-sub">A 카메라 확인</text>
+      <rect x="458" y="70" width="120" height="60" rx="10" class="s-hot"/>
+      <text x="518" y="96" text-anchor="middle" class="s-text">CONTAIN</text><text x="518" y="116" text-anchor="middle" class="s-sub">B·C 포위</text>
+      <rect x="604" y="70" width="120" height="60" rx="10" class="s-state"/>
+      <text x="664" y="96" text-anchor="middle" class="s-text">HANDOVER</text><text x="664" y="116" text-anchor="middle" class="s-sub">증거 사진, 인계</text>
+      <rect x="750" y="70" width="150" height="60" rx="10" class="s-state" style="stroke:var(--b);stroke-width:2"/>
+      <text x="825" y="96" text-anchor="middle" class="s-text">REGROUP</text><text x="825" y="116" text-anchor="middle" class="s-sub">다시 줄 서기</text>
+    </g>
+    <path d="M142,100 L162,100" class="s-line" marker-end="url(#arM)"/>
+    <path d="M288,100 L308,100" class="s-line" marker-end="url(#arM)"/>
+    <path d="M434,100 L454,100" class="s-line" marker-end="url(#arM)"/>
+    <path d="M580,100 L600,100" class="s-line" marker-end="url(#arM)"/>
+    <path d="M726,100 L746,100" class="s-line" marker-end="url(#arM)"/>
+    <path d="M825,132 L825,175 L80,175 L80,134" stroke="var(--b)" stroke-width="2" fill="none" marker-end="url(#arMr)"/>
+    <text x="452" y="196" text-anchor="middle" class="s-sub" style="fill:var(--b)">B·C가 마커를 다시 잡으면 멈췄던 곳부터 매핑 재개</text>
+    <path d="M226,68 L226,35 L80,35 L80,66" class="s-line" style="stroke-dasharray:5 4" marker-end="url(#arM)"/>
+    <path d="M372,68 L372,35 L226,35" class="s-line" style="stroke-dasharray:5 4"/>
+    <text x="226" y="26" text-anchor="middle" class="s-sub">오탐 → 행렬이 안 깨졌으니 바로 재개</text>
+  </svg>
+  </div>
+
+  <h3>데모 흐름 (약 4분)</h3>
+  <div class="tablewrap">
+  <table>
+    <tr><th>시간</th><th>장면</th><th>보여줄 포인트</th></tr>
+    <tr><td>0:00</td><td>A → B → C 행렬로 출발, 대시보드에 지도가 점점 그려짐</td><td>SLAM 매핑, 협동 이동</td></tr>
+    <tr><td>1:00</td><td>A의 LiDAR에 지도에 없는 덩어리 → A 정지, 재스캔 (SUSPECT)</td><td>변화 탐지</td></tr>
+    <tr><td>1:15</td><td>A가 돌아서 카메라로 사람/마커 확인 (CONFIRM)</td><td>다중 센서 교차 확인</td></tr>
+    <tr><td>1:30</td><td>A는 관제탑, B·C가 대열을 벗어나 포위 (CONTAIN)</td><td>역할 전환, 포위 계산</td></tr>
+    <tr><td>2:30</td><td>3방향 증거 사진 + 위치 + 타임라인을 관제에 인계 (HANDOVER)</td><td>서비스 완결성</td></tr>
+    <tr><td>3:00</td><td>B·C가 A 뒤로 돌아와 마커를 다시 잡음 (REGROUP)</td><td>복귀</td></tr>
+    <tr><td>3:40</td><td>멈췄던 곳부터 탐사 재개, 지도 완성</td><td>순환 구조</td></tr>
+  </table>
+  </div>
+  <div class="note">MechDog는 걷는 사람보다 훨씬 느립니다. 침입자는 <b>숨어 있거나 멈춰 있는 사람</b>, 또는 느린 RC카로 설정하세요. 이야기도 "탐사하다 숨은 침입자 발견"이 자연스럽습니다.</div>
 </section>
 
-<!-- 2 -->
-<section id="arch">
+<section id="system">
   <div class="num">02</div>
-  <h2>시스템 아키텍처</h2>
-  <p>기존 계획과 같이 <b>Pi가 두뇌, 개가 몸통</b>입니다. 모니터 서버는 Pi나 노트북에서 도는 별도의 작은 프로세스로, 데이터를 <i>듣기만</i> 합니다. 로봇에 명령을 내리지 않으므로 대시보드가 멈춰도 시연에는 영향이 없습니다.</p>
+  <h2>시스템 구성</h2>
+  <p>개는 몸통 역할만 하고, 무거운 계산(SLAM, 마커 인식, 침입자 탐지, 상태 머신)은 한쪽에 고정해 둔 <b>Raspberry Pi 관제탑</b>이 합니다. 모니터 서버도 Pi에서 실행하고, 노트북은 대시보드를 보는 화면 역할만 합니다.</p>
   <div class="diagram">
-  <svg viewBox="0 0 920 470" role="img" aria-label="아키텍처: 개와 Pi가 Wi-Fi로 모니터 서버에 텔레메트리를 보내고, 서버가 브라우저 대시보드로 전달">
+  <svg viewBox="0 0 920 440" role="img" aria-label="구성도: LiDAR 정찰견 A와 확인견 B, C가 Wi-Fi로 Raspberry Pi 관제탑에 데이터를 보내고, Pi가 SLAM, 마커 따라가기, 침입자 탐지, 상태 머신을 실행하여 대시보드에 표시">
     <defs>
-      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
-      <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+      <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      <marker id="ar1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+    </defs>
+    <rect x="20" y="20" width="260" height="170" rx="12" class="s-box" style="stroke:var(--a);stroke-width:2"/>
+    <circle cx="52" cy="52" r="16" class="s-a"/><text x="52" y="57" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">A</text>
+    <text x="78" y="50" class="s-text">A · LiDAR 정찰견</text><text x="78" y="68" class="s-sub">행렬 선두, 매핑, 관제탑 역할</text>
+    <text x="36" y="98" class="s-sub">• 소형 2D LiDAR (LD06/LD19)</text>
+    <text x="36" y="118" class="s-sub">• XIAO ESP32-C3 (LiDAR → Wi-Fi)</text>
+    <text x="36" y="138" class="s-sub">• 카메라, 초음파</text>
+    <text x="36" y="158" class="s-sub">• 등 뒤: 마커 ID 1</text>
+    <text x="36" y="178" class="s-mono">→ 스캔, 영상, 상태</text>
+
+    <rect x="20" y="215" width="260" height="95" rx="12" class="s-box"/>
+    <circle cx="52" cy="247" r="16" class="s-b"/><text x="52" y="252" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">B</text>
+    <text x="78" y="245" class="s-text">B · 확인견 1</text><text x="78" y="263" class="s-sub">행렬 2번, 포위, 증거 사진</text>
+    <text x="36" y="293" class="s-mono">카메라, 초음파 · 등 뒤 마커 ID 2</text>
+
+    <rect x="20" y="330" width="260" height="95" rx="12" class="s-box"/>
+    <circle cx="52" cy="362" r="16" class="s-c"/><text x="52" y="367" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">C</text>
+    <text x="78" y="360" class="s-text">C · 확인견 2</text><text x="78" y="378" class="s-sub">행렬 3번, 포위, 증거 사진</text>
+    <text x="36" y="408" class="s-mono">카메라, 초음파</text>
+
+    <path d="M282,105 C320,105 320,180 356,180" class="s-line" marker-end="url(#ar1)" marker-start="url(#ar1)"/>
+    <path d="M282,262 L356,230" class="s-line" marker-end="url(#ar1)" marker-start="url(#ar1)"/>
+    <path d="M282,377 C320,377 320,280 356,280" class="s-line" marker-end="url(#ar1)" marker-start="url(#ar1)"/>
+    <text x="292" y="425" class="s-sub">같은 Wi-Fi · JSON over UDP</text>
+
+    <rect x="360" y="80" width="270" height="280" rx="14" class="s-soft"/>
+    <text x="495" y="108" text-anchor="middle" class="s-text">Raspberry Pi · 관제탑 (고정)</text>
+    <rect x="378" y="122" width="234" height="100" rx="8" class="s-box"/>
+    <text x="390" y="142" class="s-sub" font-weight="600">위치와 지도</text>
+    <text x="390" y="162" class="s-sub">SLAM (스캔 매칭, 오도메트리 없음)</text>
+    <text x="390" y="180" class="s-sub">B·C 점 지우기 → 지도 오염 방지</text>
+    <text x="390" y="198" class="s-sub">마커 체인으로 B·C 좌표 추정</text>
+    <text x="390" y="214" class="s-mono">BreezySLAM 또는 slam_toolbox</text>
+    <rect x="378" y="232" width="234" height="116" rx="8" class="s-box"/>
+    <text x="390" y="252" class="s-sub" font-weight="600">판단</text>
+    <text x="390" y="272" class="s-sub">마커 따라가기 (ArUco, B·C)</text>
+    <text x="390" y="290" class="s-sub">침입자 탐지 (지도에 없는 덩어리)</text>
+    <text x="390" y="308" class="s-sub">상태 머신, 포위 지점 계산</text>
+    <text x="390" y="326" class="s-sub">세 마리에게 move 명령 (10 Hz)</text>
+
+    <rect x="680" y="110" width="220" height="100" rx="14" class="s-box" style="stroke:var(--accent);stroke-width:2"/>
+    <text x="790" y="140" text-anchor="middle" class="s-text">모니터 서버</text>
+    <text x="790" y="160" text-anchor="middle" class="s-mono">server/app.py (Pi에서 실행)</text>
+    <text x="790" y="186" text-anchor="middle" class="s-sub">카메라 영상도 여기서 받아 나눠 줌</text>
+    <rect x="680" y="250" width="220" height="100" rx="14" class="s-box"/>
+    <text x="790" y="280" text-anchor="middle" class="s-text">대시보드 (노트북 화면)</text>
+    <text x="790" y="302" text-anchor="middle" class="s-sub">SLAM 지도 + 3마리 위치</text>
+    <text x="790" y="322" text-anchor="middle" class="s-sub">침입자, 증거 사진, 타임라인</text>
+    <path d="M632,170 L676,160" class="s-acc" marker-end="url(#ar1a)"/>
+    <path d="M790,212 L790,246" class="s-acc" marker-end="url(#ar1a)"/>
+  </svg>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Pi 모델</th><th>할 수 있는 일</th></tr>
+    <tr><td><b>Pi 5 / Pi 4 (4 GB 이상)</b></td><td>SLAM, 카메라 3대 ArUco 인식, 침입자 탐지, 상태 머신, 모니터 서버까지 모두 가능</td></tr>
+    <tr><td><b>Pi 4 (2 GB) / Pi 3</b></td><td>BreezySLAM + ArUco(320×240)는 가능. YOLO 사람 인식은 무거우니 침입자에 마커나 색 조끼를 쓰거나 노트북으로 넘기기</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="explore">
+  <div class="num">03</div>
+  <h2>행렬 탐사 (EXPLORE)</h2>
+  <p>각 확인견은 <b>카메라로 바로 앞 개의 등에 붙은 ArUco 마커</b>를 보고, <b>초음파로 그 개와의 거리</b>를 재며 따라갑니다. A는 SLAM 지도 위에서 아직 안 가 본 곳(frontier)을 향해 천천히 이동합니다.</p>
+
+  <div class="diagram">
+  <svg viewBox="0 0 920 270" role="img" aria-label="위에서 본 행렬: 왼쪽으로 가는 A, 그 뒤 B, 그 뒤 C. B의 카메라와 초음파가 A의 등 마커를, C가 B의 등 마커를 보며 0.6 m 간격을 유지">
+    <defs>
+      <marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    </defs>
+    <text x="40" y="34" class="s-sub">← 진행 방향</text>
+    <rect x="60" y="110" width="120" height="44" rx="14" class="s-dog" style="stroke:var(--a)"/>
+    <rect x="38" y="116" width="26" height="32" rx="8" class="s-dog" style="stroke:var(--a)"/>
+    <circle cx="120" cy="132" r="12" class="s-bar"/>
+    <rect x="182" y="124" width="16" height="16" fill="#fff" stroke="#111" stroke-width="2"/><rect x="186" y="128" width="5" height="5" fill="#111"/><rect x="191" y="133" width="4" height="4" fill="#111"/>
+    <text x="110" y="182" text-anchor="middle" class="s-text" style="fill:var(--a)">A · 정찰견</text>
+    <text x="110" y="200" text-anchor="middle" class="s-sub">LiDAR + SLAM으로 길 찾기</text>
+    <text x="110" y="218" text-anchor="middle" class="s-mono">등 뒤: 마커 ID 1</text>
+    <path d="M338,132 L200,104 L200,160 Z" class="s-cone"/>
+    <line x1="338" y1="146" x2="202" y2="146" stroke="var(--c)" stroke-width="2" stroke-dasharray="3 4"/>
+    <line x1="338" y1="152" x2="202" y2="152" stroke="var(--c)" stroke-width="2" stroke-dasharray="3 4"/>
+    <rect x="360" y="110" width="120" height="44" rx="14" class="s-dog" style="stroke:var(--b)"/>
+    <rect x="338" y="116" width="26" height="32" rx="8" class="s-dog" style="stroke:var(--b)"/>
+    <rect x="482" y="124" width="16" height="16" fill="#fff" stroke="#111" stroke-width="2"/><rect x="486" y="128" width="4" height="4" fill="#111"/><rect x="490" y="133" width="5" height="5" fill="#111"/>
+    <text x="410" y="182" text-anchor="middle" class="s-text" style="fill:var(--b)">B · 확인견 1</text>
+    <text x="410" y="200" text-anchor="middle" class="s-sub">마커 1을 따라감</text>
+    <text x="410" y="218" text-anchor="middle" class="s-mono">등 뒤: 마커 ID 2</text>
+    <path d="M638,132 L500,104 L500,160 Z" class="s-cone"/>
+    <line x1="638" y1="146" x2="502" y2="146" stroke="var(--c)" stroke-width="2" stroke-dasharray="3 4"/>
+    <line x1="638" y1="152" x2="502" y2="152" stroke="var(--c)" stroke-width="2" stroke-dasharray="3 4"/>
+    <rect x="660" y="110" width="120" height="44" rx="14" class="s-dog" style="stroke:var(--c)"/>
+    <rect x="638" y="116" width="26" height="32" rx="8" class="s-dog" style="stroke:var(--c)"/>
+    <text x="710" y="182" text-anchor="middle" class="s-text" style="fill:var(--c)">C · 확인견 2</text>
+    <text x="710" y="200" text-anchor="middle" class="s-sub">마커 2를 따라감</text>
+    <line x1="200" y1="78" x2="336" y2="78" class="s-line" marker-start="url(#ar5)" marker-end="url(#ar5)"/>
+    <text x="268" y="70" text-anchor="middle" class="s-mono">목표 0.6 m</text>
+    <line x1="500" y1="78" x2="636" y2="78" class="s-line" marker-start="url(#ar5)" marker-end="url(#ar5)"/>
+    <text x="568" y="70" text-anchor="middle" class="s-mono">목표 0.6 m</text>
+    <g transform="translate(810,100)">
+      <path d="M0,8 L30,0 L30,16 Z" class="s-cone"/><text x="38" y="12" class="s-sub">카메라</text>
+      <line x1="0" y1="40" x2="30" y2="40" stroke="var(--c)" stroke-width="2" stroke-dasharray="3 4"/><text x="38" y="44" class="s-sub">초음파</text>
+      <rect x="7" y="62" width="16" height="16" fill="#fff" stroke="#111" stroke-width="2"/><text x="38" y="75" class="s-sub">ArUco</text>
+    </g>
+    <text x="40" y="256" class="s-sub">마커: 6–8 cm, 뒤 개 카메라 높이에 맞춰 수직으로 부착 · 인식 거리 약 0.3–1.5 m (예상, 실측 필요)</text>
+  </svg>
+  </div>
+
+  <h3>센서 역할 나누기</h3>
+  <div class="tablewrap">
+  <table>
+    <tr><th>알아야 할 것</th><th>센서</th><th>이유</th></tr>
+    <tr><td>앞 개와의 거리</td><td>초음파</td><td>바로 앞을 재는 센서라 정확하고 빠름</td></tr>
+    <tr><td>앞 개가 좌우 어디 있는지</td><td>카메라 + ArUco</td><td>마커가 화면 가운데에서 벗어난 정도가 곧 회전값</td></tr>
+    <tr><td>누구를 따라가는지</td><td>마커 ID</td><td>B는 마커 1만, C는 마커 2만 따라감</td></tr>
+  </table>
+  </div>
+
+  <h3>따라가기 제어 (Pi에서 10 Hz)</h3>
+  <div class="diagram">
+  <svg viewBox="0 0 920 250" role="img" aria-label="B의 카메라 화면에서 마커가 가운데보다 오른쪽에 있으면 회전값으로, 초음파 거리는 속도로 바꾸어 move 명령을 보냄">
+    <defs>
+      <marker id="ar6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/></marker>
+    </defs>
+    <rect x="30" y="30" width="300" height="190" rx="8" class="s-soft"/>
+    <text x="180" y="22" text-anchor="middle" class="s-sub">B의 카메라 화면 (320×240)</text>
+    <line x1="180" y1="36" x2="180" y2="214" class="s-grid" style="stroke-dasharray:5 5;stroke:var(--muted)"/>
+    <rect x="218" y="100" width="44" height="44" fill="#fff" stroke="#111" stroke-width="3"/><rect x="226" y="108" width="12" height="12" fill="#111"/><rect x="240" y="124" width="12" height="12" fill="#111"/>
+    <line x1="182" y1="170" x2="236" y2="170" stroke="var(--red)" stroke-width="2" marker-end="url(#ar6)"/>
+    <text x="210" y="192" text-anchor="middle" class="s-mono" style="fill:var(--red)">dx = +40 px</text>
+    <text x="240" y="92" text-anchor="middle" class="s-mono">ID 1</text>
+    <rect x="380" y="30" width="270" height="56" rx="8" class="s-box"/>
+    <text x="394" y="52" class="s-text">마커 좌우 위치 dx → 회전</text>
+    <text x="394" y="72" class="s-mono">turn = −k₁ · dx</text>
+    <rect x="380" y="98" width="270" height="56" rx="8" class="s-box"/>
+    <text x="394" y="120" class="s-text">초음파 거리 d → 속도</text>
+    <text x="394" y="140" class="s-mono">v = k₂ · (d − 0.6),  d &lt; 0.4 m면 0</text>
+    <rect x="380" y="166" width="270" height="56" rx="8" class="s-box" style="stroke:var(--red)"/>
+    <text x="394" y="188" class="s-text">마커가 안 보이면</text>
+    <text x="394" y="208" class="s-mono">정지 + 앞 개도 대기 + 다시 찾기</text>
+    <path d="M334,125 L374,125" class="s-acc" marker-end="url(#ar6)"/>
+    <path d="M654,58 C700,58 700,125 730,125" class="s-acc"/>
+    <path d="M654,126 L730,126" class="s-acc"/>
+    <path d="M654,194 C700,194 700,127 730,127" class="s-acc"/>
+    <rect x="734" y="98" width="160" height="56" rx="10" class="s-box" style="stroke:var(--accent);stroke-width:2"/>
+    <text x="814" y="122" text-anchor="middle" class="s-text">move(v, turn)</text>
+    <text x="814" y="142" text-anchor="middle" class="s-mono">→ B, 10 Hz</text>
+  </svg>
+  </div>
+  <pre><code># Pi 관제탑: B와 C에 같은 코드, 따라갈 마커 ID만 다름
+LEADER = {"B": ("A", 1), "C": ("B", 2)}    # 따라가는 개: (앞 개, 앞 개 마커 ID)
+
+def follow_step(dog):
+    leader, marker_id = LEADER[dog]
+    m = find_aruco(latest_frame[dog], marker_id)   # 카메라 영상은 모니터 서버가 받은 것을 같이 씀
+    d = ultrasonic_m[dog]
+    if m is None:                                  # 마커를 놓침
+        send(dog, {"cmd": "move", "v": 0, "turn": search_dir[dog]})   # 마지막 본 방향으로 회전
+        hold(leader)                               # 앞 개는 기다리게
+        return
+    release(leader)
+    turn = -K_TURN * m.dx
+    v = 0 if d &lt; 0.40 else K_V * (d - 0.60)
+    send(dog, {"cmd": "move", "v": clamp(v), "turn": clamp(turn)})</code></pre>
+
+  <h3>B·C의 지도 좌표</h3>
+  <p>마커를 보면 앞 개와의 상대 위치를 알 수 있습니다(OpenCV <code>solvePnP</code>, 카메라 보정 필요). A의 지도 좌표는 SLAM으로 알고 있으니, <b>A 좌표 + 상대 위치 = B 좌표</b>, 같은 방법으로 C 좌표도 구합니다. 이 좌표는 대시보드 표시, 지도 오염 방지, 침입자 탐지에 모두 쓰입니다.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 920 180" role="img" aria-label="A 좌표는 SLAM으로, B 좌표는 A 좌표와 마커 상대 위치로, C 좌표는 B 좌표와 마커 상대 위치로 구하며 오차 범위가 점점 커짐">
+    <defs>
+      <marker id="ar7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    </defs>
+    <ellipse cx="150" cy="80" rx="22" ry="16" fill="var(--a)" opacity=".15"/>
+    <circle cx="150" cy="80" r="14" class="s-a"/><text x="150" y="85" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">A</text>
+    <text x="150" y="128" text-anchor="middle" class="s-sub">SLAM 좌표</text>
+    <ellipse cx="460" cy="80" rx="36" ry="24" fill="var(--b)" opacity=".15"/>
+    <circle cx="460" cy="80" r="14" class="s-b"/><text x="460" y="85" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">B</text>
+    <text x="460" y="128" text-anchor="middle" class="s-sub">A 좌표 + 마커 1 상대 위치</text>
+    <ellipse cx="770" cy="80" rx="52" ry="32" fill="var(--c)" opacity=".18"/>
+    <circle cx="770" cy="80" r="14" class="s-c"/><text x="770" y="85" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">C</text>
+    <text x="770" y="128" text-anchor="middle" class="s-sub">B 좌표 + 마커 2 상대 위치</text>
+    <path d="M180,80 L416,80" class="s-line" marker-end="url(#ar7)"/>
+    <path d="M500,80 L712,80" class="s-line" marker-end="url(#ar7)"/>
+    <text x="460" y="166" text-anchor="middle" class="s-sub">색 범위 = 예상 오차. 뒤로 갈수록 오차가 쌓여 C가 가장 부정확함</text>
+  </svg>
+  </div>
+
+  <div class="warn"><b>지도 오염 방지 (처음부터 넣기):</b> A 바로 뒤에는 항상 B가 보입니다. SLAM은 스캔에 들어온 것을 모두 지도에 그리려 하므로, <b>B·C의 알려진 위치 주변(반경 약 25 cm) 점은 SLAM에 넣기 전에 지웁니다.</b> 포위와 다시 줄 서기 동안에는 지도 업데이트를 아예 멈추고 위치 추정만 합니다(5, 6절).</div>
+</section>
+
+<section id="detect">
+  <div class="num">04</div>
+  <h2>발견과 확인 (SUSPECT → CONFIRM)</h2>
+  <p>침입자 후보는 원래 계획서의 규칙을 그대로 씁니다. <b>"지도에 없고, 알고 있는 개(B·C)와도 매칭되지 않는 덩어리 = 침입자 후보"</b>. A가 걷는 중에는 흔들림 때문에 오탐이 생기기 쉬우니, 후보가 보이면 <b>A가 멈추고 2–3번 다시 스캔</b>해서 확인합니다.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 920 300" role="img" aria-label="변화 탐지 3단계: 기준 지도, 현재 스캔, 차이에서 B C 위치를 뺀 뒤 남은 덩어리만 침입자 후보">
+    <defs>
+      <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
     </defs>
     <g>
-      <rect x="20" y="30" width="230" height="110" rx="12" class="s-box"/>
-      <circle cx="52" cy="62" r="16" class="s-a"/><text x="52" y="67" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">A</text>
-      <text x="78" y="60" class="s-text">A 개 · 추적견</text><text x="78" y="78" class="s-sub">추적 담당</text>
-      <text x="36" y="104" class="s-sub">ESP32-S3 카메라, 초음파, IMU</text>
-      <text x="36" y="122" class="s-mono">→ 상태, 스냅샷</text>
-
-      <rect x="20" y="170" width="230" height="110" rx="12" class="s-box"/>
-      <circle cx="52" cy="202" r="16" class="s-b"/><text x="52" y="207" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">B</text>
-      <text x="78" y="200" class="s-text">B 개 · 봉쇄견 1</text><text x="78" y="218" class="s-sub">출구 1 봉쇄</text>
-      <text x="36" y="244" class="s-sub">MP3, 도트매트릭스, 초음파, IMU</text>
-      <text x="36" y="262" class="s-mono">→ 상태</text>
-
-      <rect x="20" y="310" width="230" height="110" rx="12" class="s-box"/>
-      <circle cx="52" cy="342" r="16" class="s-c"/><text x="52" y="347" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">C</text>
-      <text x="78" y="340" class="s-text">C 개 · 봉쇄견 2</text><text x="78" y="358" class="s-sub">출구 2 봉쇄</text>
-      <text x="36" y="384" class="s-sub">MP3, 도트매트릭스, 초음파, IMU</text>
-      <text x="36" y="402" class="s-mono">→ 상태</text>
+      <text x="140" y="30" text-anchor="middle" class="s-text">① 지금까지 만든 지도</text>
+      <rect x="30" y="50" width="220" height="200" rx="10" class="s-box"/>
+      <path d="M50,70 L230,70 L230,230 L50,230 Z" class="s-pts"/>
+      <path d="M90,120 L140,120 L140,150 L90,150 Z" class="s-pts"/>
+      <text x="140" y="275" text-anchor="middle" class="s-sub">SLAM이 쌓아 온 지도</text>
     </g>
-    <rect x="330" y="80" width="250" height="290" rx="14" class="s-soft"/>
-    <text x="455" y="110" text-anchor="middle" class="s-text">Raspberry Pi · 관제탑</text>
-    <rect x="350" y="126" width="210" height="96" rx="8" class="s-box"/>
-    <text x="362" y="146" class="s-sub" font-weight="600">센서</text>
-    <text x="362" y="166" class="s-sub">2D LiDAR (고정, 높이 10–15 cm)</text>
-    <text x="362" y="184" class="s-sub">카메라 + YOLO</text>
-    <text x="362" y="202" class="s-sub">ReSpeaker 마이크 어레이 (DOA)</text>
-    <rect x="350" y="234" width="210" height="120" rx="8" class="s-box"/>
-    <text x="362" y="254" class="s-sub" font-weight="600">두뇌 (patrol_brain)</text>
-    <text x="362" y="274" class="s-sub">지도 + 개 위치 추적</text>
-    <text x="362" y="292" class="s-sub">침입자 = 매칭 안 된 덩어리</text>
-    <text x="362" y="310" class="s-sub">상태 머신, 출구 선점,</text>
-    <text x="362" y="328" class="s-sub">포위 (헝가리안 알고리즘)</text>
-    <text x="362" y="346" class="s-mono">5–10 Hz 루프</text>
-    <path d="M252,85 C300,85 300,170 328,170" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
-    <path d="M252,225 L328,225" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
-    <path d="M252,365 C300,365 300,290 328,290" class="s-line" marker-end="url(#ar)" marker-start="url(#ar)"/>
-    <text x="262" y="215" class="s-mono">명령 ↔ 상태</text>
-    <text x="262" y="455" class="s-sub">같은 Wi-Fi 공유기 · JSON over UDP</text>
-    <rect x="660" y="120" width="240" height="120" rx="14" class="s-box" style="stroke:var(--accent);stroke-width:2"/>
-    <text x="780" y="148" text-anchor="middle" class="s-text">모니터 서버</text>
-    <text x="780" y="168" text-anchor="middle" class="s-mono">server/app.py</text>
-    <text x="678" y="196" class="s-sub">수신: UDP :9000 + POST /api/ingest</text>
-    <text x="678" y="216" class="s-sub">송신: WebSocket /ws</text>
-    <rect x="660" y="300" width="240" height="100" rx="14" class="s-box"/>
-    <text x="780" y="330" text-anchor="middle" class="s-text">브라우저 대시보드</text>
-    <text x="780" y="350" text-anchor="middle" class="s-mono">http://&lt;ip&gt;:8000</text>
-    <text x="780" y="378" text-anchor="middle" class="s-sub">노트북, 태블릿, 프로젝터</text>
-    <path d="M582,180 L656,180" class="s-acc" marker-end="url(#arA)"/>
-    <text x="590" y="170" class="s-mono">텔레메트리</text>
-    <path d="M780,242 L780,296" class="s-acc" marker-end="url(#arA)"/>
-    <text x="790" y="275" class="s-mono">실시간 전송</text>
-    <path d="M252,60 C470,10 640,40 700,116" class="s-line" stroke-dasharray="5 4" marker-end="url(#ar)"/>
-    <text x="330" y="66" class="s-mono">개 상태와 스냅샷은 직접 보내도 됨</text>
-  </svg>
-  </div>
-  <p><b>기본 원칙:</b> 로봇을 움직이는 것은 모두 Pi 두뇌를 거칩니다. <i>보기만</i> 할 데이터는 모니터에도 보냅니다. 개발 중에는 두뇌가 완성되기 전이라도 개가 모니터로 직접 데이터를 보내게 해서 센서 값을 확인할 수 있습니다.</p>
-</section>
-
-<!-- 3 -->
-<section id="data">
-  <div class="num">03</div>
-  <h2>모니터가 보여주는 데이터</h2>
-  <p>메시지 종류 7가지로 모든 데이터를 다룹니다. 예시가 포함된 전체 명세는 <code>docs/message_schema.md</code>에 있습니다.</p>
-  <div class="tablewrap"><table>
-    <tr><th>종류</th><th>보내는 쪽</th><th>주기</th><th>표시 방식</th><th>주요 필드</th></tr>
-    <tr><td><code>lidar</code></td><td>Pi</td><td>5 Hz</td><td>지도 위 하늘색 점</td><td><code>origin</code>, <code>points [[deg, m]…]</code></td></tr>
-    <tr><td><code>dog</code></td><td>Pi (x, y) + 각 개 (센서)</td><td>10 Hz</td><td>방향이 표시된 개 마커, 상태 카드</td><td><code>x y heading_deg state battery_v front_cm tilt</code></td></tr>
-    <tr><td><code>intruder</code></td><td>Pi</td><td>5 Hz</td><td>빨간 마커, 0.5 m 원, 이동 궤적</td><td><code>x y confidence</code></td></tr>
-    <tr><td><code>sound</code></td><td>Pi (ReSpeaker)</td><td>1 Hz + 경보 시</td><td>나침반, 지도 위 DOA 선</td><td><code>label doa_deg level_db alert</code></td></tr>
-    <tr><td><code>camera</code></td><td>A 개</td><td>약 1 Hz</td><td>실시간 화면, 증거 갤러리</td><td><code>image</code> (data URL), <code>evidence</code></td></tr>
-    <tr><td><code>mission</code></td><td>Pi</td><td>변경 시</td><td>상단 상태 단계 표시</td><td><code>state</code></td></tr>
-    <tr><td><code>event</code></td><td>Pi</td><td>발생 시</td><td>타임라인</td><td><code>level text</code></td></tr>
-  </table></div>
-  <p><span class="tag">왜 개 데이터를 나누나요?</span> MechDog은 자기가 어디 있는지 모릅니다. <b>위치</b>는 Pi의 LiDAR 추적에서 오고, <b>배터리, 초음파, 기울기</b>는 개에서 옵니다. 양쪽이 각각 일부 필드만 담은 <code>dog</code> 메시지를 보내고, 모니터가 이를 합칩니다.</p>
-</section>
-
-<!-- 4 -->
-<section id="arena">
-  <div class="num">04</div>
-  <h2>아레나와 좌표계</h2>
-  <p>모든 것이 하나의 좌표계를 씁니다. 단위는 미터, 원점은 왼쪽 아래 모서리, x는 오른쪽, y는 위쪽, 각도는 +x에서 반시계 방향입니다. 배치 정보는 <code>web/arena.json</code>에 있습니다. 실제 아레나를 측정해 이 파일을 수정하면 대시보드와 시뮬레이터가 모두 따라갑니다.</p>
-  <div class="diagram">
-  <svg viewBox="0 0 760 520" role="img" aria-label="6 × 4 m 아레나: 좌우 벽에 출구 2개, 장애물 2개, 순찰 구역 3개, 아래 중앙에 Pi LiDAR">
-    <g transform="translate(80,40)">
-      <rect x="0" y="0" width="200" height="400" class="s-zb"/>
-      <rect x="200" y="0" width="200" height="400" class="s-za"/>
-      <rect x="400" y="0" width="200" height="400" class="s-zc"/>
-      <g class="s-grid">
-        <line x1="100" y1="0" x2="100" y2="400"/><line x1="200" y1="0" x2="200" y2="400"/><line x1="300" y1="0" x2="300" y2="400"/>
-        <line x1="400" y1="0" x2="400" y2="400"/><line x1="500" y1="0" x2="500" y2="400"/>
-        <line x1="0" y1="100" x2="600" y2="100"/><line x1="0" y1="200" x2="600" y2="200"/><line x1="0" y1="300" x2="600" y2="300"/>
-      </g>
-      <text x="10" y="20" class="s-sub">구역 B</text><text x="210" y="20" class="s-sub">구역 A</text><text x="410" y="20" class="s-sub">구역 C</text>
-      <g class="s-ray">
-        <line x1="300" y1="385" x2="0" y2="270"/><line x1="300" y1="385" x2="0" y2="40"/><line x1="300" y1="385" x2="160" y2="0"/>
-        <line x1="300" y1="385" x2="300" y2="0"/><line x1="300" y1="385" x2="480" y2="0"/><line x1="300" y1="385" x2="600" y2="60"/>
-        <line x1="300" y1="385" x2="600" y2="300"/><line x1="300" y1="385" x2="160" y2="140"/>
-      </g>
-      <rect x="160" y="90" width="50" height="50" class="s-obst"/>
-      <rect x="390" y="270" width="60" height="40" class="s-obst"/>
-      <line x1="0" y1="0" x2="600" y2="0" class="s-wall"/><line x1="0" y1="400" x2="600" y2="400" class="s-wall"/>
-      <line x1="0" y1="0" x2="0" y2="170" class="s-wall"/><line x1="0" y1="250" x2="0" y2="400" class="s-wall"/>
-      <line x1="600" y1="0" x2="600" y2="170" class="s-wall"/><line x1="600" y1="250" x2="600" y2="400" class="s-wall"/>
-      <line x1="0" y1="170" x2="0" y2="250" class="s-exit"/><line x1="600" y1="170" x2="600" y2="250" class="s-exit"/>
-      <text x="-12" y="168" text-anchor="end" class="s-text" style="fill:var(--red)">출구 1</text>
-      <text x="612" y="168" class="s-text" style="fill:var(--red)">출구 2</text>
-      <path d="M-40,210 C80,205 200,200 260,230 S400,215 440,210" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round"/>
-      <circle cx="440" cy="210" r="9" class="s-red"/>
-      <circle cx="440" cy="210" r="50" fill="none" stroke="var(--red)" stroke-dasharray="4 5" stroke-width="1.5"/>
-      <text x="440" y="282" text-anchor="middle" class="s-sub" style="fill:var(--red);paint-order:stroke;stroke:var(--paper);stroke-width:4px">침입자 정지 · 반경 0.5 m 포위</text>
-      <circle cx="40" cy="210" r="13" class="s-b"/><text x="40" y="215" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">B</text>
-      <circle cx="560" cy="210" r="13" class="s-c"/><text x="560" y="215" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">C</text>
-      <circle cx="380" cy="235" r="13" class="s-a"/><text x="380" y="240" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">A</text>
-      <circle cx="300" cy="385" r="9" fill="var(--text)"/>
-      <text x="314" y="380" class="s-sub">Pi + LiDAR (3.0, 0.15)</text>
-      <g transform="translate(0,440)">
-        <line x1="0" y1="0" x2="100" y2="0" stroke="var(--text)" stroke-width="2"/>
-        <text x="106" y="4" class="s-sub">1 m</text>
-        <text x="0" y="24" class="s-mono">원점 (0,0) = 왼쪽 아래 · x → · y ↑ · 6 × 4 m</text>
-      </g>
+    <path d="M262,150 L310,150" class="s-line" marker-end="url(#ar3)"/>
+    <g>
+      <text x="430" y="30" text-anchor="middle" class="s-text">② 현재 스캔 (A 정지)</text>
+      <rect x="320" y="50" width="220" height="200" rx="10" class="s-box"/>
+      <path d="M340,70 L520,70 L520,230 L340,230 Z" class="s-pts"/>
+      <path d="M380,120 L430,120 L430,150 L380,150 Z" class="s-pts"/>
+      <path d="M455,170 L475,170 L475,188 L455,188 Z" class="s-pts"/>
+      <path d="M352,96 L368,96 L368,108 L352,108 Z" class="s-pts"/>
+      <circle cx="380" cy="102" r="9" class="s-a"/>
+      <circle cx="360" cy="102" r="12" fill="none" stroke="var(--b)" stroke-width="2" stroke-dasharray="3 3"/>
+      <text x="430" y="275" text-anchor="middle" class="s-sub">A 뒤의 점 덩어리 = B (알고 있음)</text>
+    </g>
+    <path d="M552,150 L600,150" class="s-line" marker-end="url(#ar3)"/>
+    <g>
+      <text x="720" y="30" text-anchor="middle" class="s-text">③ 지도 − B·C = 후보</text>
+      <rect x="610" y="50" width="220" height="200" rx="10" class="s-box"/>
+      <path d="M630,70 L810,70 L810,230 L630,230 Z" class="s-pts" style="opacity:.25"/>
+      <path d="M670,120 L720,120 L720,150 L670,150 Z" class="s-pts" style="opacity:.25"/>
+      <path d="M745,170 L765,170 L765,188 L745,188 Z" class="s-pts-new"/>
+      <circle cx="755" cy="179" r="24" class="s-redsoft"/>
+      <text x="720" y="275" text-anchor="middle" class="s-sub">여러 스캔에서 연속으로 보이면 → CONFIRM</text>
     </g>
   </svg>
   </div>
-  <p>LiDAR는 개와 침입자의 다리나 RC카가 보이도록 <b>개 몸통 높이(10–15 cm)</b>에 설치하세요. 두 출구가 모두 보이고 그림자가 최소인 곳에 둡니다. 상자 뒤는 사각지대가 되며, 대시보드에서 하늘색 점이 비는 부분으로 확인할 수 있습니다.</p>
+  <pre><code># 아이디어 (Raspberry Pi 관제탑에서 실행)
+pts_map = transform(scan, pose_A)                      # SLAM이 준 A의 위치로 지도 좌표 변환
+new_pts = [p for p in pts_map if dist_to_map(p) &gt; 0.10]   # 지도에서 10 cm 이상 떨어진 점
+blobs = cluster(new_pts, eps=0.08, min_pts=5)          # 가까운 점끼리 묶기
+known = [pose_B, pose_C]                               # 마커 체인으로 아는 B·C 위치
+candidates = [b for b in blobs if min_dist(b, known) &gt; 0.25]
+for c in candidates:
+    track(c)                                           # 같은 자리에서 3번 이상 → CONFIRM</code></pre>
+  <div class="grid2">
+    <div class="card"><h4>CONFIRM: A의 카메라로 확인</h4>
+      <p>A가 후보 쪽으로 몸을 돌려 카메라로 봅니다. Pi에서 YOLO 사람 인식 또는 침입자 마커/색 조끼 인식. <b>LiDAR + 카메라 두 센서가 일치해야</b> 포위로 넘어갑니다. 아니면 오탐으로 보고 바로 탐사 재개.</p></div>
+    <div class="card"><h4>침입자 준비물</h4>
+      <p>1단계는 ArUco 마커나 색 조끼를 단 <b>느린 RC카</b>, 2단계는 숨어 있다가 멈춰 있는 팀원. A 등의 LiDAR는 높이 약 20 cm 이상이라 <b>낮은 RC카는 안 보일 수 있으니 세운 상자나 막대를 얹어</b> 스캔 높이에 걸리게 합니다.</p></div>
+  </div>
 </section>
 
-<!-- 5 -->
-<section id="states">
+<section id="contain">
   <div class="num">05</div>
-  <h2>임무 상태 머신</h2>
-  <p>상태 머신은 Pi에서 실행됩니다. 상태가 바뀔 때마다 <code>mission</code> 메시지를 보내고, 대시보드 상단에 현재 상태가 강조됩니다.</p>
+  <h2>포위 (CONTAIN → HANDOVER)</h2>
+  <p>행렬 중에는 B·C가 앞 개의 마커를 보고 있어서 좌표를 압니다. 그런데 포위하려고 대열을 벗어나면 마커를 놓치고 위치를 잃습니다. 해결책은 <b>A가 멈춰서 "이동형 관제탑"이 되는 것</b>입니다. 멈춘 A의 LiDAR는 원래 계획서의 고정 LiDAR와 똑같이 침입자, B, C를 모두 점 덩어리로 보고 추적합니다.</p>
   <div class="diagram">
-  <svg viewBox="0 0 900 300" role="img" aria-label="상태 머신: PATROL → SUSPECT → ALERT → INTERCEPT → CONTAIN → HANDOVER → RETURN → PATROL, SUSPECT에서 오탐이면 RETURN">
-    <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
-    <g font-family="-apple-system, Segoe UI, sans-serif">
-      <rect x="20" y="40" width="140" height="64" rx="10" class="s-state"/><text x="90" y="68" text-anchor="middle" class="s-text">PATROL</text><text x="90" y="88" text-anchor="middle" class="s-sub">3구역 웨이포인트 순찰</text>
-      <rect x="250" y="40" width="140" height="64" rx="10" class="s-state"/><text x="320" y="68" text-anchor="middle" class="s-text">SUSPECT</text><text x="320" y="88" text-anchor="middle" class="s-sub">센서 1개 감지</text>
-      <rect x="480" y="40" width="140" height="64" rx="10" class="s-hot"/><text x="550" y="68" text-anchor="middle" class="s-text">ALERT</text><text x="550" y="88" text-anchor="middle" class="s-sub">센서 2개 이상 일치</text>
-      <rect x="710" y="40" width="170" height="64" rx="10" class="s-hot"/><text x="795" y="68" text-anchor="middle" class="s-text">INTERCEPT</text><text x="795" y="88" text-anchor="middle" class="s-sub">B, C → 출구 · A 추적</text>
-      <rect x="710" y="190" width="170" height="64" rx="10" class="s-hot"/><text x="795" y="218" text-anchor="middle" class="s-text">CONTAIN</text><text x="795" y="238" text-anchor="middle" class="s-sub">120° 포위, 경고, STOP</text>
-      <rect x="480" y="190" width="140" height="64" rx="10" class="s-state"/><text x="550" y="218" text-anchor="middle" class="s-text">HANDOVER</text><text x="550" y="238" text-anchor="middle" class="s-sub">증거 → 관제 인계</text>
-      <rect x="250" y="190" width="140" height="64" rx="10" class="s-state"/><text x="320" y="218" text-anchor="middle" class="s-text">RETURN</text><text x="320" y="238" text-anchor="middle" class="s-sub">순찰 경로 복귀</text>
-      <path d="M162,72 L246,72" class="s-line" marker-end="url(#ar2)"/><text x="204" y="62" text-anchor="middle" class="s-mono">이상 징후</text>
-      <path d="M392,72 L476,72" class="s-line" marker-end="url(#ar2)"/><text x="434" y="62" text-anchor="middle" class="s-mono">확인됨</text>
-      <path d="M622,72 L706,72" class="s-line" marker-end="url(#ar2)"/><text x="664" y="62" text-anchor="middle" class="s-mono">즉시</text>
-      <path d="M795,106 L795,186" class="s-line" marker-end="url(#ar2)"/><text x="785" y="150" text-anchor="end" class="s-mono">정지 / 출구 차단</text>
-      <path d="M708,222 L624,222" class="s-line" marker-end="url(#ar2)"/><text x="666" y="212" text-anchor="middle" class="s-mono">N초 유지</text>
-      <path d="M478,222 L394,222" class="s-line" marker-end="url(#ar2)"/><text x="436" y="212" text-anchor="middle" class="s-mono">인계 완료</text>
-      <path d="M248,222 C120,222 90,180 90,108" class="s-line" marker-end="url(#ar2)"/>
-      <path d="M300,106 C280,150 300,170 310,186" class="s-line" stroke-dasharray="4 4" marker-end="url(#ar2)"/><text x="286" y="150" text-anchor="end" class="s-mono">오탐</text>
-      <text x="20" y="290" class="s-sub">빨간 테두리 = 대시보드 상태 표시가 빨갛게 깜박이는 단계</text>
+  <svg viewBox="0 0 920 320" role="img" aria-label="두 가지 포위: 왼쪽은 A가 관제탑이 되어 LiDAR로 B, C, 침입자를 추적하며 120도 간격으로 둘러싸는 완전 포위, 오른쪽은 벽을 등진 침입자를 A가 앞에서, B와 C가 양옆에서 막는 반포위">
+    <!-- full -->
+    <rect x="15" y="15" width="435" height="290" rx="12" class="s-box"/>
+    <text x="35" y="42" class="s-text">완전 포위 (120°) <tspan class="s-sub">· 보너스 목표</tspan></text>
+    <circle cx="250" cy="165" r="75" fill="none" stroke="var(--red)" stroke-width="1.2" stroke-dasharray="3 4"/>
+    <line x1="175" y1="165" x2="288" y2="100" class="s-ray" style="opacity:.9"/>
+    <line x1="175" y1="165" x2="288" y2="230" class="s-ray" style="opacity:.9"/>
+    <line x1="175" y1="165" x2="242" y2="165" class="s-ray" style="opacity:.9"/>
+    <circle cx="250" cy="165" r="9" class="s-red"/>
+    <circle cx="175" cy="165" r="15" class="s-a"/><text x="175" y="170" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">A</text>
+    <circle cx="288" cy="100" r="14" class="s-b"/><text x="288" y="105" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">B</text>
+    <circle cx="288" cy="230" r="14" class="s-c"/><text x="288" y="235" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">C</text>
+    <text x="150" y="200" text-anchor="middle" class="s-mono">관제탑</text>
+    <text x="35" y="272" class="s-sub">A의 LiDAR가 침입자, B, C를 모두 추적.</text>
+    <text x="35" y="292" class="s-sub">반경 0.6–0.8 m. 침입자 뒤쪽이 가려질 수 있음</text>
+    <!-- half -->
+    <rect x="470" y="15" width="435" height="290" rx="12" class="s-box" style="stroke:var(--b);stroke-width:2"/>
+    <text x="490" y="42" class="s-text">반포위 <tspan class="s-sub">· 추천 목표</tspan></text>
+    <line x1="560" y1="70" x2="820" y2="70" class="s-wall"/>
+    <text x="690" y="62" text-anchor="middle" class="s-sub">벽</text>
+    <line x1="690" y1="205" x2="618" y2="135" class="s-ray" style="opacity:.9"/>
+    <line x1="690" y1="205" x2="762" y2="135" class="s-ray" style="opacity:.9"/>
+    <line x1="690" y1="205" x2="690" y2="118" class="s-ray" style="opacity:.9"/>
+    <circle cx="690" cy="110" r="9" class="s-red"/>
+    <circle cx="690" cy="205" r="15" class="s-a"/><text x="690" y="210" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">A</text>
+    <circle cx="612" cy="130" r="14" class="s-b"/><text x="612" y="135" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">B</text>
+    <circle cx="768" cy="130" r="14" class="s-c"/><text x="768" y="135" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">C</text>
+    <text x="490" y="272" class="s-sub">벽 + 3마리로 막기. B·C가 A의 LiDAR와</text>
+    <text x="490" y="292" class="s-sub">카메라 시야 안에 계속 있어서 훨씬 쉬움</text>
+  </svg>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <tr><th>할 일</th><th>방법</th></tr>
+    <tr><td><b>누가 누구인지 (ID)</b></td><td>멈추는 순간의 행렬 순서로 정함. A 바로 뒤 덩어리 = B, 그 뒤 = C. 이후 덩어리를 계속 추적</td></tr>
+    <tr><td><b>B·C의 방향</b></td><td>움직이는 방향으로 추정 + MechDog IMU로 보조</td></tr>
+    <tr><td><b>포위 지점 계산</b></td><td>원래 계획서의 공식: 침입자 위치 + 반경 × (120° 간격). A 자리는 고정이니 B·C에 남은 두 지점을 배정(이동 거리 합이 작은 쪽)</td></tr>
+    <tr><td><b>지도</b></td><td>CONTAIN부터 REGROUP까지 <b>지도 업데이트 정지</b>, 위치 추정만. 침입자와 움직이는 B·C가 지도에 벽으로 새겨지는 것을 막음</td></tr>
+    <tr><td><b>안전</b></td><td>사람과 30 cm 이내면 후퇴(비접촉), 초음파 10 cm 정지, 1초간 명령 없으면 정지</td></tr>
+    <tr><td><b>HANDOVER</b></td><td>스피커가 없으니 대시보드 경보 + <b>카메라 3대의 3방향 증거 사진</b> + 침입자 위치 + 타임라인을 관제에 전송</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="regroup">
+  <div class="num">06</div>
+  <h2>다시 줄 서기 (REGROUP → EXPLORE)</h2>
+  <p>포위하는 동안 A가 멈춰 있었기 때문에 <b>SLAM 지도와 A의 위치가 그대로 유지</b>됩니다. 그래서 다시 줄만 서면 멈춘 자리에서 매핑을 이어 갈 수 있습니다. A는 계속 LiDAR 관제탑 역할을 하며 B·C를 안내합니다.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 920 270" role="img" aria-label="다시 줄 서기: A가 탐사 방향으로 돌고, B가 LiDAR 안내로 A 뒤 0.6 m 지점으로 가서 제자리에서 돌며 마커 1을 찾고, C도 B 뒤로 가서 마커 2를 찾음">
+    <defs>
+      <marker id="ar8b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--b)"/></marker>
+      <marker id="ar8c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--c)"/></marker>
+      <marker id="ar8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--a)"/></marker>
+    </defs>
+    <circle cx="420" cy="140" r="16" class="s-a"/><text x="420" y="145" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">A</text>
+    <line x1="438" y1="140" x2="500" y2="140" stroke="var(--a)" stroke-width="2.4" marker-end="url(#ar8a)"/>
+    <text x="470" y="128" text-anchor="middle" class="s-mono">① 탐사 방향</text>
+    <circle cx="335" cy="140" r="18" fill="none" stroke="var(--b)" stroke-width="2" stroke-dasharray="4 4"/>
+    <circle cx="250" cy="140" r="18" fill="none" stroke="var(--c)" stroke-width="2" stroke-dasharray="4 4"/>
+    <text x="335" y="186" text-anchor="middle" class="s-mono">② A 뒤 0.6 m</text>
+    <text x="250" y="186" text-anchor="middle" class="s-mono">⑤ B 뒤 0.6 m</text>
+    <path d="M540,60 C470,30 360,50 340,116" stroke="var(--b)" stroke-width="2" fill="none" stroke-dasharray="6 5" marker-end="url(#ar8b)"/>
+    <circle cx="552" cy="62" r="14" class="s-b"/><text x="552" y="67" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">B</text>
+    <text x="440" y="34" class="s-sub">③ LiDAR 안내로 이동</text>
+    <path d="M335,112 A28,28 0 1,0 363,140" fill="none" stroke="var(--b)" stroke-width="1.8" marker-end="url(#ar8b)"/>
+    <text x="300" y="98" text-anchor="end" class="s-sub" style="fill:var(--b)">④ 돌며 마커 1 찾기</text>
+    <path d="M540,225 C450,260 280,250 254,162" stroke="var(--c)" stroke-width="2" fill="none" stroke-dasharray="6 5" marker-end="url(#ar8c)"/>
+    <circle cx="552" cy="222" r="14" class="s-c"/><text x="552" y="227" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">C</text>
+    <text x="400" y="262" class="s-sub">⑤ B가 자리 잡은 뒤 이동 → 마커 2 찾기</text>
+    <text x="566" y="96" class="s-mono">포위 위치</text>
+    <g transform="translate(640,40)">
+      <text class="s-text" y="0">순서</text>
+      <text y="26" class="s-sub">① A가 다음 탐사 방향으로 회전</text>
+      <text y="50" class="s-sub">② Pi가 A 뒤 0.6 m 지점 계산,</text>
+      <text y="68" class="s-sub">   지도에서 비어 있는지 확인</text>
+      <text y="92" class="s-sub">③ B 이동 (A의 LiDAR가 추적)</text>
+      <text y="116" class="s-sub">④ B가 제자리 회전하며 마커 1</text>
+      <text y="134" class="s-sub">   찾기 → 찾으면 따라가기 모드</text>
+      <text y="158" class="s-sub">⑤ C도 같은 방법으로 B 뒤에</text>
+      <text y="182" class="s-sub">⑥ 둘 다 잡으면 지도 업데이트</text>
+      <text y="200" class="s-sub">   다시 켜고 A 출발 → EXPLORE</text>
     </g>
   </svg>
   </div>
-  <div class="tablewrap"><table>
-    <tr><th>이상 징후 출처</th><th>신호</th><th>모니터 표시</th></tr>
-    <tr><td>LiDAR</td><td>개 3마리 중 어느 것과도 매칭되지 않는 움직이는 덩어리</td><td>침입자 마커 (신뢰도 0.6)</td></tr>
-    <tr><td>소리</td><td>유리 깨짐 / 문 소리 + DOA</td><td>Pi에서 소리 방향으로 뻗는 보라색 선</td></tr>
-    <tr><td>비전</td><td>YOLO person, ArUco 마커 또는 미등록 얼굴</td><td>A 개 카메라 화면의 박스</td></tr>
-  </table></div>
-  <p><b>두 출처가 같은 위치를 가리킬 때만 ALERT</b>로 넘어갑니다. 모니터에서 DOA 선이 실제로 침입자 마커 근처를 지나는지 확인하세요. 교차 확인을 눈으로 볼 수 있게 한 것입니다.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>신경 쓸 점</th><th>대응</th></tr>
+    <tr><td><b>마커를 다시 못 찾음</b></td><td>LiDAR로 잡은 B 위치·방향은 ±10 cm, ±20° 정도로 부정확 → "대략 그 자리로 → 돌면서 찾기"로 나눔. 카메라 화각 약 60°라 한 바퀴면 대개 찾음. 20초 안에 못 찾으면 <b>사람이 손으로 옮겨 주는 대비책</b>을 데모 규칙으로</td></tr>
+    <tr><td><b>B부터 한 마리씩</b></td><td>C는 B가 자리를 잡아야 갈 곳이 정해짐</td></tr>
+    <tr><td><b>침입자 처리</b></td><td>데모에서는 "관제 인계 후 팀원이 RC카를 치움"으로 정함. 침입자가 남아 있으면 그 자리를 "출입 금지 구역"으로 표시하고 피해서 탐사</td></tr>
+    <tr><td><b>어디까지 탐사했는지</b></td><td>Pi가 미탐사 경계(frontier) 목록을 들고 있다가 멈췄던 곳부터 이어 감</td></tr>
+    <tr><td><b>오탐이었을 때</b></td><td>행렬이 안 깨졌으니 REGROUP 없이 바로 EXPLORE 재개</td></tr>
+    <tr><td><b>시간</b></td><td>REGROUP에 30–60초 예상. 시연 영상이면 배속 처리</td></tr>
+  </table>
+  </div>
 </section>
 
-<!-- 6 -->
 <section id="monitor">
-  <div class="num">06</div>
-  <h2>장면별 모니터 화면</h2>
-  <p>아래는 계획서 5절의 데모 시나리오를 따르는 <code>server/simulator.py</code>로 <code>web/index.html</code>을 실행해 찍은 실제 화면입니다. 각 단계에서 목표로 삼을 그림으로 활용하세요.</p>
-  <div class="shots">
-    <figure><img src="images/dashboard_patrol.png" alt="PATROL: 개 3마리가 각자 구역에 있고 LiDAR로 방 윤곽이 보임"><figcaption><b>0:00 PATROL.</b> 각 개가 자기 구역을 돕니다. LiDAR 윤곽이 벽과 일치하면 설치 위치와 각도 변환이 맞다는 뜻입니다.</figcaption></figure>
-    <figure><img src="images/dashboard_alert.png" alt="SUSPECT: 출구 1의 침입자, Pi에서 침입자를 향하는 보라색 소리 방향 선"><figcaption><b>0:45 SUSPECT.</b> 유리 깨지는 소리: DOA 선이 출구 1을 가리키고, LiDAR도 그곳에서 매칭되지 않는 덩어리를 봅니다. A 개가 확인하러 회전합니다.</figcaption></figure>
-    <figure><img src="images/dashboard_intercept.png" alt="INTERCEPT: B는 출구 1, C는 출구 2, A는 침입자를 따라가며 카메라에 사람 박스가 보임"><figcaption><b>1:00 INTERCEPT.</b> B와 C는 출구로 가고, A는 약 60 cm 거리에서 따라가며, 카메라가 사람을 확인합니다. 증거 갤러리에 스냅샷이 쌓이기 시작합니다.</figcaption></figure>
-    <figure><img src="images/dashboard_contain.png" alt="CONTAIN: 정지한 침입자 주위의 개 3마리"><figcaption><b>1:40 CONTAIN.</b> 침입자가 멈추면 개들이 0.5 m 거리에서 120° 간격으로 포위합니다. 음성 경고와 STOP 표시가 타임라인에 기록됩니다.</figcaption></figure>
-  </div>
+  <div class="num">07</div>
+  <h2>모니터와 데이터</h2>
+  <p><b>순찰 모니터(Patrol Monitor)</b>는 시스템이 보고 판단하는 모든 것을 실시간으로 보여주는 웹 페이지입니다. 시연에서는 "관제실" 역할을 하고, 개발 중에는 가장 중요한 디버깅 도구가 됩니다. 모니터 서버는 데이터를 <i>듣기만</i> 하고 로봇에 명령을 내리지 않으므로, 대시보드가 멈춰도 로봇 동작에는 영향이 없습니다. 로봇을 움직이는 것은 모두 Pi 두뇌를 거칩니다.</p>
+  <figure class="shot">
+    <img src="images/dashboard_contain.png" alt="현재 대시보드: 아레나 지도에서 개 3마리가 침입자를 포위하고, 오른쪽과 아래에 개 상태, 카메라, 이벤트 타임라인 패널이 있음">
+    <figcaption>현재 대시보드를 시뮬레이터로 실행한 화면입니다(이전 시나리오 기준). 개 상태 카드, 카메라, 증거 갤러리, 이벤트 타임라인은 그대로 쓰고, 아래 표의 "바꿀 점"을 반영해 새 시나리오에 맞춥니다.</figcaption>
+  </figure>
+
+  <h3>메시지 종류</h3>
+  <p>전체 명세와 예시는 <code>docs/message_schema.md</code>에 있습니다. 모니터로 보낼 때는 UDP 9000번 포트 또는 HTTP <code>POST /api/ingest</code>를 씁니다.</p>
+  <div class="tablewrap"><table>
+    <tr><th>종류</th><th>보내는 쪽</th><th>주기</th><th>표시 방식</th><th>새 시나리오에서 바꿀 점</th></tr>
+    <tr><td><code>lidar</code></td><td>Pi (A의 스캔)</td><td>5 Hz</td><td>지도 위 하늘색 점</td><td><code>origin</code>이 A를 따라 움직이고, A의 방향(<code>heading_deg</code>)이 필요함</td></tr>
+    <tr><td><code>dog</code></td><td>Pi (위치) + 각 개 (센서)</td><td>10 Hz</td><td>방향이 표시된 개 마커, 상태 카드</td><td>A 위치는 SLAM, B·C 위치는 마커 체인 또는 A의 LiDAR 추적에서 옴</td></tr>
+    <tr><td><code>intruder</code></td><td>Pi</td><td>5 Hz</td><td>빨간 마커, 원, 이동 궤적</td><td>그대로</td></tr>
+    <tr><td><code>camera</code></td><td>A, B, C</td><td>실시간</td><td>실시간 화면, 증거 갤러리</td><td>카메라 3대 모두 사용 (<code>CAMERAS</code>에 3개 등록)</td></tr>
+    <tr><td><code>mission</code></td><td>Pi 상태 머신</td><td>변경 시</td><td>상단 상태 단계 표시</td><td>단계 이름을 EXPLORE / SUSPECT / CONFIRM / CONTAIN / HANDOVER / REGROUP으로 교체 (<code>web/app.js</code>의 <code>STATES</code>)</td></tr>
+    <tr><td><code>event</code></td><td>Pi</td><td>발생 시</td><td>타임라인</td><td>그대로</td></tr>
+    <tr><td><code>map</code> <span class="tag">신규</span></td><td>Pi (SLAM)</td><td>1 Hz</td><td>점점 그려지는 지도</td><td>새로 추가. 정적 <code>arena.json</code> 대신 SLAM 지도를 배경으로</td></tr>
+    <tr><td><code>sound</code></td><td>—</td><td>—</td><td>—</td><td>새 시나리오에서는 사용하지 않음</td></tr>
+  </table></div>
+  <p><span class="tag">왜 개 데이터를 나누나요?</span> MechDog은 자기가 어디 있는지 모릅니다. <b>위치</b>는 Pi(SLAM, 마커)에서 오고, <b>배터리, 초음파, 기울기</b>는 개에서 옵니다. 양쪽이 각각 일부 필드만 담은 <code>dog</code> 메시지를 보내고, 모니터가 이를 합칩니다.</p>
+
+  <h3>좌표계</h3>
+  <p>단위는 미터, x는 오른쪽, y는 위쪽, 각도는 +x에서 반시계 방향입니다. SLAM 지도는 A가 출발한 곳을 원점으로 잡으므로, <b>A를 항상 아레나의 정해진 출발점(예: 왼쪽 아래 모서리에서 (0.3, 0.3), +x 방향)에 두고 시작</b>하세요. 그러면 SLAM 좌표와 <code>web/arena.json</code>의 좌표가 일치해서, 출구나 숨을 곳 같은 라벨을 그대로 쓸 수 있습니다.</p>
+
   <h3>직접 실행해 보기</h3>
 <pre><code>cd mechdog-patrol-monitor
 pip install -r requirements.txt
 uvicorn server.app:app --host 0.0.0.0 --port 8000   # 터미널 1
-python -m server.simulator --speed 3                 # 터미널 2
+python -m server.simulator --speed 3                 # 터미널 2 (지금은 이전 시나리오를 재생)
 # http://localhost:8000 열기</code></pre>
+  <div class="note">시뮬레이터를 새 상태 머신(EXPLORE → … → REGROUP)으로 바꾸는 것이 모니터 트랙의 첫 작업입니다. LiDAR가 오기 전에 대시보드와 두뇌 로직을 먼저 만들어 둘 수 있습니다.</div>
 </section>
 
-<!-- 7 -->
-<section id="roadmap">
-  <div class="num">07</div>
-  <h2>로드맵</h2>
-  <p>계획서의 개발 단계(MVP → 확장 1–3)를 바탕으로 한 8주 일정 제안입니다. 모니터 작업은 전 기간에 걸쳐 함께 진행합니다. 매주 시뮬레이션 스트림 하나를 실제 데이터로 바꿉니다.</p>
+<section id="hw">
+  <div class="num">08</div>
+  <h2>하드웨어 현실 체크</h2>
   <div class="diagram">
-  <svg viewBox="0 0 900 330" role="img" aria-label="간트 차트: 1주차 준비, 1–2주차 통신, 2–3주차 Pi 센싱, 3–4주차 MVP, 5주차 소리, 6주차 포위, 7주차 얼굴 인식, 8주차 시연 리허설, 전 기간 모니터 연동">
+  <svg viewBox="0 0 920 330" role="img" aria-label="MechDog 등에 얹는 센서 배낭 옆모습: 맨 위 LiDAR, 그 아래 ESP32-C3 브리지, 배터리, 뒤쪽에 ArUco 마커. 총 120~160 g">
+    <g transform="translate(120,40)">
+      <rect x="0" y="150" width="260" height="60" rx="18" class="s-dog"/>
+      <rect x="250" y="120" width="70" height="55" rx="14" class="s-dog"/>
+      <circle cx="300" cy="140" r="4" fill="var(--text)"/>
+      <line x1="30" y1="205" x2="15" y2="265" class="s-leg"/>
+      <line x1="70" y1="205" x2="80" y2="265" class="s-leg"/>
+      <line x1="190" y1="205" x2="175" y2="265" class="s-leg"/>
+      <line x1="230" y1="205" x2="240" y2="265" class="s-leg"/>
+      <line x1="-40" y1="268" x2="360" y2="268" class="s-grid"/>
+      <text x="130" y="186" text-anchor="middle" class="s-sub">MechDog 약 560 g</text>
+      <rect x="70" y="128" width="120" height="22" rx="4" class="s-bar3"/>
+      <text x="130" y="143" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">배터리 / 강압</text>
+      <rect x="80" y="102" width="100" height="24" rx="4" class="s-bar2"/>
+      <text x="130" y="118" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">ESP32-C3 브리지</text>
+      <rect x="90" y="88" width="80" height="12" rx="3" class="s-obst" style="opacity:.6"/>
+      <rect x="105" y="58" width="50" height="30" rx="8" class="s-bar"/>
+      <text x="130" y="78" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">LiDAR</text>
+      <rect x="-14" y="146" width="22" height="22" fill="#fff" stroke="#111" stroke-width="2"/><rect x="-9" y="151" width="6" height="6" fill="#111"/><rect x="-2" y="158" width="5" height="5" fill="#111"/>
+      <text x="-20" y="190" text-anchor="end" class="s-mono">마커 ID 1</text>
+      <line x1="-60" y1="73" x2="100" y2="73" class="s-ray" style="opacity:.9;stroke-dasharray:4 4"/>
+      <line x1="160" y1="73" x2="400" y2="73" class="s-ray" style="opacity:.9;stroke-dasharray:4 4"/>
+      <text x="330" y="66" class="s-mono">스캔 평면</text>
+    </g>
+    <g transform="translate(560,40)">
+      <text class="s-text" y="10">A의 센서 배낭 예상 무게</text>
+      <text y="40" class="s-sub">LD06 / LD19 LiDAR</text><text x="330" y="40" text-anchor="end" class="s-mono">약 40 g</text>
+      <text y="64" class="s-sub">XIAO ESP32-C3 브리지</text><text x="330" y="64" text-anchor="end" class="s-mono">약 5 g</text>
+      <text y="88" class="s-sub">배터리 + 강압 컨버터</text><text x="330" y="88" text-anchor="end" class="s-mono">50–70 g</text>
+      <text y="112" class="s-sub">마운트, 케이블</text><text x="330" y="112" text-anchor="end" class="s-mono">30–50 g</text>
+      <line x1="0" y1="124" x2="330" y2="124" class="s-grid"/>
+      <text y="146" class="s-text">합계</text><text x="330" y="146" text-anchor="end" class="s-text">120–160 g</text>
+      <text y="190" class="s-sub" style="fill:var(--red)">RPLIDAR A1은 혼자 약 170 g → 비추천</text>
+      <text y="222" class="s-sub">걸을 때 몸이 흔들려 스캔 평면이 기울어짐</text>
+      <text y="244" class="s-sub">→ 천천히 걷거나 "멈춤 → 스캔 → 이동"</text>
+    </g>
+  </svg>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <tr><th>항목</th><th>권장</th><th>이유</th></tr>
+    <tr><td><b>LiDAR 무게</b></td><td>LD06 / LD19 같은 소형 LiDAR (약 40 g, UART)</td><td>RPLIDAR A1(약 170 g)은 MechDog(약 560 g)에게 너무 무거움</td></tr>
+    <tr><td><b>데이터 처리</b></td><td>개: XIAO ESP32-C3로 LiDAR UART → Wi-Fi(UDP) 전달<br>Pi 관제탑: SLAM, 마커 인식, 탐지, 상태 머신</td><td>개에는 데이터 전달만 맡기고 계산은 고정된 Pi에서</td></tr>
+    <tr><td><b>전원</b></td><td>별도 배터리 또는 강압 컨버터로 따로 공급</td><td>서보 전원이 흔들리면 LiDAR가 재부팅될 수 있음</td></tr>
+    <tr><td><b>SLAM 방식</b></td><td>스캔 매칭만으로 동작하는 SLAM (Python: BreezySLAM, ROS2: slam_toolbox + 스캔 매처)</td><td>MechDog에는 바퀴 엔코더(오도메트리)가 없음</td></tr>
+    <tr><td><b>마커</b></td><td>A·B 등 뒤에 6–8 cm ArUco, 뒤 개 카메라 높이에 맞춰 수직으로</td><td>LiDAR 스캔 평면을 가리지 않도록 LiDAR보다 낮게</td></tr>
+    <tr><td><b>대시보드</b></td><td><code>lidar</code> 메시지에 A의 자세(x, y, heading)를 함께 보내고, SLAM 지도 화면 추가</td><td>지금은 고정된 <code>origin</code>과 <code>arena.json</code> 정적 지도를 전제로 함</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="num">09</div>
+  <h2>로드맵</h2>
+  <p>8주 일정 제안입니다. 모니터 작업은 전 기간에 걸쳐 함께 진행하고, 매주 시뮬레이션 스트림 하나를 실제 데이터로 바꿉니다. <b>0–2단계는 LiDAR 없이 지금 바로</b> 시작할 수 있습니다.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 900 330" role="img" aria-label="간트 차트: 1주차 준비, 1–2주차 통신, 2–3주차 행렬 따라가기, 3–4주차 SLAM, 4–5주차 MVP 행렬 탐사와 발견, 6주차 반포위, 7주차 다시 줄 서기, 8주차 시연 리허설, 전 기간 모니터 연동">
     <g font-family="-apple-system, Segoe UI, sans-serif">
       <g class="s-grid">
         <line x1="200" y1="20" x2="200" y2="300"/><line x1="287" y1="20" x2="287" y2="300"/><line x1="375" y1="20" x2="375" y2="300"/>
@@ -356,11 +741,11 @@ python -m server.simulator --speed 3                 # 터미널 2
       <g class="s-text" style="font-size:13px">
         <text x="0" y="44">0 · 준비 및 측정</text>
         <text x="0" y="76">1 · Pi ↔ 개 통신</text>
-        <text x="0" y="108">2 · Pi 센싱</text>
-        <text x="0" y="140">3 · MVP: 출구 봉쇄</text>
-        <text x="0" y="172">확장 1 · 소리 + 교차 확인</text>
-        <text x="0" y="204">확장 2 · 3마리 포위</text>
-        <text x="0" y="236">확장 3 · 얼굴 인식</text>
+        <text x="0" y="108">2 · 행렬 따라가기</text>
+        <text x="0" y="140">3 · SLAM 매핑</text>
+        <text x="0" y="172">4 · MVP: 탐사 + 발견</text>
+        <text x="0" y="204">5 · 반포위 + 인계</text>
+        <text x="0" y="236">6 · 다시 줄 서기</text>
         <text x="0" y="268">시연 리허설</text>
         <text x="0" y="300">모니터 연동</text>
       </g>
@@ -368,8 +753,9 @@ python -m server.simulator --speed 3                 # 터미널 2
       <rect x="230" y="62" width="143" height="20" rx="5" class="s-bar"/>
       <rect x="289" y="94" width="172" height="20" rx="5" class="s-bar"/>
       <rect x="377" y="126" width="172" height="20" rx="5" class="s-bar"/>
-      <text x="556" y="141" class="s-sub" style="fill:var(--red)">◆ MVP 시연</text>
-      <rect x="552" y="158" width="84" height="20" rx="5" class="s-bar2"/>
+      <text x="383" y="120" class="s-mono">LiDAR 도착 후</text>
+      <rect x="464" y="158" width="172" height="20" rx="5" class="s-bar"/>
+      <text x="642" y="173" class="s-sub" style="fill:var(--red)">◆ MVP 시연</text>
       <rect x="639" y="190" width="84" height="20" rx="5" class="s-bar2"/>
       <rect x="727" y="222" width="84" height="20" rx="5" class="s-bar2"/>
       <rect x="814" y="254" width="84" height="20" rx="5" class="s-bar3"/>
@@ -378,12 +764,11 @@ python -m server.simulator --speed 3                 # 터미널 2
     </g>
   </svg>
   </div>
-  <p class="s-sub" style="color:var(--muted);font-size:14px">주 단위 기간은 실제 일정에 맞게 조정하세요. 날짜보다 순서가 중요합니다. <b>MVP가 실제 로봇으로 처음부터 끝까지 동작하기 전에는 확장 2를 시작하지 마세요.</b></p>
+  <p class="s-sub" style="color:var(--muted);font-size:14px">주 단위 기간은 실제 일정에 맞게 조정하세요. 날짜보다 순서가 중요합니다. <b>MVP(4단계)가 실제 로봇으로 처음부터 끝까지 동작하기 전에는 5단계를 시작하지 마세요.</b> 완전 120° 포위는 시간이 남을 때의 보너스입니다.</p>
 </section>
 
-<!-- 8 -->
 <section id="steps">
-  <div class="num">08</div>
+  <div class="num">10</div>
   <h2>단계별 진행</h2>
   <p>진행하면서 항목을 체크하세요. 체크 상태는 이 브라우저에만 저장됩니다.</p>
   <div class="progress"><i id="prog"></i></div>
@@ -395,13 +780,15 @@ python -m server.simulator --speed 3                 # 터미널 2
       <h3>준비 및 측정</h3>
       <div class="when">1주차 · 전원</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>로봇 전용 Wi-Fi 공유기를 준비합니다. Pi와 각 개에 고정 IP를 주고 기록해 둡니다.</span></label></li>
-        <li><label><input type="checkbox"><span>노트북과 Pi에서 모니터 + 시뮬레이터를 실행합니다. 팀원 모두 대시보드를 열어 봅니다.</span></label></li>
-        <li><label><input type="checkbox"><span>MechDog의 보행 속도와 회전 속도(m/s, °/s)를 측정합니다. 실측값을 시뮬레이터의 <code>DOG_SPEED</code>에 넣고, 개가 침입자보다 먼저 출구에 도착할 수 있는지 확인합니다.</span></label></li>
-        <li><label><input type="checkbox"><span>아레나를 만듭니다: 출구 2개, 상자 몇 개. 크기를 재서 <code>web/arena.json</code>을 수정합니다.</span></label></li>
-        <li><label><input type="checkbox"><span>계획서 11절의 결정 사항을 정합니다: 침입자는 RC카 먼저, 다음에 사람. 모드는 하나로 할지 둘 다 할지(수색구조 + 순찰).</span></label></li>
+        <li><label><input type="checkbox"><span>로봇 전용 Wi-Fi 공유기를 준비합니다. Pi와 각 개, 카메라 3대에 고정 IP를 주고 기록해 둡니다.</span></label></li>
+        <li><label><input type="checkbox"><span>Pi에서 모니터 + 시뮬레이터를 실행합니다. 팀원 모두 노트북으로 대시보드를 열어 봅니다.</span></label></li>
+        <li><label><input type="checkbox"><span>MechDog의 보행 속도와 회전 속도(m/s, °/s)를 측정합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>A에 LiDAR 배낭과 같은 무게(120–160 g)의 물건을 얹고 걸어 봅니다. 넘어지거나 느려지지 않는지 확인합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>카메라 3대를 320×240으로 Pi에 연결하고 실제 FPS와 지연을 잽니다.</span></label></li>
+        <li><label><input type="checkbox"><span>아레나를 만듭니다: 벽, 장애물 몇 개, 침입자가 숨을 곳. 크기를 재서 <code>web/arena.json</code>을 수정합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>침입자를 정합니다: 1단계는 마커/색 조끼를 단 RC카(스캔 높이까지 세운 상자를 얹음), 2단계는 사람.</span></label></li>
       </ul>
-      <div class="done"><b>완료 기준:</b> 대시보드에 실제 아레나 윤곽이 나오고, 출구 선점이 물리적으로 가능한지 알고 있다.</div>
+      <div class="done"><b>완료 기준:</b> 걷는 속도, 짐 무게 한계, 카메라 FPS를 숫자로 안다.</div>
     </div>
   </div>
 
@@ -411,86 +798,106 @@ python -m server.simulator --speed 3                 # 터미널 2
       <h3>Pi ↔ 개 통신</h3>
       <div class="when">1–2주차 · 개 펌웨어 + 두뇌</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>각 개의 MicroPython: Wi-Fi에 접속해 <code>dog</code> 상태 메시지(배터리, front_cm, 기울기, 상태)를 10 Hz로 모니터에 보냅니다. 10절 참고.</span></label></li>
-        <li><label><input type="checkbox"><span>개가 Pi로부터 <code>{"to":"B","cmd":"move",...}</code>를 받아 걷습니다.</span></label></li>
+        <li><label><input type="checkbox"><span>각 개의 MicroPython: Wi-Fi에 접속해 <code>dog</code> 상태 메시지(배터리, front_cm, 기울기, 상태)를 10 Hz로 모니터에 보냅니다. 12절 참고.</span></label></li>
+        <li><label><input type="checkbox"><span>개가 Pi로부터 <code>{"to":"B","cmd":"move","v":80,"turn":-20}</code>를 받아 <code>mechdog.move(속도, 회전)</code>로 걷습니다.</span></label></li>
         <li><label><input type="checkbox"><span>개의 안전 반사: 10 cm 이내 장애물이면 정지, 넘어지면(IMU) 정지, 1초간 명령이 없으면 정지.</span></label></li>
         <li><label><input type="checkbox"><span>개가 걷는 중에 공유기 전원을 뽑아 봅니다. 1초 안에 멈춰야 하고, 대시보드의 해당 카드가 <b>LOST</b>로 바뀌어야 합니다.</span></label></li>
       </ul>
-      <div class="done"><b>완료 기준:</b> 개 3마리 카드에 배터리/초음파/기울기가 실시간으로 나오고, Pi가 명령으로 각 개를 걷게 할 수 있다.</div>
+      <div class="done"><b>완료 기준:</b> 개 3마리 카드에 센서 값이 실시간으로 나오고, Pi가 명령으로 각 개를 걷게 할 수 있다.</div>
     </div>
   </div>
 
   <div class="phase">
     <div class="badge">2</div>
     <div>
-      <h3>Pi 센싱: LiDAR 지도와 개 위치 추적</h3>
-      <div class="when">2–3주차 · 인식</div>
+      <h3>행렬 따라가기</h3>
+      <div class="when">2–3주차 · 인식 + 두뇌 · LiDAR 필요 없음</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>Pi에서 LiDAR를 읽어 아레나 각도로 변환하고 <code>lidar</code> 메시지를 보냅니다. 하늘색 윤곽이 그려진 벽과 일치해야 합니다.</span></label></li>
-        <li><label><input type="checkbox"><span>빈 아레나 스캔을 약 10초간 기록해 정적 배경으로 씁니다. 움직이는 점 = 스캔 − 배경.</span></label></li>
-        <li><label><input type="checkbox"><span>움직이는 점을 군집화하고(예: DBSCAN, eps ≈ 8 cm) 각 개의 마지막 위치 + 마지막 명령으로 군집과 개를 매칭합니다.</span></label></li>
-        <li><label><input type="checkbox"><span>Pi에서 각 개의 <code>x, y, heading_deg</code>를 <code>dog</code> 메시지로 보냅니다. 이제 지도 위 마커가 움직입니다.</span></label></li>
-        <li><label><input type="checkbox"><span>A 개 카메라: 1초에 한 장씩 JPEG을 <code>camera</code> 메시지로 POST합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>ArUco 마커(6–8 cm)를 출력해 A 등 뒤에 ID 1, B 등 뒤에 ID 2를 붙입니다. 각 카메라를 체스보드로 보정합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>개 1마리가 사람이 손에 든 마커를 0.6 m 거리로 따라갑니다.</span></label></li>
+        <li><label><input type="checkbox"><span>B가 A를 따라갑니다(A는 리모컨으로 조종). 이어서 C가 B를 따라갑니다.</span></label></li>
+        <li><label><input type="checkbox"><span>"뒤 개가 마커를 놓치면 앞 개가 대기" 규칙과 제자리 회전으로 다시 찾기를 넣습니다.</span></label></li>
+        <li><label><input type="checkbox"><span>B와 C의 초음파 측정 시점을 번갈아 지정해 간섭을 막습니다.</span></label></li>
+        <li><label><input type="checkbox"><span><code>solvePnP</code>로 앞 개와의 상대 위치를 구해 대시보드에 B·C 위치를 표시합니다.</span></label></li>
       </ul>
-      <div class="done"><b>완료 기준:</b> 개를 손으로 옮기면 지도 위 마커가 약 10 cm 오차 안에서 따라온다.</div>
+      <div class="done"><b>완료 기준:</b> A를 리모컨으로 ㄱ자 경로를 걷게 했을 때 B·C가 놓치지 않고 따라온다.</div>
     </div>
   </div>
 
   <div class="phase">
     <div class="badge">3</div>
     <div>
-      <h3>MVP: 탐지와 출구 봉쇄</h3>
-      <div class="when">3–4주차 · 두뇌 + 전원</div>
+      <h3>SLAM 매핑</h3>
+      <div class="when">3–4주차 · 인식 · LiDAR 도착 후</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>매칭되지 않는 움직이는 덩어리 → <code>intruder</code> 메시지 → SUSPECT.</span></label></li>
-        <li><label><input type="checkbox"><span>상태 머신 PATROL → SUSPECT → ALERT → INTERCEPT가 <code>mission</code>과 <code>event</code> 메시지를 보냅니다.</span></label></li>
-        <li><label><input type="checkbox"><span>INTERCEPT: B와 C를 출구 웨이포인트로 보냅니다. A는 50–80 cm 거리에서 따라가며 최소 30 cm를 유지합니다.</span></label></li>
-        <li><label><input type="checkbox"><span>매 실행을 기록합니다: 모든 텔레메트리를 <code>.jsonl</code> 파일에 이어 저장해 재생과 디버깅에 씁니다.</span></label></li>
-        <li><label><input type="checkbox"><span>RC카 + ArUco 마커로 10회 테스트하고 성공 횟수를 셉니다.</span></label></li>
+        <li><label><input type="checkbox"><span>LiDAR를 Pi에 USB로 바로 꽂고 손으로 들고 다니며 BreezySLAM으로 지도를 만듭니다.</span></label></li>
+        <li><label><input type="checkbox"><span>XIAO ESP32-C3 브리지로 LiDAR UART를 Wi-Fi(UDP)로 넘기고, A 등에 장착합니다. 전원은 별도로 공급합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>"천천히 걷기"와 "멈춤 → 스캔 → 이동"의 지도 품질을 비교해 방식을 정합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>B·C 위치 주변(반경 약 25 cm) 점을 SLAM 입력에서 지웁니다.</span></label></li>
+        <li><label><input type="checkbox"><span>대시보드에 SLAM 지도(<code>map</code>)와 A 위치를 표시합니다.</span></label></li>
       </ul>
-      <div class="done"><b>완료 기준 (계획서 8절):</b> RC카가 진입하면 개 2마리가 출구에 도착하고, 대시보드에서 확인된다. <span class="tag r">MVP 시연</span></div>
+      <div class="done"><b>완료 기준:</b> 행렬로 아레나를 한 바퀴 돌면 벽이 겹치거나 휘지 않은 지도가 나온다.</div>
     </div>
   </div>
 
   <div class="phase">
-    <div class="badge">E1</div>
+    <div class="badge">4</div>
     <div>
-      <h3>소리 방향과 교차 확인</h3>
-      <div class="when">5주차 · 인식 (<code>siren-alert-edge-ai/</code> 재활용)</div>
+      <h3>MVP: 행렬 탐사 + 발견</h3>
+      <div class="when">4–5주차 · 두뇌 + 전원</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>ReSpeaker DOA + 유리/문 소리 분류기 → <code>alert: true</code>인 <code>sound</code> 메시지.</span></label></li>
-        <li><label><input type="checkbox"><span>LiDAR 침입자가 DOA 선의 ±20° 안에 있을 때만 ALERT.</span></label></li>
-        <li><label><input type="checkbox"><span>오탐 테스트: 아레나에 아무도 없을 때 유리 깨지는 소리를 재생합니다. SUSPECT → RETURN이 되고 ALERT는 없어야 합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>A가 지도의 미탐사 경계(frontier)를 향해 스스로 이동하고, B·C가 따라옵니다 (EXPLORE).</span></label></li>
+        <li><label><input type="checkbox"><span>지도에 없고 B·C와도 매칭되지 않는 덩어리 → A 정지, 재스캔 → <code>intruder</code> 메시지, SUSPECT.</span></label></li>
+        <li><label><input type="checkbox"><span>A가 돌아서 카메라로 확인(마커/색 조끼 또는 YOLO) → CONFIRM.</span></label></li>
+        <li><label><input type="checkbox"><span>상태 머신이 <code>mission</code>과 <code>event</code> 메시지를 보냅니다. 모든 텔레메트리를 <code>.jsonl</code> 파일에 기록해 재생과 디버깅에 씁니다.</span></label></li>
+        <li><label><input type="checkbox"><span>오탐 테스트: 아무도 없을 때 탐사해서 SUSPECT가 나와도 CONFIRM 없이 바로 재개되는지 확인합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>숨은 RC카로 10회 테스트하고 성공 횟수를 셉니다.</span></label></li>
       </ul>
-      <div class="done"><b>완료 기준:</b> 오탐 시 ALERT가 발생하지 않는다.</div>
+      <div class="done"><b>완료 기준:</b> 행렬이 탐사하다 숨은 RC카를 찾아 CONFIRM까지 가고, 대시보드에서 확인된다. <span class="tag r">MVP 시연</span></div>
     </div>
   </div>
 
   <div class="phase">
-    <div class="badge">E2</div>
+    <div class="badge">5</div>
     <div>
-      <h3>진행 방향 예측과 3마리 포위</h3>
+      <h3>반포위 + 인계</h3>
       <div class="when">6주차 · 두뇌</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>최근 약 1초간의 위치로 침입자 속도를 추정합니다. 출구별로 침입자 도착 시간과 각 개의 도착 시간을 비교합니다.</span></label></li>
-        <li><label><input type="checkbox"><span>CONTAIN: 반경 약 0.5 m의 포위 지점 3개를 <code>scipy.optimize.linear_sum_assignment</code>로 개와 매칭하고 5 Hz로 갱신합니다.</span></label></li>
-        <li><label><input type="checkbox"><span>경고: B와 C에서 MP3 "멈춰" + 도트매트릭스 STOP. <code>event</code>로 기록합니다.</span></label></li>
-        <li><label><input type="checkbox"><span>HANDOVER: A 개 스냅샷에 <code>evidence: true</code>를 표시한 뒤 RETURN.</span></label></li>
+        <li><label><input type="checkbox"><span>CONTAIN: A 정지 = 관제탑. 멈추는 순간의 행렬 순서로 B·C의 ID를 정하고 LiDAR 덩어리로 추적합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>벽을 등진 침입자를 A가 앞에서, B·C가 양옆에서 막는 지점을 계산해 보냅니다.</span></label></li>
+        <li><label><input type="checkbox"><span>CONTAIN 동안 SLAM 지도 업데이트를 멈춥니다.</span></label></li>
+        <li><label><input type="checkbox"><span>사람과 30 cm 이내면 후퇴(비접촉)를 확인합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>HANDOVER: 카메라 3대의 사진에 <code>evidence: true</code>를 표시하고, 위치와 타임라인을 함께 인계합니다.</span></label></li>
       </ul>
-      <div class="done"><b>완료 기준:</b> 움직이는 침입자를 포위하고, 대시보드에 궤적, 증거, 타임라인이 나온다.</div>
+      <div class="done"><b>완료 기준:</b> 벽을 등진 RC카를 3마리가 막고, 증거 사진 3장이 갤러리에 나온다.</div>
     </div>
   </div>
 
   <div class="phase">
-    <div class="badge">E3</div>
+    <div class="badge">6</div>
     <div>
-      <h3>얼굴 인식</h3>
-      <div class="when">7주차 · 인식 (<code>Real-Time_Face-Recognition…</code> 재활용)</div>
+      <h3>다시 줄 서기 → 탐사 재개</h3>
+      <div class="when">7주차 · 두뇌</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>등록된 사람 → 인사 이벤트(ALERT 없음). 미등록 사람 → ALERT.</span></label></li>
-        <li><label><input type="checkbox"><span>카메라 화면에 이름 또는 "unknown"을 그린 뒤 전송합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>REGROUP: A가 다음 탐사 방향으로 돌고, Pi가 A 뒤 0.6 m 지점을 계산해 B를 보냅니다.</span></label></li>
+        <li><label><input type="checkbox"><span>B가 제자리 회전하며 마커 1을 찾으면 따라가기 모드로 전환. 같은 방법으로 C.</span></label></li>
+        <li><label><input type="checkbox"><span>20초 안에 못 찾으면 사람이 옮겨 주는 대비책을 정하고 대시보드에 안내를 띄웁니다.</span></label></li>
+        <li><label><input type="checkbox"><span>지도 업데이트를 다시 켜고, 멈췄던 frontier부터 EXPLORE를 재개합니다.</span></label></li>
       </ul>
-      <div class="done"><b>완료 기준:</b> 두 경우에 서로 다른 반응을 보인다.</div>
+      <div class="done"><b>완료 기준:</b> 포위 후 사람 손 없이 다시 줄 서서 탐사를 이어 간다 (5회 중 4회 이상).</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="badge">E</div>
+    <div>
+      <h3>보너스</h3>
+      <div class="when">시간이 남으면</div>
+      <ul class="check">
+        <li><label><input type="checkbox"><span>완전 120° 포위: 침입자 반경 0.6–0.8 m 지점 3개 중 A 자리를 뺀 두 곳을 B·C에 배정합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>B·C가 A가 지나간 발자국 점을 따라가도록 바꿔 모서리 충돌을 없앱니다.</span></label></li>
+        <li><label><input type="checkbox"><span>얼굴 인식(<code>Real-Time_Face-Recognition…</code> 재활용): 등록된 사람이면 ALERT 없이 인사 이벤트.</span></label></li>
+      </ul>
     </div>
   </div>
 
@@ -500,7 +907,7 @@ python -m server.simulator --speed 3                 # 터미널 2
       <h3>시연 리허설</h3>
       <div class="when">8주차 · 전원</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>배터리를 충전한 상태로 3분 시나리오(계획서 5절)를 연속 5회 실행합니다.</span></label></li>
+        <li><label><input type="checkbox"><span>배터리를 충전한 상태로 4분 시나리오(1절)를 연속 5회 실행합니다.</span></label></li>
         <li><label><input type="checkbox"><span>대시보드를 프로젝터에 띄웁니다. 관객이 로봇의 "생각"을 보는 화면입니다.</span></label></li>
         <li><label><input type="checkbox"><span>성공한 실행을 백업 영상으로 녹화하고, 만일을 위해 시뮬레이터도 준비해 둡니다.</span></label></li>
       </ul>
@@ -508,28 +915,26 @@ python -m server.simulator --speed 3                 # 터미널 2
   </div>
 </section>
 
-<!-- 9 -->
 <section id="team">
-  <div class="num">09</div>
+  <div class="num">11</div>
   <h2>팀 구성 제안</h2>
-  <p>메시지 형식이 트랙 간의 약속이므로 네 트랙이 병렬로 작업할 수 있습니다. 1주차에 <code>docs/message_schema.md</code>를 합의하고, 바꿀 때는 반드시 모두에게 알리세요.</p>
+  <p>메시지 형식이 트랙 간의 약속이므로 네 트랙이 병렬로 작업할 수 있습니다. 1주차에 <code>docs/message_schema.md</code>를 합의하고(새 <code>map</code> 메시지와 <code>lidar</code>의 방향 필드 포함), 바꿀 때는 반드시 모두에게 알리세요.</p>
   <div class="grid2">
-    <div class="card"><h4><span class="tag a">트랙 1</span> 개 펌웨어</h4><p>ESP32-S3 개 3마리의 MicroPython: Wi-Fi, 명령 파서, 보행 호출, 안전 반사, 상태 메시지, MP3와 도트매트릭스, A 개 카메라.</p></div>
-    <div class="card"><h4><span class="tag b">트랙 2</span> 인식 (Pi)</h4><p>LiDAR 드라이버, 배경 제거, 군집화, 개/침입자 매칭, YOLO, ReSpeaker DOA와 소리 분류.</p></div>
-    <div class="card"><h4><span class="tag c">트랙 3</span> 두뇌 (Pi)</h4><p>상태 머신, 출구 예측, 헝가리안 배정, 웨이포인트 이동, 인계. <code>mission</code>, <code>intruder</code>, <code>event</code>를 보냅니다.</p></div>
-    <div class="card"><h4><span class="tag r">트랙 4</span> 모니터 및 통합</h4><p>이 폴더: 대시보드, 시뮬레이터, 기록/재생, 아레나 설정, 시연 화면. 전체 통합 테스트도 담당합니다.</p></div>
+    <div class="card"><h4><span class="tag a">트랙 1</span> 개 펌웨어</h4><p>MechDog 3마리의 MicroPython: Wi-Fi, 명령 파서, 보행 호출, 안전 반사, 상태 메시지. 카메라 펌웨어(ESP32-S3)와 LiDAR 브리지(ESP32-C3).</p></div>
+    <div class="card"><h4><span class="tag b">트랙 2</span> 인식 (Pi)</h4><p>SLAM, B·C 점 지우기, ArUco 인식과 <code>solvePnP</code>, 침입자 후보 탐지, 카메라 확인(마커/YOLO).</p></div>
+    <div class="card"><h4><span class="tag c">트랙 3</span> 두뇌 (Pi)</h4><p>상태 머신, 따라가기 제어, frontier 탐사, 포위 지점 계산, REGROUP. <code>mission</code>, <code>intruder</code>, <code>event</code>를 보냅니다.</p></div>
+    <div class="card"><h4><span class="tag r">트랙 4</span> 모니터 및 통합</h4><p>이 폴더: SLAM 지도 화면, 새 상태 단계, 카메라 3대, 시뮬레이터, 기록/재생, 시연 화면. 전체 통합 테스트도 담당합니다.</p></div>
   </div>
 </section>
 
-<!-- 10 -->
 <section id="code">
-  <div class="num">10</div>
+  <div class="num">12</div>
   <h2>실제 하드웨어 연결</h2>
-  <p>각 코드 조각이 시뮬레이터의 한 부분을 대체합니다. <code>server/app.py</code>를 실행 중인 기기의 IP로 보내세요.</p>
+  <p>각 코드 조각이 시뮬레이터의 한 부분을 대체합니다. 모니터 주소는 <code>server/app.py</code>를 실행 중인 Pi의 IP입니다. 아래는 출발점이 되는 스케치이며, 실제 하드웨어에서 아직 시험하지 않았습니다.</p>
 
   <h3>개 상태 (각 MechDog의 MicroPython)</h3>
 <pre><code>import network, socket, ujson, time
-MONITOR = ("192.168.0.10", 9000)   # 모니터 IP
+MONITOR = ("192.168.0.10", 9000)   # 모니터(Pi) IP
 NAME = "B"
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -539,67 +944,123 @@ while True:
            "tilt": "ok" if upright() else "fallen", "state": current_state}
     sock.sendto(ujson.dumps(msg), MONITOR)
     time.sleep_ms(100)</code></pre>
-  <p><code>read_battery</code>, <code>ultrasonic</code>, <code>upright</code>는 사용하는 펌웨어 버전의 Hiwonder MechDog 라이브러리 호출로 바꿔 넣을 자리입니다.</p>
+  <p><code>read_battery</code>, <code>ultrasonic</code>, <code>upright</code>는 사용하는 펌웨어 버전의 Hiwonder MechDog 라이브러리 호출로 바꿔 넣을 자리입니다. 실제 파일은 <code>firmware/dog_status.py</code>입니다.</p>
 
-  <h3>LiDAR 스캔 (Pi의 Python, RPLIDAR 예시)</h3>
-<pre><code>import json, socket
-from rplidar import RPLidar           # pip install rplidar-roboticia
+  <h3>개 명령 받기 + 워치독 (각 MechDog의 MicroPython)</h3>
+<pre><code>from HW_MechDog import MechDog       # 기존 main.py와 같은 라이브러리
+dog = MechDog()
+cmd_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+cmd_sock.bind(("0.0.0.0", 9100))
+cmd_sock.settimeout(0.05)
+last = time.ticks_ms()
 
-MONITOR = ("127.0.0.1", 9000)
-ORIGIN, MOUNT_DEG = [3.0, 0.15], 90  # 센서 정면이 향하는 아레나 기준 각도
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-lidar = RPLidar("/dev/ttyUSB0")
-
-for scan in lidar.iter_scans():
-    pts = [[round((MOUNT_DEG - a) % 360, 1), round(d / 1000, 3)] for _, a, d in scan if d > 0]
-    sock.sendto(json.dumps({"type": "lidar", "from": "pi", "origin": ORIGIN, "points": pts}).encode(), MONITOR)</code></pre>
-
-  <h3>A 개 카메라 스냅샷 (Pi가 ESP32-S3 카메라에서 받아 모니터로 전송)</h3>
-<pre><code>import base64, requests, time
-CAM = "http://192.168.0.21/capture"        # ESP32 카메라 스냅샷 URL
 while True:
-    jpg = requests.get(CAM, timeout=2).content
-    requests.post("http://127.0.0.1:8000/api/ingest", json={
-        "type": "camera", "from": "A", "note": state,
-        "image": "data:image/jpeg;base64," + base64.b64encode(jpg).decode(),
-        "evidence": state in ("INTERCEPT", "CONTAIN")})
-    time.sleep(1)</code></pre>
+    try:
+        data, _ = cmd_sock.recvfrom(256)
+        cmd = ujson.loads(data)
+        if cmd.get("cmd") == "move":
+            dog.move(cmd["v"], cmd["turn"])     # 예: move(120, 0) 전진, move(80, -40) 회전하며 전진
+            last = time.ticks_ms()
+    except OSError:
+        pass
+    if time.ticks_diff(time.ticks_ms(), last) &gt; 1000:
+        dog.move(0, 0)                            # 1초간 명령 없음 → 정지</code></pre>
+
+  <h3>LiDAR + SLAM (Pi의 Python, BreezySLAM)</h3>
+<pre><code>from breezyslam.algorithms import RMHC_SLAM
+from breezyslam.sensors import Laser
+
+laser = Laser(360, 10, 360, 12000)          # 한 바퀴 360점, 10 Hz, 360°, 최대 12 m (LD06/LD19)
+slam = RMHC_SLAM(laser, 500, 10)            # 지도 500×500 픽셀, 10 m
+for scan_mm in read_scans():                # 브리지(UDP) 또는 USB에서 받은 360개 거리(mm)
+    scan_mm = mask_dogs(scan_mm, pose_B, pose_C)   # B·C 주변 점 지우기
+    if mission in ("CONTAIN", "HANDOVER", "REGROUP"):
+        pose = localize_only(scan_mm)        # 지도 업데이트 정지, 위치만
+    else:
+        slam.update(scan_mm)                 # 오도메트리 없이 스캔 매칭만
+    x_mm, y_mm, th = slam.getpos()
+    emit({"type": "dog", "from": "A", "x": x_mm / 1000, "y": y_mm / 1000, "heading_deg": th})
+    emit({"type": "lidar", "from": "A", "origin": [x_mm / 1000, y_mm / 1000],
+          "heading_deg": th, "points": to_points(scan_mm)})   # heading_deg는 추가 예정 필드</code></pre>
+
+  <h3>카메라 3대 (모니터 서버가 받아 나눠 줌)</h3>
+<pre><code>CAMERAS="A=http://192.168.0.20:81/stream,B=http://192.168.0.21:81/stream,C=http://192.168.0.22:81/stream" \
+  uvicorn server.app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 2</code></pre>
+  <p>ESP32 카메라는 스트림을 한 곳에만 보낼 수 있으므로, 따라가기 코드는 카메라에 직접 붙지 말고 모니터 서버가 이미 받은 영상을 같이 써야 합니다.</p>
 
   <h3>두뇌 → 모니터</h3>
 <pre><code>def emit(msg):
     sock.sendto(json.dumps(msg).encode(), MONITOR)
 
-emit({"type": "mission", "from": "pi", "state": "ALERT"})
+emit({"type": "mission", "from": "pi", "state": "CONFIRM"})
 emit({"type": "intruder", "from": "pi", "x": 2.41, "y": 1.98, "confidence": 0.95})
-emit({"type": "event", "from": "pi", "level": "alert", "text": "LiDAR + sound agree -> ALERT"})
-emit({"type": "dog", "from": "B", "x": 1.20, "y": 0.35, "heading_deg": 90})   # 추적된 위치</code></pre>
+emit({"type": "event", "from": "pi", "level": "alert", "text": "LiDAR + 카메라 일치 -> CONTAIN"})
+emit({"type": "dog", "from": "B", "x": 1.20, "y": 0.35, "heading_deg": 90})   # 마커 체인으로 구한 위치</code></pre>
   <div class="note">스트림은 한 번에 하나씩 바꾸고 나머지는 시뮬레이터를 유지하세요. 예: 개 상태는 실제, LiDAR는 시뮬레이션. 대시보드에서 이상한 점이 보이면 어느 스트림이 원인인지 바로 알 수 있습니다.</div>
 </section>
 
-<!-- 11 -->
-<section id="risks">
-  <div class="num">11</div>
-  <h2>리스크와 모니터에서 확인할 점</h2>
-  <div class="tablewrap"><table>
-    <tr><th>리스크</th><th>대응</th><th>모니터에서 보이는 모습</th></tr>
-    <tr><td>개가 느려 출구 도달 실패</td><td>개 대기 위치를 출구 가까이, 침입자 속도 제한</td><td>"Intruder heading to EXIT 2 (ETA …, Dog C ETA …)" 이벤트</td></tr>
-    <tr><td>LiDAR에서 개와 침입자 혼동</td><td>명령 기반으로 개 위치 예측, 반사 마커 부착</td><td>침입자 마커가 개 위로 튐</td></tr>
-    <tr><td>Wi-Fi 지연·끊김</td><td>1초 무명령 정지, 전용 공유기</td><td>개 카드가 <b>LOST</b>로 바뀌고 마커가 흐려짐</td></tr>
-    <tr><td>Pi에서 YOLO가 느림</td><td>경량 모델 또는 OAK-D Lite</td><td>카메라 시각이 뒤처짐</td></tr>
-    <tr><td>사람 안전</td><td>30 cm 접근 금지 반사, 시연 시 저속 보행</td><td>침입자 주위 0.5 m 원: 개가 원 위에 머물러야 함</td></tr>
-    <tr><td>시연 중 배터리 방전</td><td>예비 배터리, 매 실행 전 확인</td><td>배터리 막대 (6.4–8.4 V)</td></tr>
-  </table></div>
+<section id="risk">
+  <div class="num">13</div>
+  <h2>어려운 점과 리스크</h2>
+  <div class="diagram">
+  <svg viewBox="0 0 920 270" role="img" aria-label="모서리 문제: 왼쪽은 B가 A를 향해 직선으로 가다 장애물 모서리에 걸림, 오른쪽은 B가 A가 지나간 점들을 따라가서 피함">
+    <rect x="15" y="15" width="435" height="240" rx="12" class="s-box"/>
+    <text x="35" y="42" class="s-text">직접 따라가기</text>
+    <rect x="130" y="100" width="300" height="140" rx="4" class="s-obst"/>
+    <path d="M80,230 L80,70 L380,70" class="s-path"/>
+    <circle cx="390" cy="70" r="13" class="s-a"/><text x="390" y="75" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">A</text>
+    <line x1="80" y1="225" x2="380" y2="76" stroke="var(--red)" stroke-width="2.4"/>
+    <text x="198" y="174" text-anchor="middle" font-size="22" font-weight="700" style="fill:var(--red)">✕</text>
+    <circle cx="80" cy="230" r="13" class="s-b"/><text x="80" y="235" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">B</text>
+    <text x="250" y="210" text-anchor="middle" class="s-sub">모서리를 질러 가다 충돌</text>
+    <rect x="470" y="15" width="435" height="240" rx="12" class="s-box" style="stroke:var(--b);stroke-width:2"/>
+    <text x="490" y="42" class="s-text">A가 지나간 길 따라가기 (발전형)</text>
+    <rect x="585" y="100" width="300" height="140" rx="4" class="s-obst"/>
+    <path d="M535,230 L535,70 L835,70" class="s-pts" style="stroke:var(--b);stroke-dasharray:0.1 22;stroke-width:7"/>
+    <circle cx="845" cy="70" r="13" class="s-a"/><text x="845" y="75" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">A</text>
+    <circle cx="535" cy="200" r="13" class="s-b"/><text x="535" y="205" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">B</text>
+    <text x="705" y="210" text-anchor="middle" class="s-sub">B 좌표를 알면 A의 발자국 점을 차례로 따라감</text>
+  </svg>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <tr><th>문제</th><th>해결책</th></tr>
+    <tr><td><b>앞 개가 회전하면 마커를 놓침</b> (가장 흔함)</td><td>"뒤 개가 놓치면 앞 개가 멈춰 기다림" 규칙. A는 천천히 크게 돌기. 놓친 개는 마지막으로 본 방향으로 제자리 회전하며 다시 찾기</td></tr>
+    <tr><td><b>모서리를 질러 감</b></td><td>처음엔 넓은 경로 + 초음파 10 cm 정지 반사. 발전형은 위 그림처럼 A가 지나간 점들을 따라가기</td></tr>
+    <tr><td><b>지도 오염</b></td><td>B·C 위치 주변 점을 SLAM 입력에서 지우기, 포위 중에는 지도 업데이트 정지</td></tr>
+    <tr><td><b>걷는 중 오탐</b></td><td>후보가 보이면 A가 멈추고 재스캔, 카메라와 교차 확인</td></tr>
+    <tr><td><b>침입자 뒤쪽이 가려짐</b></td><td>포위 반경을 0.6–0.8 m로 넉넉히, 가려진 동안은 초음파 정지 반사에 맡김. 반포위를 기본 목표로</td></tr>
+    <tr><td><b>카메라 FPS와 지연</b></td><td>지금 펌웨어는 소프트웨어 JPEG라 FPS가 낮을 수 있음. 320×240으로 낮추고 천천히 걷기. 실제 FPS를 먼저 측정</td></tr>
+    <tr><td><b>카메라 스트림은 한 곳에만 감</b></td><td>모니터 서버를 Pi에서 실행하고, 따라가기 코드가 서버가 이미 받는 영상을 같이 사용</td></tr>
+    <tr><td><b>초음파 간섭</b></td><td>B와 C가 동시에 쏘면 섞일 수 있음 → Pi가 측정 시점을 번갈아 지정</td></tr>
+    <tr><td><b>MechDog가 느림</b></td><td>침입자는 숨어 있거나 멈춰 있는 대상으로. 걷는 사람 추격은 하지 않음</td></tr>
+    <tr><td><b>Wi-Fi 지연·끊김</b></td><td>1초 무명령 정지, 로봇 전용 공유기</td></tr>
+    <tr><td><b>사람 안전</b></td><td>30 cm 접근 금지 반사, 시연 시 저속 보행</td></tr>
+    <tr><td><b>시연 중 배터리 방전</b></td><td>예비 배터리, 매 실행 전 대시보드 배터리 막대(6.4–8.4 V) 확인. A는 배낭 전원도 따로 확인</td></tr>
+  </table>
+  </div>
+  <h3>부분별 난이도</h3>
+  <div class="tablewrap">
+  <table>
+    <tr><th>부분</th><th>난이도</th><th>비고</th></tr>
+    <tr><td>행렬 따라가기</td><td><span class="tag b">중</span></td><td>LiDAR 없이 지금 바로 시작 가능</td></tr>
+    <tr><td>행렬 + 매핑</td><td><span class="tag c">중상</span></td><td>지도 오염 방지를 처음부터</td></tr>
+    <tr><td>발견 + 확인</td><td><span class="tag b">중</span></td><td>멈춰서 재스캔 + 카메라</td></tr>
+    <tr><td>반포위</td><td><span class="tag b">중</span></td><td>추천 목표</td></tr>
+    <tr><td>완전 포위 (120°)</td><td><span class="tag r">상</span></td><td>보너스 목표</td></tr>
+    <tr><td>REGROUP</td><td><span class="tag c">중상</span></td><td>마커를 다시 잡는 단계가 관건</td></tr>
+  </table>
+  </div>
 </section>
 
 <footer>
-  폴더: <code>mechdog-patrol-monitor/</code> · 기반 문서: <code>patrol_apprehension_plan.md</code> (2026-11-06), <code>project_plan_summary.md</code> · 가이드 작성일 2026-11-09.
+  폴더: <code>mechdog-patrol-monitor/</code> · 기반 문서: <code>patrol_apprehension_plan.md</code> (2026-11-06), <code>project_plan_summary.md</code> · 가이드 작성일 2026-11-09 · 행렬 탐사 시나리오로 변경 2026-11-11.
 </footer>
 </div>
-
 <script>
   (function () {
     const boxes = [...document.querySelectorAll("ul.check input")];
-    const KEY = "mechdog-guide-checks-ko";
+    const KEY = "mechdog-guide-checks-ko-v2";
     let saved = [];
     try { saved = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
     boxes.forEach((b, i) => { b.checked = !!saved[i]; });
