@@ -30,8 +30,10 @@ mechdog-patrol-monitor/
 │   ├── app.js
 │   ├── style.css
 │   └── arena.json      # 아레나 크기, 출구, 장애물, 구역, LiDAR 위치
+├── brain/              # 행동 알고리즘 (Pi/노트북): 마커 따라가기, 키보드 조종, 마커 출력
 ├── firmware/
 │   ├── dog_status.py   # MechDog(MicroPython)용 상태 전송 코드
+│   ├── dog_cmd.py      # MechDog: Wi-Fi move 명령 받기 + 안전 반사
 │   └── mechdog_cam/    # 카메라 모듈 펌웨어: 기존 Wi-Fi에 접속 (Arduino)
 ├── tools/
 │   ├── send_test.py    # 실제 하드웨어 없이 서버를 확인하는 테스트 송신기
@@ -54,6 +56,15 @@ Pi와 로봇견이 `udp://<모니터-IP>:9000` 으로 [docs/message_schema.md](d
 2. Thonny에서 `firmware/dog_status.py` 를 열고 `WIFI_SSID`, `WIFI_PASS`, `MONITOR`(이 컴퓨터의 IP), `NAME` 을 설정한 다음 USB로 로봇견에서 실행합니다. **실제 Wi-Fi 비밀번호를 넣은 상태로 커밋하지 마세요.**
 3. 로봇견 카드가 활성화되어 Wi-Fi 세기가 표시되고, 타임라인에 "Dog B 온라인"이 떠야 합니다. 그다음 센서 함수를 하나씩 채웁니다.
 4. Pi + LiDAR가 동작하기 전에는 로봇견의 위치가 없습니다. 그동안 지도에 표시하려면: `python tools/send_test.py --dog B --x 1.2 --y 0.8`
+
+## 행동 알고리즘 연습 (마커 따라가기)
+
+로봇견이 Wi-Fi로 `move` 명령을 받게 하고(`firmware/dog_cmd.py`), Pi나 노트북에서 카메라로 ArUco 마커를 찾아 따라가게 합니다. 로봇견 없이 노트북 웹캠으로 먼저 연습할 수 있습니다. 순서와 조정 방법은 [brain/README.md](brain/README.md)에 있습니다.
+
+```bash
+pip install -r brain/requirements.txt
+python brain/marker_follow.py --camera 0 --show   # 연습 모드: 명령은 화면에만 표시
+```
 
 ## 카메라 연결하기
 

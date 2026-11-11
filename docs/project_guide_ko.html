@@ -135,13 +135,14 @@
     <li><a href="#detect">4 · 발견과 확인</a></li>
     <li><a href="#contain">5 · 포위</a></li>
     <li><a href="#regroup">6 · 다시 줄 서기</a></li>
-    <li><a href="#monitor">7 · 모니터와 데이터</a></li>
-    <li><a href="#hw">8 · 하드웨어 체크</a></li>
-    <li><a href="#roadmap">9 · 로드맵</a></li>
-    <li><a href="#steps">10 · 단계별 진행</a></li>
-    <li><a href="#team">11 · 팀 구성</a></li>
-    <li><a href="#code">12 · 하드웨어 연결</a></li>
-    <li><a href="#risk">13 · 리스크</a></li>
+    <li><a href="#behavior">7 · 행동 알고리즘 연습</a></li>
+    <li><a href="#monitor">8 · 모니터와 데이터</a></li>
+    <li><a href="#hw">9 · 하드웨어 체크</a></li>
+    <li><a href="#roadmap">10 · 로드맵</a></li>
+    <li><a href="#steps">11 · 단계별 진행</a></li>
+    <li><a href="#team">12 · 팀 구성</a></li>
+    <li><a href="#code">13 · 하드웨어 연결</a></li>
+    <li><a href="#risk">14 · 리스크</a></li>
   </ul>
 </header>
 
@@ -631,8 +632,104 @@ for c in candidates:
   </div>
 </section>
 
-<section id="monitor">
+<section id="behavior">
   <div class="num">07</div>
+  <h2>지금 하드웨어로 연습하는 행동 알고리즘</h2>
+  <p>LiDAR와 추가 하드웨어가 오기 전에도 <b>MechDog + 카메라 + 초음파</b>(그리고 MechDog 내장 IMU)만으로 대부분의 행동을 만들고 연습할 수 있습니다. 계산은 Pi(또는 노트북)에서 하고, 개는 <code>move(속도, 회전)</code>만 실행합니다. LiDAR가 없으면 <b>지도(SLAM)</b>와 <b>카메라 시야 밖의 침입자 탐지</b>만 빠집니다.</p>
+
+  <h3>구현할 수 있는 행동</h3>
+  <div class="tablewrap"><table>
+    <tr><th>#</th><th>행동</th><th>센서</th><th>알고리즘</th><th>시나리오 단계</th><th>난이도</th></tr>
+    <tr><td>1</td><td><b>안전 반사</b></td><td>초음파, IMU</td><td>10 cm 이내 정지, 넘어지면 정지, 1초간 명령 없으면 정지 (개 안에서 실행)</td><td>전체</td><td><span class="tag b">하</span></td></tr>
+    <tr><td>2</td><td><b>마커 따라가기</b></td><td>카메라, 초음파</td><td>마커 좌우 위치 → 회전, 거리 → 속도 (P 제어)</td><td>EXPLORE</td><td><span class="tag c">중</span></td></tr>
+    <tr><td>3</td><td><b>놓친 마커 다시 찾기</b></td><td>카메라</td><td>마지막으로 본 방향으로 제자리 회전, 그동안 앞 개는 대기</td><td>EXPLORE</td><td><span class="tag b">하</span></td></tr>
+    <tr><td>4</td><td><b>초음파 회전 스캔</b></td><td>초음파</td><td>멈춰서 30°씩 돌며 거리 측정 → 가장 넓게 열린 방향 선택 ("가난한 LiDAR")</td><td>A의 탐사</td><td><span class="tag c">중</span></td></tr>
+    <tr><td>5</td><td><b>벽 따라 탐사</b></td><td>초음파</td><td>오른손 법칙. 주기적으로 오른쪽을 돌아보며 벽과의 거리 유지</td><td>A의 탐사</td><td><span class="tag c">중상</span></td></tr>
+    <tr><td>6</td><td><b>추측 항법</b></td><td>명령 기록</td><td>미리 잰 속도(m/s, °/s) × 시간으로 대략적인 위치 추정. 짧은 거리만 믿을 수 있음</td><td>대시보드 표시</td><td><span class="tag c">중</span></td></tr>
+    <tr><td>7</td><td><b>침입자 탐지</b></td><td>카메라</td><td>침입자 마커, 색 조끼(HSV 색 범위), 또는 멈춰서 프레임 차이로 움직임 감지. YOLO는 Pi 성능에 따라</td><td>SUSPECT</td><td><span class="tag c">중</span></td></tr>
+    <tr><td>8</td><td><b>접근 + 거리 유지</b></td><td>카메라, 초음파</td><td>대상을 화면 가운데로 맞춘 뒤 0.6 m에서 정지, 30 cm 안이면 후퇴</td><td>CONFIRM</td><td><span class="tag c">중</span></td></tr>
+    <tr><td>9</td><td><b>증거 촬영</b></td><td>카메라</td><td>대상이 가운데에 있고 거리가 맞으면 자동 스냅샷(<code>evidence: true</code>)</td><td>HANDOVER</td><td><span class="tag b">하</span></td></tr>
+    <tr><td>10</td><td><b>포위</b></td><td>카메라</td><td>침입자 "마커 큐브"의 담당 면 찾기 (아래 ①)</td><td>CONTAIN</td><td><span class="tag c">중상</span></td></tr>
+    <tr><td>11</td><td><b>다시 줄 서기</b></td><td>카메라</td><td>앞 개의 옆·뒤 마커로 상대 위치를 구해 복귀 (아래 ②)</td><td>REGROUP</td><td><span class="tag c">중상</span></td></tr>
+  </table></div>
+
+  <h3>LiDAR 없이 포위와 재정렬을 가능하게 하는 아이디어</h3>
+  <div class="diagram">
+  <svg viewBox="0 0 920 300" role="img" aria-label="왼쪽: 침입자 위 상자의 네 면에 서로 다른 마커를 붙이면 A는 앞면, B는 왼쪽 면, C는 오른쪽 면을 0.6 m에서 정면으로 보며 자동으로 포위. 오른쪽: A의 뒤와 양옆에 마커를 붙이면 B가 옆 마커만 보여도 A 뒤 지점으로 돌아갈 수 있음">
+    <defs>
+      <marker id="arB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--b)"/></marker>
+    </defs>
+    <!-- panel 1: marker cube -->
+    <rect x="15" y="15" width="435" height="270" rx="12" class="s-box"/>
+    <text x="35" y="42" class="s-text">① 침입자 마커 큐브</text>
+    <rect x="205" y="120" width="60" height="60" rx="4" class="s-soft" style="stroke:var(--red);stroke-width:2"/>
+    <text x="235" y="155" text-anchor="middle" class="s-sub" style="fill:var(--red)">침입자</text>
+    <rect x="227" y="104" width="16" height="14" fill="#fff" stroke="#111" stroke-width="1.5"/><text x="235" y="96" text-anchor="middle" class="s-mono">13 뒤</text>
+    <rect x="227" y="182" width="16" height="14" fill="#fff" stroke="#111" stroke-width="1.5"/>
+    <rect x="189" y="143" width="14" height="16" fill="#fff" stroke="#111" stroke-width="1.5"/>
+    <rect x="267" y="143" width="14" height="16" fill="#fff" stroke="#111" stroke-width="1.5"/>
+    <text x="252" y="214" class="s-mono">10 앞</text>
+    <text x="178" y="140" text-anchor="end" class="s-mono">11 왼</text>
+    <text x="292" y="140" class="s-mono">12 오른</text>
+    <path d="M235,245 L235,200" class="s-cone" style="stroke:var(--b);opacity:.6;stroke-width:2"/>
+    <circle cx="235" cy="252" r="14" class="s-a"/><text x="235" y="257" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">A</text>
+    <line x1="112" y1="151" x2="186" y2="151" stroke="var(--b)" stroke-width="2" stroke-dasharray="4 4"/>
+    <circle cx="100" cy="151" r="14" class="s-b"/><text x="100" y="156" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">B</text>
+    <line x1="358" y1="151" x2="284" y2="151" stroke="var(--b)" stroke-width="2" stroke-dasharray="4 4"/>
+    <circle cx="370" cy="151" r="14" class="s-c"/><text x="370" y="156" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">C</text>
+    <text x="35" y="78" class="s-sub">"담당 면 마커를 0.6 m에서 정면으로 봐라"</text>
+    <text x="35" y="275" class="s-sub">전역 좌표 없이 자동으로 앞·왼쪽·오른쪽에 자리 잡음</text>
+    <!-- panel 2: markers on dog -->
+    <rect x="470" y="15" width="435" height="270" rx="12" class="s-box" style="stroke:var(--b);stroke-width:2"/>
+    <text x="490" y="42" class="s-text">② 개에게도 마커를 여러 면에</text>
+    <rect x="640" y="125" width="110" height="44" rx="14" class="s-dog" style="stroke:var(--a)"/>
+    <rect x="750" y="131" width="24" height="32" rx="8" class="s-dog" style="stroke:var(--a)"/>
+    <text x="695" y="152" text-anchor="middle" class="s-text" style="fill:var(--a)">A</text>
+    <rect x="622" y="139" width="16" height="16" fill="#fff" stroke="#111" stroke-width="1.5"/><text x="614" y="152" text-anchor="end" class="s-mono">뒤 1</text>
+    <rect x="687" y="108" width="16" height="15" fill="#fff" stroke="#111" stroke-width="1.5"/><text x="695" y="100" text-anchor="middle" class="s-mono">왼 3</text>
+    <rect x="687" y="171" width="16" height="15" fill="#fff" stroke="#111" stroke-width="1.5"/><text x="712" y="200" class="s-mono">오른 4</text>
+    <circle cx="560" cy="147" r="18" fill="none" stroke="var(--b)" stroke-width="2" stroke-dasharray="4 4"/>
+    <text x="560" y="185" text-anchor="middle" class="s-mono">A 뒤 0.6 m</text>
+    <circle cx="700" cy="250" r="14" class="s-b"/><text x="700" y="255" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">B</text>
+    <path d="M700,236 L695,190" stroke="var(--b)" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M686,248 C620,250 565,220 560,170" stroke="var(--b)" stroke-width="2" fill="none" marker-end="url(#arB)"/>
+    <text x="490" y="78" class="s-sub">옆 마커 4만 보여도 A와의 상대 위치를 앎</text>
+    <text x="490" y="275" class="s-sub">→ A 뒤 지점으로 돌아가 마커 1을 잡고 따라가기</text>
+  </svg>
+  </div>
+  <ul>
+    <li><b>① 마커 큐브:</b> RC카 위 상자의 네 면에 다른 마커(앞 10, 왼쪽 11, 오른쪽 12, 뒤 13)를 붙입니다. 각 개에게 담당 면 마커를 0.6 m에서 정면으로 보게만 하면 자리를 잡습니다. <code>solvePnP</code>를 쓰면 세 마리의 위치를 <b>침입자 기준 좌표</b>로 알 수 있습니다. 담당이 아닌 면이 보이면 그 면 번호로 어느 쪽으로 돌아가야 할지 압니다. 사람 침입자는 조끼 앞뒤·옆에 마커를 붙입니다.</li>
+    <li><b>② 개에게도 여러 면에 마커:</b> A에 뒤 1, 왼쪽 3, 오른쪽 4를 붙이면 REGROUP 때 LiDAR 대신 마커가 안내합니다. 행렬 중 A가 크게 돌아 등 마커가 안 보일 때도 옆 마커로 따라갈 수 있습니다.</li>
+  </ul>
+
+  <h3>LiDAR 없는 연습용 시나리오</h3>
+  <div class="tablewrap"><table>
+    <tr><th>단계</th><th>LiDAR 버전 (최종)</th><th>지금 버전 (연습)</th></tr>
+    <tr><td>EXPLORE</td><td>SLAM + frontier</td><td>A는 <b>초음파 회전 스캔</b>으로 열린 방향을 골라 이동, B·C는 마커 따라가기</td></tr>
+    <tr><td>SUSPECT</td><td>지도에 없는 덩어리</td><td>A가 일정 간격으로 <b>멈춰서 카메라로 둘러보기</b> (마커 큐브, 색, 움직임)</td></tr>
+    <tr><td>CONFIRM</td><td>카메라</td><td>같음 (접근 + 거리 유지)</td></tr>
+    <tr><td>CONTAIN</td><td>A 정지 + LiDAR 추적</td><td><b>마커 큐브의 담당 면 찾기</b></td></tr>
+    <tr><td>HANDOVER</td><td>3방향 사진</td><td>같음</td></tr>
+    <tr><td>REGROUP</td><td>LiDAR 안내</td><td><b>A의 옆·뒤 마커로 복귀</b></td></tr>
+  </table></div>
+  <p>LiDAR가 오면 EXPLORE와 SUSPECT만 바꾸고 나머지 행동은 그대로 재사용합니다.</p>
+
+  <h3>추천 연습 순서</h3>
+  <div class="tablewrap"><table>
+    <tr><th>순서</th><th>행동</th><th>코드</th></tr>
+    <tr><td>1</td><td>안전 반사 + Wi-Fi <code>move</code> 명령 (모든 것의 기반)</td><td><code>firmware/dog_cmd.py</code>, <code>brain/teleop.py</code></td></tr>
+    <tr><td>2</td><td><b>마커 따라가기 1마리</b> (손에 든 마커). 개 없이 노트북 웹캠으로 먼저 연습 가능</td><td><code>brain/marker_follow.py</code></td></tr>
+    <tr><td>3</td><td>접근 + 거리 유지 + 증거 촬영 (2번과 거의 같은 코드, 마커 ID만 다름)</td><td>2번 확장</td></tr>
+    <tr><td>4</td><td>3마리 행렬 + 놓쳤을 때 대기</td><td>2번 × 2</td></tr>
+    <tr><td>5</td><td>마커 큐브로 포위</td><td>예정</td></tr>
+    <tr><td>6</td><td>옆 마커로 다시 줄 서기</td><td>예정</td></tr>
+    <tr><td>7</td><td>초음파 회전 스캔 탐사</td><td>예정</td></tr>
+  </table></div>
+  <p>마커 따라가기 사용법은 13절 "실제 하드웨어 연결"과 <code>brain/README.md</code>에 있습니다.</p>
+</section>
+
+<section id="monitor">
+  <div class="num">08</div>
   <h2>모니터와 데이터</h2>
   <p><b>순찰 모니터(Patrol Monitor)</b>는 시스템이 보고 판단하는 모든 것을 실시간으로 보여주는 웹 페이지입니다. 시연에서는 "관제실" 역할을 하고, 개발 중에는 가장 중요한 디버깅 도구가 됩니다. 모니터 서버는 데이터를 <i>듣기만</i> 하고 로봇에 명령을 내리지 않으므로, 대시보드가 멈춰도 로봇 동작에는 영향이 없습니다. 로봇을 움직이는 것은 모두 Pi 두뇌를 거칩니다.</p>
   <figure class="shot">
@@ -668,7 +765,7 @@ python -m server.simulator --speed 3                 # 터미널 2 (지금은 �
 </section>
 
 <section id="hw">
-  <div class="num">08</div>
+  <div class="num">09</div>
   <h2>하드웨어 현실 체크</h2>
   <div class="diagram">
   <svg viewBox="0 0 920 330" role="img" aria-label="MechDog 등에 얹는 센서 배낭 옆모습: 맨 위 LiDAR, 그 아래 ESP32-C3 브리지, 배터리, 뒤쪽에 ArUco 마커. 총 120~160 g">
@@ -723,7 +820,7 @@ python -m server.simulator --speed 3                 # 터미널 2 (지금은 �
 </section>
 
 <section id="roadmap">
-  <div class="num">09</div>
+  <div class="num">10</div>
   <h2>로드맵</h2>
   <p>8주 일정 제안입니다. 모니터 작업은 전 기간에 걸쳐 함께 진행하고, 매주 시뮬레이션 스트림 하나를 실제 데이터로 바꿉니다. <b>0–2단계는 LiDAR 없이 지금 바로</b> 시작할 수 있습니다.</p>
   <div class="diagram">
@@ -768,7 +865,7 @@ python -m server.simulator --speed 3                 # 터미널 2 (지금은 �
 </section>
 
 <section id="steps">
-  <div class="num">10</div>
+  <div class="num">11</div>
   <h2>단계별 진행</h2>
   <p>진행하면서 항목을 체크하세요. 체크 상태는 이 브라우저에만 저장됩니다.</p>
   <div class="progress"><i id="prog"></i></div>
@@ -798,7 +895,7 @@ python -m server.simulator --speed 3                 # 터미널 2 (지금은 �
       <h3>Pi ↔ 개 통신</h3>
       <div class="when">1–2주차 · 개 펌웨어 + 두뇌</div>
       <ul class="check">
-        <li><label><input type="checkbox"><span>각 개의 MicroPython: Wi-Fi에 접속해 <code>dog</code> 상태 메시지(배터리, front_cm, 기울기, 상태)를 10 Hz로 모니터에 보냅니다. 12절 참고.</span></label></li>
+        <li><label><input type="checkbox"><span>각 개의 MicroPython: Wi-Fi에 접속해 <code>dog</code> 상태 메시지(배터리, front_cm, 기울기, 상태)를 10 Hz로 모니터에 보냅니다. 13절 참고.</span></label></li>
         <li><label><input type="checkbox"><span>개가 Pi로부터 <code>{"to":"B","cmd":"move","v":80,"turn":-20}</code>를 받아 <code>mechdog.move(속도, 회전)</code>로 걷습니다.</span></label></li>
         <li><label><input type="checkbox"><span>개의 안전 반사: 10 cm 이내 장애물이면 정지, 넘어지면(IMU) 정지, 1초간 명령이 없으면 정지.</span></label></li>
         <li><label><input type="checkbox"><span>개가 걷는 중에 공유기 전원을 뽑아 봅니다. 1초 안에 멈춰야 하고, 대시보드의 해당 카드가 <b>LOST</b>로 바뀌어야 합니다.</span></label></li>
@@ -916,7 +1013,7 @@ python -m server.simulator --speed 3                 # 터미널 2 (지금은 �
 </section>
 
 <section id="team">
-  <div class="num">11</div>
+  <div class="num">12</div>
   <h2>팀 구성 제안</h2>
   <p>메시지 형식이 트랙 간의 약속이므로 네 트랙이 병렬로 작업할 수 있습니다. 1주차에 <code>docs/message_schema.md</code>를 합의하고(새 <code>map</code> 메시지와 <code>lidar</code>의 방향 필드 포함), 바꿀 때는 반드시 모두에게 알리세요.</p>
   <div class="grid2">
@@ -928,7 +1025,7 @@ python -m server.simulator --speed 3                 # 터미널 2 (지금은 �
 </section>
 
 <section id="code">
-  <div class="num">12</div>
+  <div class="num">13</div>
   <h2>실제 하드웨어 연결</h2>
   <p>각 코드 조각이 시뮬레이터의 한 부분을 대체합니다. 모니터 주소는 <code>server/app.py</code>를 실행 중인 Pi의 IP입니다. 아래는 출발점이 되는 스케치이며, 실제 하드웨어에서 아직 시험하지 않았습니다.</p>
 
@@ -946,7 +1043,16 @@ while True:
     time.sleep_ms(100)</code></pre>
   <p><code>read_battery</code>, <code>ultrasonic</code>, <code>upright</code>는 사용하는 펌웨어 버전의 Hiwonder MechDog 라이브러리 호출로 바꿔 넣을 자리입니다. 실제 파일은 <code>firmware/dog_status.py</code>입니다.</p>
 
-  <h3>개 명령 받기 + 워치독 (각 MechDog의 MicroPython)</h3>
+  <h3>마커 따라가기 연습 (지금 하드웨어로)</h3>
+  <p>실제로 동작하는 코드가 저장소에 있습니다. 로봇견 쪽은 <code>firmware/dog_cmd.py</code>(명령 받기 + 1초 워치독 + 15 cm 전진 금지), Pi/노트북 쪽은 <code>brain/marker_follow.py</code>(ArUco 인식 → 회전·속도 계산 → 명령 전송), <code>brain/teleop.py</code>(키보드 조종), <code>brain/make_markers.py</code>(마커 출력)입니다. 자세한 순서는 <code>brain/README.md</code>를 보세요.</p>
+<pre><code>pip install -r brain/requirements.txt
+python brain/make_markers.py                       # 마커 A4 시트 → 실제 크기로 출력
+python brain/marker_follow.py --camera 0 --show    # 개 없이 웹캠으로 연습 (명령 전송 안 함)
+python brain/teleop.py --dog 192.168.0.31          # dog_cmd.py 실행 중인 로봇견을 키보드로 조종
+python brain/marker_follow.py --camera http://localhost:8000/api/camera/B/stream \
+    --dog 192.168.0.31 --name B --monitor 127.0.0.1 --max-speed 80 --show</code></pre>
+
+  <h3>개 명령 받기 + 워치독 (요약, 실제 파일은 <code>firmware/dog_cmd.py</code>)</h3>
 <pre><code>from HW_MechDog import MechDog       # 기존 main.py와 같은 라이브러리
 dog = MechDog()
 cmd_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1000,7 +1106,7 @@ emit({"type": "dog", "from": "B", "x": 1.20, "y": 0.35, "heading_deg": 90})   # 
 </section>
 
 <section id="risk">
-  <div class="num">13</div>
+  <div class="num">14</div>
   <h2>어려운 점과 리스크</h2>
   <div class="diagram">
   <svg viewBox="0 0 920 270" role="img" aria-label="모서리 문제: 왼쪽은 B가 A를 향해 직선으로 가다 장애물 모서리에 걸림, 오른쪽은 B가 A가 지나간 점들을 따라가서 피함">
