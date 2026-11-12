@@ -20,3 +20,6 @@ sk-[A-Za-z0-9]{32,}
 AKIA[0-9A-Z]{16}
 xox[abprs]-[A-Za-z0-9-]{10,}
 AIza[0-9A-Za-z_-]{35}
+
+# Cloudflare 터널 토큰
+eyJh[A-Za-z0-9_-]{60,}

@@ -18,6 +18,28 @@ python -m server.simulator            # --speed 3 을 붙이면 3배속
 
 브라우저에서 http://localhost:8000 을 엽니다.
 
+## Docker로 실행하고 외부에 공개하기 (시연용)
+
+허브 서버(대시보드 + UDP 수신)만 컨테이너로 돌리고, Cloudflare Tunnel로 `https://` 공개 주소를 붙입니다. 공유기 설정이나 공인 IP는 필요 없습니다. LiDAR·`brain/` 처럼 하드웨어를 쓰는 프로그램은 Pi에서 직접 실행하고, 지금처럼 `<허브 IP>:9000`(UDP)으로 보냅니다.
+
+```bash
+cp .env.example .env          # CAMERAS, INGEST_TOKEN 채우기
+docker compose up --build -d  # 로컬: http://localhost:8000
+
+# 임시 공개 주소 (계정 불필요, 실행할 때마다 주소가 바뀜)
+docker compose --profile quick up --build -d
+docker compose logs quick-tunnel | grep trycloudflare
+
+# 고정 공개 주소 (시연 QR용): Cloudflare Zero Trust → Networks → Tunnels 에서 터널을 만들고
+# Public hostname 의 서비스를 http://hub:8000 으로 지정, 토큰을 .env 의 CF_TUNNEL_TOKEN 에 넣는다
+docker compose --profile tunnel up --build -d
+```
+
+- **외부에 공개할 때는 `INGEST_TOKEN`을 반드시 설정하세요.** 설정하지 않으면 주소를 아는 누구나 `POST /api/ingest`로 가짜 경보를 띄울 수 있습니다. 설정하면 `camera_relay.py`에도 `--token`(또는 `INGEST_TOKEN` 환경 변수)으로 같은 값을 줍니다. UDP는 터널을 거치지 않으므로 영향이 없습니다.
+- 공개 주소로 보는 사람도 카메라 영상을 볼 수 있습니다. 서버가 카메라 연결 하나를 나눠 주므로 카메라 부하는 늘지 않지만, 관람객 수만큼 현장 업로드 대역폭을 씁니다.
+- 행사장 인터넷이 끊겨도 로컬 주소 `http://<허브 IP>:8000`는 계속 동작합니다. 발표 화면은 로컬 주소로 여는 것을 권합니다.
+- Pi(64-bit OS)에서도 같은 명령으로 실행됩니다. 중지: `docker compose --profile quick --profile tunnel down`
+
 ## 폴더 구조
 
 ```
@@ -43,6 +65,7 @@ mechdog-patrol-monitor/
 │   ├── project_guide.html
 │   ├── message_schema.md
 │   └── images/
+├── Dockerfile          # 허브 컨테이너 (docker-compose.yml, .env.example 과 함께)
 └── requirements.txt
 ```
 

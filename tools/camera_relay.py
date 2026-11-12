@@ -7,9 +7,11 @@
     python tools/camera_relay.py --url http://192.168.4.1/capture
     python tools/camera_relay.py --url http://192.168.4.1:81/stream --fps 2 --dog A
 
+서버에 INGEST_TOKEN 이 설정돼 있으면 같은 값을 --token 이나 INGEST_TOKEN 환경 변수로 준다.
+
 표준 라이브러리만 사용한다. 지금은 Mac에서, 나중에는 Pi에서 실행한다.
 """
-import argparse, base64, json, socket, time, urllib.error, urllib.request
+import argparse, base64, json, os, socket, time, urllib.error, urllib.request
 
 # ESP32 카메라 펌웨어가 흔히 쓰는 주소 (Espressif CameraWebServer 및 파생 펌웨어).
 CANDIDATES = ["/capture", "/jpg", "/snapshot", "/cam-hi.jpg", "/cam-lo.jpg", ":81/stream", "/stream", "/mjpeg", "/"]
@@ -92,7 +94,10 @@ def relay(a):
                 last = time.time()
                 msg = {"type": "camera", "from": a.dog, "note": "live",
                        "image": "data:image/jpeg;base64," + base64.b64encode(jpg).decode()}
-                req = urllib.request.Request(ingest, json.dumps(msg).encode(), {"Content-Type": "application/json"})
+                headers = {"Content-Type": "application/json"}
+                if a.token:
+                    headers["Authorization"] = f"Bearer {a.token}"
+                req = urllib.request.Request(ingest, json.dumps(msg).encode(), headers)
                 urllib.request.urlopen(req, timeout=3).read()
                 print(f"\r{len(jpg) // 1024} KB 프레임 전송 {time.strftime('%H:%M:%S')}", end="", flush=True)
         except KeyboardInterrupt:
@@ -108,6 +113,7 @@ p.add_argument("--url", help="스냅샷 또는 MJPEG 스트림 URL")
 p.add_argument("--monitor", default="127.0.0.1:8000", help="모니터 서버 host:port")
 p.add_argument("--dog", default="A")
 p.add_argument("--fps", type=float, default=2)
+p.add_argument("--token", default=os.environ.get("INGEST_TOKEN"), help="서버의 INGEST_TOKEN (설정된 경우)")  # allow-secret: 환경 변수 이름일 뿐
 a = p.parse_args()
 
 if a.probe:

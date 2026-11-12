@@ -1,0 +1,28 @@
+# 대시보드만:            docker compose up --build -d
+# + 임시 공개 주소:      docker compose --profile quick up --build -d   (주소는 docker compose logs quick-tunnel)
+# + 고정 공개 주소:      docker compose --profile tunnel up --build -d  (.env 의 CF_TUNNEL_TOKEN 필요)
+# 설정은 .env (.env.example 을 복사). 로봇견·Pi는 지금처럼 <이 컴퓨터 IP>:9000 (UDP) 으로 보낸다.
+services:
+  hub:
+    build: .
+    ports: ["8000:8000", "9000:9000/udp"]
+    env_file: [{ path: .env, required: false }]
+    restart: unless-stopped
+
+  # 계정 없이 https://xxxx.trycloudflare.com 주소를 받는다. 실행할 때마다 주소가 바뀐다.
+  quick-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://hub:8000
+    depends_on: [hub]
+    profiles: [quick]
+    restart: unless-stopped
+
+  # Cloudflare 대시보드에서 만든 터널. Public hostname 의 서비스는 http://hub:8000 으로 지정한다.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
+    depends_on: [hub]
+    profiles: [tunnel]
+    restart: unless-stopped

@@ -8,11 +8,15 @@ Pi 관제탑과 로봇견들이 보내는 JSON 메시지(UDP 또는 HTTP POST)�
 로봇견 카메라 실시간 영상까지 보려면 CAMERAS 환경 변수에 스트림 주소를 넣는다.
 열린 영상 스트림 때문에 Ctrl+C 종료가 멈추지 않도록 --timeout-graceful-shutdown 을 붙인다:
     CAMERAS="A=http://192.168.0.20:81/stream" uvicorn server.app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 2
+
+대시보드를 외부(터널)에 공개할 때는 INGEST_TOKEN 을 설정한다. 그러면 HTTP POST /api/ingest 는
+"Authorization: Bearer <토큰>" 헤더가 있어야 받는다. UDP는 터널을 거치지 않으므로 그대로 받는다.
 """
 
 import asyncio
 import json
 import os
+import secrets
 import threading
 import time
 import urllib.request
@@ -28,6 +32,7 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 MAX_EVENTS = 200
 MAX_EVIDENCE = 24
 DOG_TIMEOUT = 3.0   # 이 시간(초) 동안 메시지가 없으면 로봇견을 오프라인으로 표시
+INGEST_TOKEN = os.environ.get("INGEST_TOKEN", "")
 
 # "최신 값 하나"가 아니라 목록으로 보관하는 메시지 종류.
 HISTORY_TYPES = {"event": MAX_EVENTS}
@@ -202,6 +207,10 @@ app = FastAPI(title="MechDog Patrol Monitor", lifespan=lifespan)
 @app.post("/api/ingest")
 async def http_ingest(request: Request):
     """UDP와 같지만, 데이터그램 하나에 들어가지 않는 큰 데이터(예: 카메라 JPEG)용."""
+    if INGEST_TOKEN:
+        given = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+        if not secrets.compare_digest(given, INGEST_TOKEN):
+            raise HTTPException(401, "INGEST_TOKEN 이 맞지 않음")
     body = await request.json()
     for msg in body if isinstance(body, list) else [body]:
         ingest(msg)
