@@ -140,7 +140,7 @@
     <li><a href="#hw">9 · 하드웨어 체크</a></li>
     <li><a href="#roadmap">10 · 로드맵</a></li>
     <li><a href="#steps">11 · 단계별 진행</a></li>
-    <li><a href="#team">12 · 팀 구성</a></li>
+    <li><a href="#team">12 · 팀 구성 (3명)</a></li>
     <li><a href="#code">13 · 하드웨어 연결</a></li>
     <li><a href="#risk">14 · 리스크</a></li>
   </ul>
@@ -277,7 +277,7 @@
 <section id="system">
   <div class="num">02</div>
   <h2>시스템 구성</h2>
-  <p>개는 몸통 역할만 하고, 무거운 계산(SLAM, 마커 인식, 침입자 탐지, 상태 머신)은 한쪽에 고정해 둔 <b>Raspberry Pi 관제탑</b>이 합니다. 모니터 서버도 Pi에서 실행하고, 노트북은 대시보드를 보는 화면 역할만 합니다.</p>
+  <p>개는 몸통 역할만 하고, 무거운 계산(SLAM, 마커 인식, 침입자 탐지, 상태 머신)은 한쪽에 고정해 둔 <b>Raspberry Pi 관제탑</b>이 합니다. 모니터 서버도 Pi에서 <b>Docker 컨테이너</b>로 실행하고, 노트북은 대시보드를 보는 화면 역할만 합니다. 시연 때는 Cloudflare Tunnel로 <b>공개 주소(HTTPS)</b>를 붙여 관람객도 휴대폰으로 대시보드를 볼 수 있고, 별도 기록 컨테이너가 주요 기록을 <b>Supabase</b>에 남깁니다(8절).</p>
   <div class="diagram">
   <svg viewBox="0 0 920 440" role="img" aria-label="구성도: LiDAR 정찰견 A와 확인견 B, C가 Wi-Fi로 Raspberry Pi 관제탑에 데이터를 보내고, Pi가 SLAM, 마커 따라가기, 침입자 탐지, 상태 머신을 실행하여 대시보드에 표시">
     <defs>
@@ -325,14 +325,18 @@
 
     <rect x="680" y="110" width="220" height="100" rx="14" class="s-box" style="stroke:var(--accent);stroke-width:2"/>
     <text x="790" y="140" text-anchor="middle" class="s-text">모니터 서버</text>
-    <text x="790" y="160" text-anchor="middle" class="s-mono">server/app.py (Pi에서 실행)</text>
+    <text x="790" y="160" text-anchor="middle" class="s-mono">server/app.py (Pi, Docker)</text>
     <text x="790" y="186" text-anchor="middle" class="s-sub">카메라 영상도 여기서 받아 나눠 줌</text>
     <rect x="680" y="250" width="220" height="100" rx="14" class="s-box"/>
-    <text x="790" y="280" text-anchor="middle" class="s-text">대시보드 (노트북 화면)</text>
+    <text x="790" y="280" text-anchor="middle" class="s-text">대시보드 (노트북 + 공개 URL)</text>
     <text x="790" y="302" text-anchor="middle" class="s-sub">SLAM 지도 + 3마리 위치</text>
     <text x="790" y="322" text-anchor="middle" class="s-sub">침입자, 증거 사진, 타임라인</text>
     <path d="M632,170 L676,160" class="s-acc" marker-end="url(#ar1a)"/>
     <path d="M790,212 L790,246" class="s-acc" marker-end="url(#ar1a)"/>
+    <rect x="680" y="372" width="220" height="56" rx="14" class="s-box" style="stroke-dasharray:5 4"/>
+    <text x="790" y="396" text-anchor="middle" class="s-text">Supabase 기록</text>
+    <text x="790" y="416" text-anchor="middle" class="s-sub">recorder 컨테이너가 /ws 구독</text>
+    <path d="M902,160 C918,160 918,400 904,400" class="s-line" style="stroke-dasharray:5 4" marker-end="url(#ar1)"/>
   </svg>
   </div>
   <div class="tablewrap">
@@ -738,7 +742,7 @@ for c in candidates:
   </figure>
 
   <h3>메시지 종류</h3>
-  <p>전체 명세와 예시는 <code>docs/message_schema.md</code>에 있습니다. 모니터로 보낼 때는 UDP 9000번 포트 또는 HTTP <code>POST /api/ingest</code>를 씁니다.</p>
+  <p>전체 명세와 예시는 <code>docs/message_schema.md</code>에 있습니다. 모니터로 보낼 때는 UDP 9000번 포트 또는 HTTP <code>POST /api/ingest</code>를 씁니다. 서버에 <code>INGEST_TOKEN</code>이 설정돼 있으면 HTTP로 보낼 때 <code>Authorization: Bearer &lt;토큰&gt;</code> 헤더가 필요합니다(UDP는 그대로).</p>
   <div class="tablewrap"><table>
     <tr><th>종류</th><th>보내는 쪽</th><th>주기</th><th>표시 방식</th><th>새 시나리오에서 바꿀 점</th></tr>
     <tr><td><code>lidar</code></td><td>Pi (A의 스캔)</td><td>5 Hz</td><td>지도 위 하늘색 점</td><td><code>origin</code>이 A를 따라 움직이고, A의 방향(<code>heading_deg</code>)이 필요함</td></tr>
@@ -761,7 +765,33 @@ pip install -r requirements.txt
 uvicorn server.app:app --host 0.0.0.0 --port 8000   # 터미널 1
 python -m server.simulator --speed 3                 # 터미널 2 (지금은 이전 시나리오를 재생)
 # http://localhost:8000 열기</code></pre>
-  <div class="note">시뮬레이터를 새 상태 머신(EXPLORE → … → REGROUP)으로 바꾸는 것이 모니터 트랙의 첫 작업입니다. LiDAR가 오기 전에 대시보드와 두뇌 로직을 먼저 만들어 둘 수 있습니다.</div>
+  <div class="note">시뮬레이터를 새 상태 머신(EXPLORE → … → REGROUP)으로 바꾸는 것이 담당3(관제·통합)의 첫 작업입니다. LiDAR가 오기 전에 대시보드와 두뇌 로직을 먼저 만들어 둘 수 있습니다.</div>
+
+  <h3>외부 공개 (Docker + Cloudflare Tunnel)</h3>
+  <p>모니터 서버만 컨테이너로 돌리고, Cloudflare Tunnel로 공개 주소를 붙입니다. 공유기 설정이나 공인 IP가 필요 없고, 로봇·LiDAR·카메라 경로는 그대로입니다. LiDAR 처리와 <code>brain/</code>처럼 하드웨어를 쓰는 코드는 컨테이너에 넣지 않고 Pi에서 직접 실행합니다.</p>
+<pre><code>cp .env.example .env                          # CAMERAS, INGEST_TOKEN 채우기
+docker compose up --build -d                  # 로컬만: http://&lt;Pi IP&gt;:8000
+docker compose --profile quick up --build -d  # + 임시 공개 주소 (실행마다 바뀜)
+docker compose logs quick-tunnel | grep trycloudflare
+docker compose --profile tunnel up --build -d # + 고정 공개 주소 (.env의 CF_TUNNEL_TOKEN)</code></pre>
+  <div class="tablewrap"><table>
+    <tr><th>주의할 점</th><th>이유와 대응</th></tr>
+    <tr><td><b><code>INGEST_TOKEN</code> 필수</b></td><td>설정하지 않으면 주소를 아는 누구나 <code>POST /api/ingest</code>로 가짜 경보를 띄울 수 있습니다. <code>camera_relay.py</code>에도 <code>--token</code>으로 같은 값을 줍니다.</td></tr>
+    <tr><td><b>고정 주소로 QR</b></td><td>임시 주소는 실행할 때마다 바뀌므로, 시연용 QR은 이름 있는 터널(고정 도메인)로 만듭니다.</td></tr>
+    <tr><td><b>로컬 대비 주소</b></td><td>행사장 인터넷이 끊겨도 <code>http://&lt;Pi IP&gt;:8000</code>은 동작합니다. 프로젝터 화면은 로컬 주소로 엽니다.</td></tr>
+    <tr><td><b>업로드 대역폭</b></td><td>카메라 연결은 서버가 하나만 유지하지만, 관람객 한 명당 영상 0.5~2 Mbps를 씁니다. 사람이 많으면 공개 화면에서는 스냅샷만 보여 주는 것을 검토합니다.</td></tr>
+  </table></div>
+
+  <h3>클라우드 기록 (Supabase)</h3>
+  <p>별도 <code>recorder</code> 컨테이너가 모니터 서버의 <code>/ws</code>에 대시보드처럼 붙어서 메시지를 받고, 필요한 것만 골라 Supabase에 기록합니다. 모니터 서버 코드는 바꾸지 않으며, Supabase나 인터넷에 문제가 생겨도 실시간 관제에는 영향이 없습니다. 지금은 초안 단계입니다(<code>recorder/README.md</code>, <code>cloud/supabase/schema.sql</code>).</p>
+  <div class="tablewrap"><table>
+    <tr><th>메시지</th><th>기록 방식</th></tr>
+    <tr><td><code>event</code>, <code>mission</code>, <code>intruder</code></td><td>전부</td></tr>
+    <tr><td><code>dog</code></td><td>개마다 1초에 1번만 (10 Hz 전부 저장하면 무료 용량이 금방 참)</td></tr>
+    <tr><td><code>camera</code></td><td>증거 사진(<code>evidence: true</code>)만, JPEG는 Storage 버킷에 올리고 DB에는 경로만</td></tr>
+    <tr><td><code>lidar</code>, 실시간 영상</td><td>기록하지 않음</td></tr>
+  </table></div>
+  <div class="note">모니터 서버는 새로 접속한 클라이언트에게 이전 기록을 다시 보내므로, recorder가 재접속하면 같은 메시지가 또 옵니다. 테이블의 <code>unique (type, source, ts)</code>로 중복을 무시합니다. <code>service_role</code> 키는 recorder의 <code>.env</code>에만 두고 <code>web/</code>에는 절대 넣지 않습니다.</div>
 </section>
 
 <section id="hw">
@@ -1006,6 +1036,7 @@ python -m server.simulator --speed 3                 # 터미널 2 (지금은 �
       <ul class="check">
         <li><label><input type="checkbox"><span>배터리를 충전한 상태로 4분 시나리오(1절)를 연속 5회 실행합니다.</span></label></li>
         <li><label><input type="checkbox"><span>대시보드를 프로젝터에 띄웁니다. 관객이 로봇의 "생각"을 보는 화면입니다.</span></label></li>
+        <li><label><input type="checkbox"><span>관람객용 공개 주소(고정 터널)를 QR로 준비하고, 인터넷이 끊겼을 때 로컬 주소로 바로 전환하는 연습을 합니다.</span></label></li>
         <li><label><input type="checkbox"><span>성공한 실행을 백업 영상으로 녹화하고, 만일을 위해 시뮬레이터도 준비해 둡니다.</span></label></li>
       </ul>
     </div>
@@ -1014,14 +1045,15 @@ python -m server.simulator --speed 3                 # 터미널 2 (지금은 �
 
 <section id="team">
   <div class="num">12</div>
-  <h2>팀 구성 제안</h2>
-  <p>메시지 형식이 트랙 간의 약속이므로 네 트랙이 병렬로 작업할 수 있습니다. 1주차에 <code>docs/message_schema.md</code>를 합의하고(새 <code>map</code> 메시지와 <code>lidar</code>의 방향 필드 포함), 바꿀 때는 반드시 모두에게 알리세요.</p>
+  <h2>팀 구성 (3명)</h2>
+  <p>2026-11-12에 WBS의 4개 트랙을 3명으로 다시 묶었습니다. 각자 자기 폴더에서 작업하고, 서로를 잇는 <b>공통 약속</b>만 함께 관리하면 병렬로 진행할 수 있습니다.</p>
   <div class="grid2">
-    <div class="card"><h4><span class="tag a">트랙 1</span> 개 펌웨어</h4><p>MechDog 3마리의 MicroPython: Wi-Fi, 명령 파서, 보행 호출, 안전 반사, 상태 메시지. 카메라 펌웨어(ESP32-S3)와 LiDAR 브리지(ESP32-C3).</p></div>
-    <div class="card"><h4><span class="tag b">트랙 2</span> 인식 (Pi)</h4><p>SLAM, B·C 점 지우기, ArUco 인식과 <code>solvePnP</code>, 침입자 후보 탐지, 카메라 확인(마커/YOLO).</p></div>
-    <div class="card"><h4><span class="tag c">트랙 3</span> 두뇌 (Pi)</h4><p>상태 머신, 따라가기 제어, frontier 탐사, 포위 지점 계산, REGROUP. <code>mission</code>, <code>intruder</code>, <code>event</code>를 보냅니다.</p></div>
-    <div class="card"><h4><span class="tag r">트랙 4</span> 모니터 및 통합</h4><p>이 폴더: SLAM 지도 화면, 새 상태 단계, 카메라 3대, 시뮬레이터, 기록/재생, 시연 화면. 전체 통합 테스트도 담당합니다.</p></div>
+    <div class="card"><h4><span class="tag a">담당1</span> 하드웨어 → 지도</h4><p>MechDog 펌웨어(상태 전송, 명령 수신, 안전 반사), 카메라 펌웨어, 기초 성능 측정, LiDAR 브리지(ESP32-C3), SLAM, frontier 탐사와 침입자 후보 탐지(담당2와 함께).</p><p><code>firmware/</code>, <code>slam/</code>(예정)</p></div>
+    <div class="card"><h4><span class="tag b">담당2</span> 행동 두뇌</h4><p>마커 따라가기와 행렬, 상태 머신, CONFIRM 판단, 포위 지점 계산과 인계, 다시 줄 서기. <code>mission</code>, <code>intruder</code>, <code>event</code>를 보냅니다.</p><p><code>brain/</code></p></div>
+    <div class="card"><h4><span class="tag r">담당3</span> 관제 · 통합 · 클라우드</h4><p>대시보드 새 시나리오 반영, 시뮬레이터, 메시지 스키마 관리, Docker와 외부 공개, Supabase 기록, 테스트 계획서와 결과서, 시연 영상.</p><p><code>server/</code>, <code>web/</code>, <code>recorder/</code>, <code>cloud/</code>, <code>tools/</code></p></div>
+    <div class="card"><h4><span class="tag c">공통 약속</span> 바꿀 때는 PR + 두 명 리뷰</h4><p><code>docs/message_schema.md</code> (주인: 담당3) · UDP 9100 <code>move</code> 명령 (담당1) · SLAM 결과(지도, A 위치, 후보 덩어리) → 두뇌 (담당1 → 담당2) · 상태 이름 (담당2 → 대시보드)</p></div>
   </div>
+  <div class="note">담당2는 12월 7~16일에 포위·인계와 다시 줄 서기가 겹쳐 가장 바쁩니다. 이 시기에는 담당3이 시뮬레이터로 상태 머신 시험을 돕습니다. 실물 시험(안전 반사, 행렬, 통합)은 전원이 함께 합니다.</div>
 </section>
 
 <section id="code">
@@ -1092,6 +1124,7 @@ for scan_mm in read_scans():                # 브리지(UDP) 또는 USB에서 �
   <h3>카메라 3대 (모니터 서버가 받아 나눠 줌)</h3>
 <pre><code>CAMERAS="A=http://192.168.0.20:81/stream,B=http://192.168.0.21:81/stream,C=http://192.168.0.22:81/stream" \
   uvicorn server.app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 2</code></pre>
+  <p>Docker로 실행할 때는 같은 값을 <code>.env</code>의 <code>CAMERAS=</code>에 넣습니다.</p>
   <p>ESP32 카메라는 스트림을 한 곳에만 보낼 수 있으므로, 따라가기 코드는 카메라에 직접 붙지 말고 모니터 서버가 이미 받은 영상을 같이 써야 합니다.</p>
 
   <h3>두뇌 → 모니터</h3>
