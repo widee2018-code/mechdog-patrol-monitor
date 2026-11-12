@@ -1,6 +1,7 @@
 # 대시보드만:            docker compose up --build -d
 # + 임시 공개 주소:      docker compose --profile quick up --build -d   (주소는 docker compose logs quick-tunnel)
 # + 고정 공개 주소:      docker compose --profile tunnel up --build -d  (.env 의 CF_TUNNEL_TOKEN 필요)
+# + Supabase 기록:      docker compose --profile record up --build -d  (cloud/supabase/.env 의 SUPABASE_URL, SUPABASE_SERVICE_KEY 필요)
 # 설정은 .env (.env.example 을 복사). 로봇견·Pi는 지금처럼 <이 컴퓨터 IP>:9000 (UDP) 으로 보낸다.
 services:
   hub:
@@ -25,4 +26,14 @@ services:
       TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
     depends_on: [hub]
     profiles: [tunnel]
+    restart: unless-stopped
+
+  # hub 의 /ws 를 구독해 Supabase 에 기록한다 (recorder/README.md). hub 와 독립적이라 실패해도 대시보드는 영향 없다.
+  recorder:
+    build: ./recorder
+    env_file: [cloud/supabase/.env]   # SUPABASE_URL, SUPABASE_SERVICE_KEY (커밋되지 않음)
+    environment:
+      HUB_WS: ws://hub:8000/ws
+    depends_on: [hub]
+    profiles: [record]
     restart: unless-stopped
