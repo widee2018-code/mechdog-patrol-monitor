@@ -2,7 +2,7 @@
 # 커밋 전에 개인정보·비밀정보가 들어갔는지 검사하고, 찾으면 커밋을 막는다.
 #   공통 규칙:   .githooks/blocked-patterns.txt  (정규식, 저장소에 포함)
 #   개인 금지어: .git-blocklist.local            (그대로 일치, 대소문자 무시, git에 올라가지 않음)
-#   secrets.h 의 WIFI_SSID / WIFI_PASS 값도 자동으로 금지어에 들어간다.
+#   secrets.h / secrets.py 의 WIFI_SSID / WIFI_PASS 값도 자동으로 금지어에 들어간다.
 # 켜기:          git config core.hooksPath .githooks
 # 저장소 전체 검사: .githooks/pre-commit --all
 # 커밋 범위 검사(CI): .githooks/pre-commit --range BASE..HEAD   (범위 안의 모든 커밋을 하나씩 본다)
@@ -18,7 +18,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 # 올리면 안 되는 파일 이름
-blocked_files='(^|/)(secrets\.h|\.env(\..+)?|.*\.pem|.*\.key|id_rsa.*|\.git-blocklist\.local)$|^firmware/backup/'
+blocked_files='(^|/)(secrets\.(h|py)|\.env(\..+)?|.*\.pem|.*\.key|id_rsa.*|\.git-blocklist\.local)$|^firmware/backup/'
 
 # diff에서 추가된 줄만 "파일:줄번호:내용" 형식으로 바꾼다.
 added_lines() {
@@ -75,14 +75,15 @@ grep -E '(WIFI_SSID|PASS|PASSWORD|TOKEN|SECRET|API_KEY)[A-Za-z_]*[[:space:]]*[=:
   | grep -vE '"(YOUR_[A-Z_]*)?"' > "$tmp/hit"
 report "비밀번호/토큰 값"
 
-# 개인 금지어 + secrets.h 의 Wi-Fi 정보
+# 개인 금지어 + secrets.h / secrets.py 의 Wi-Fi 정보
 : > "$tmp/words"
 [ -f "$personal" ] && grep -vE '^[[:space:]]*(#|$)' "$personal" >> "$tmp/words"
-find . -name secrets.h -not -path './.git/*' -exec sed -nE 's/^#define[[:space:]]+WIFI_(SSID|PASS)[[:space:]]+"([^"]+)".*/\2/p' {} + \
+find . \( -name secrets.h -o -name secrets.py \) -not -path './.git/*' \
+  -exec sed -nE 's/^(#define[[:space:]]+)?WIFI_(SSID|PASS)[[:space:]=]+"([^"]+)".*/\3/p' {} + \
   | grep -v '^YOUR_' >> "$tmp/words"
 if [ -s "$tmp/words" ]; then
   grep -F -i -f "$tmp/words" "$tmp/check" > "$tmp/hit"
-  report "개인 금지어 (.git-blocklist.local / secrets.h)"
+  report "개인 금지어 (.git-blocklist.local / secrets.h / secrets.py)"
 fi
 
 if [ "$found" = 1 ]; then
