@@ -32,6 +32,27 @@ button { font: inherit; cursor: pointer; }
 .btn.danger { background: var(--alert); border-color: var(--alert); color: #fff; }
 .btn.danger:hover { filter: brightness(1.1); }
 
+/* 사이렌 (#6): 평소엔 회색 경광등, 울리면 빨간 경광등이 깜빡이고 빛줄기가 나옴 */
+.siren { display: flex; align-items: center; gap: 10px; padding: 5px 8px 5px 6px; border: 1px solid var(--line); border-radius: 10px; background: #0f1620; white-space: nowrap; }
+.siren .lamp { width: 34px; height: 34px; flex: none; }
+.siren .dome { fill: #4a5870; transition: fill .2s; }
+.siren .shine { fill: none; stroke: rgba(255,255,255,.25); stroke-width: 2.5; stroke-linecap: round; }
+.siren .base { fill: #3a4656; }
+.siren .rays path { stroke: var(--alert); stroke-width: 3; stroke-linecap: round; fill: none; }
+.siren .rays { opacity: 0; }
+.siren-txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 92px; }
+.siren-txt b { font-size: 13px; }
+.siren-txt small { color: var(--muted); font-size: 11px; }
+.btn.sm { padding: 5px 10px; font-size: 12px; border-radius: 7px; }
+.btn.sm.on { color: var(--ok); border-color: rgba(62,207,142,.45); }
+.siren.on { border-color: var(--alert); background: rgba(255,90,82,.1); }
+.siren.on .dome { fill: var(--alert); animation: lampBlink .5s steps(1) infinite; }
+.siren.on .rays { animation: raysBlink .5s steps(1) infinite; }
+.siren.on .siren-txt b { color: #ff9a94; }
+@keyframes lampBlink { 50% { fill: #7a1f1b; } }
+@keyframes raysBlink { 0% { opacity: 1; } 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .siren.on .dome, .siren.on .rays { animation: none; } .siren.on .rays { opacity: 1; } }
+
 .banner { margin: 12px 18px 0; padding: 10px 14px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-weight: 600; }
 .banner[hidden] { display: none; }
 .banner .ico { font-size: 18px; }
@@ -93,6 +114,7 @@ main { flex: 1; display: grid; gap: 12px; padding: 12px 18px 18px; min-height: 0
   .cams { grid-template-rows: none; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .cam { aspect-ratio: 4 / 3; min-height: 0; }
   .steps li { padding: 5px 10px 5px 16px; }
+  .siren-txt small { display: none; }
 }
 @media (max-width: 720px) {
   .top { flex-wrap: wrap; padding: 10px 16px; }
@@ -108,6 +130,17 @@ main { flex: 1; display: grid; gap: 12px; padding: 12px 18px 18px; min-height: 0
 <body>
 <header class="top">
   <div class="brand"><b>MechDog 관제실</b><small>행렬 순찰 · 실시간 모니터 · 시안 1</small></div>
+  <div class="siren" id="siren" role="status" aria-live="assertive">
+    <svg class="lamp" viewBox="0 0 48 48" aria-hidden="true">
+      <g class="rays"><path d="M24 2v6M7 10l5 4.5M41 10l-5 4.5M2 25h6M46 25h-6"/></g>
+      <path class="dome" d="M12 37V26a12 12 0 0 1 24 0v11z"/>
+      <path class="shine" d="M17.5 27a6.5 6.5 0 0 1 6.5-6.5"/>
+      <rect class="base" x="7" y="37" width="34" height="7" rx="2"/>
+    </svg>
+    <div class="siren-txt"><b id="sirenState">사이렌 대기</b><small id="sirenSub">알림이 꺼져 있어요</small></div>
+    <button class="btn sm" id="sirenArm">🔔 알림 켜기</button>
+    <button class="btn sm danger" id="sirenAck" hidden>확인</button>
+  </div>
   <ol class="steps" id="steps"></ol>
   <span class="clock" id="clock"></span>
   <button class="btn" id="pause">일시정지</button>

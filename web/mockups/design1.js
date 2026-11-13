@@ -57,8 +57,88 @@
     if (bx) bx.onclick = () => (S.estop ? $("estop").click() : sim.handoverDone());
   }
 
+  // ── 사이렌 (#6) ─────────────────────────────────────────────
+  // 알리는 방법 4가지: 사이렌 소리 · 경광등 그림 깜빡임 · 경보 배너(위 banner) · 브라우저 알림 팝업
+  // 울림/멈춤 시점은 #6 ③④ 결정 전 임시값: 포위(CONTAIN) 시작 때 울림 → "확인" 버튼 또는 REGROUP에서 멈춤
+  const RING_MISSIONS = new Set(["CONTAIN", "HANDOVER"]);
+  const siren = { armed: false, ringing: false, ackedId: null, notifiedId: null, ctx: null, osc: null, gain: null, timer: null,
+    ringId: null, ringAt: 0, ringArmed: false };
+
+  // 사이렌 기록: 오른쪽 아래 "이벤트" 목록에 남김 (못 봤을 때 나중에 확인용)
+  function sirenLog(level, text) {
+    S.events.unshift({ ts: Date.now(), level, text, incident: S.target ? S.target.id : 0 });
+    if (S.events.length > 80) S.events.length = 80;
+    S.evSeq++;
+  }
+  const since = (t) => M.fmtDur((Date.now() - t) / 1000);
+
+  function sirenSoundOn() {
+    if (!siren.ctx || siren.osc) return;
+    const ctx = siren.ctx, osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = "square"; gain.gain.value = 0.05;
+    osc.connect(gain).connect(ctx.destination); osc.start();
+    let hi = false;
+    const flip = () => { hi = !hi; osc.frequency.setValueAtTime(hi ? 960 : 720, ctx.currentTime); };   // 삐-뽀 두 음
+    flip(); siren.timer = setInterval(flip, 450);
+    siren.osc = osc; siren.gain = gain;
+  }
+  function sirenSoundOff() {
+    clearInterval(siren.timer); siren.timer = null;
+    if (siren.osc) { try { siren.osc.stop(); } catch (e) {} siren.osc.disconnect(); siren.osc = null; }
+  }
+  function sirenNotify(id) {
+    if (siren.notifiedId === id || !("Notification" in window) || Notification.permission !== "granted") return;
+    siren.notifiedId = id;
+    try { new Notification("🚨 침입자 확인", { body: `사건 #${id} · A·B·C가 포위 중입니다. 대시보드를 확인하세요.`, tag: `incident-${id}` }); } catch (e) {}
+  }
+
+  $("sirenArm").onclick = async () => {
+    if (siren.armed) {                       // 다시 누르면 알림 끄기
+      siren.armed = false; sirenSoundOff();
+      sirenLog("warn", "🔕 사이렌 알림 꺼짐 (소리 · 팝업 안 나옴)");
+    } else {
+      sirenLog("info", "🔔 사이렌 알림 켜짐");
+      siren.armed = true;
+      try { siren.ctx = siren.ctx || new (window.AudioContext || window.webkitAudioContext)(); await siren.ctx.resume(); } catch (e) {}
+      if ("Notification" in window && Notification.permission === "default") { try { await Notification.requestPermission(); } catch (e) {} }
+    }
+    updateSiren();
+  };
+  $("sirenAck").onclick = () => {
+    siren.ackedId = S.target && S.target.id;
+    sirenLog("info", `✅ 사이렌 확인 · 사건 #${siren.ackedId} · 관제가 확인 버튼을 누름 (울린 지 ${since(siren.ringAt)})`);
+    siren.ringId = null;
+    updateSiren();
+  };
+
+  function updateSiren() {
+    const id = S.target && S.target.id;
+    const ringing = RING_MISSIONS.has(S.mission) && !S.estop && id != null && siren.ackedId !== id;
+    // 울림 시작 / 확인 없이 멈춤 기록
+    if (ringing && siren.ringId !== id) {
+      siren.ringId = id; siren.ringAt = Date.now();
+      sirenLog("alert", `🚨 사이렌 울림 · 사건 #${id} · 포위 시작` + (siren.armed ? "" : " (알림 꺼져 있어 소리 · 팝업 안 나옴)"));
+    } else if (!ringing && siren.ringId != null) {
+      const why = S.estop ? "비상 정지" : S.mission === "REGROUP" ? "줄 다시 서기(REGROUP) 시작" : S.mission;
+      sirenLog("warn", `⚠ 사이렌 자동 멈춤 · 사건 #${siren.ringId} · ${why} · 아무도 확인하지 않음 (울린 시간 ${since(siren.ringAt)})`);
+      siren.ringId = null;
+    }
+    siren.ringing = ringing;
+    $("siren").classList.toggle("on", ringing);
+    $("sirenAck").hidden = !ringing;
+    const arm = $("sirenArm");
+    arm.textContent = siren.armed ? "🔔 알림 켜짐" : "🔔 알림 켜기";
+    arm.classList.toggle("on", siren.armed);
+    if (ringing && siren.armed) { sirenSoundOn(); sirenNotify(id); } else sirenSoundOff();
+    $("sirenState").textContent = ringing ? `사이렌 울림 · 사건 #${id}` : "사이렌 대기";
+    $("sirenSub").textContent = ringing
+      ? (siren.armed ? "확인을 누르면 멈춰요" : "소리 꺼짐 · 알림 켜기를 누르세요")
+      : (siren.armed ? "소리 · 팝업 준비됨" : "알림이 꺼져 있어요");
+  }
+
   let evSeen = -1;
   function renderDom() {
+    updateSiren();
     const idx = M.MISSIONS.findIndex((m) => m.key === S.mission);
     [...$("steps").children].forEach((li, i) => { li.className = i === idx ? (M.HOT.has(S.mission) ? "now hot" : "now") : ""; });
     $("clock").textContent = M.fmtTime(Date.now());
