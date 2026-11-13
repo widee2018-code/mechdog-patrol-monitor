@@ -15,6 +15,7 @@ hub와 독립된 프로세스라서 recorder가 죽어도 대시보드는 영향
 |---|---|---|
 | `event`, `mission`, `intruder` | 전부 | `mission`의 `STANDBY` 같은 새 상태 이름도 코드 수정 없이 그대로 저장 |
 | `command` | 전부 | 대시보드 버튼(`start` / `stop` / `regroup`). 행의 `ts`가 누른 시각이라 "탐사 시작 시각"과 비상 정지 여부를 볼 수 있음 |
+| `alarm` | 전부 | 사이렌 `on` / `off` (이슈 #8 예시 기준 가정. 이름이 다르면 `recorder.py`의 목록을 고친다). `incidents` 뷰의 사이렌 시작/끝에 쓰임 |
 | `ready` | `all_ready`가 **바뀔 때만** | STANDBY 중 1초마다 오므로 전부 저장하지 않음. 첫 메시지는 저장하고, 같은 값이 계속 오면 건너뜀. `all_ready` 필드가 없으면 저장 안 함 |
 | `sound` | `alert`가 참일 때만 | |
 | `dog` | 로봇견별 **1초에 1건** | 나머지는 솎아냄 |

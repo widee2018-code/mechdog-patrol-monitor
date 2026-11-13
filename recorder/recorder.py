@@ -60,7 +60,7 @@ async def to_row(msg):
     t = msg.get("type")
     source = str(msg.get("from") or "unknown")
     ts = float(msg.get("ts") or time.time())
-    if t in ("event", "mission", "intruder", "command"):  # command: start / stop / regroup (누른 시각 = ts)
+    if t in ("event", "mission", "intruder", "command", "alarm"):  # command: start / stop / regroup (누른 시각 = ts), alarm: 사이렌 on / off
         pass
     elif t == "ready":  # STANDBY 준비 확인: all_ready 가 바뀔 때만 저장
         if "all_ready" not in msg:

@@ -4,7 +4,7 @@
 create table if not exists telemetry_log (
   id      bigint generated always as identity primary key,
   ts      timestamptz not null,
-  type    text not null,   -- event / mission / sound / dog / intruder / camera / command / ready
+  type    text not null,   -- event / mission / sound / dog / intruder / camera / command / ready / alarm
   source  text not null,   -- 메시지의 from: A, B, C, pi, monitor
   level   text,            -- event 메시지의 info / warn / alert
   payload jsonb not null,  -- 원본 메시지 (이미지는 빼고 Storage 경로로 바꿔 넣음)
