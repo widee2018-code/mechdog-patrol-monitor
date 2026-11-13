@@ -32,8 +32,8 @@
 | 일정 시간 뒤 재정렬 → 매핑 재개 | ⬜ 시점 결정 필요 | #7, #16 |
 | 상태 머신, 메시지 형식, 시뮬레이터 | ⬜ 예전 시나리오 그대로 (먼저 할 일) | #8, #9, #10 |
 | 일렬 대기 → 대시보드에서 탐사 시작 (STANDBY) | ⬜ 설계 완료 (가이드 8절) | #22 |
-| 대시보드 새 시나리오 반영 | 🟡 디자인 시안 3안 (PR #3) | #17 |
-| Supabase 기록 | 🟡 기록기 동작 확인 (PR #4) | #19, #20 |
+| 대시보드 새 시나리오 반영 | 🟡 디자인 시안 3안 합쳐짐 (`web/mockups/`, PR #3), 안 고르기 남음 | #17 |
+| Supabase 기록 | 🟡 기록기 합쳐짐 (`recorder/`, PR #21) | #19, #20 |
 
 할 일은 [GitHub Issues](https://github.com/widee2018-code/mechdog-patrol-monitor/issues)에서 관리합니다. 담당별 보기:
 [worksenddl2-source](https://github.com/widee2018-code/mechdog-patrol-monitor/issues?q=is%3Aopen+assignee%3Aworksenddl2-source) ·
