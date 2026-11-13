@@ -28,6 +28,7 @@ BATCH_MAX = 200
 BUFFER_MAX = 5000  # 오프라인일 때 메모리에 쌓아 둘 최대 행 수 (넘으면 오래된 것부터 버림)
 
 _last_dog = {}  # 로봇견별 마지막 기록 시각 (1초 간격으로 솎아내기)
+_last_ready = {}  # 보낸 쪽별 마지막 all_ready 값 (ready는 1초마다 오므로 값이 바뀔 때만 기록)
 _data_url = re.compile(r"^data:image/jpeg;base64,(.*)$", re.S)
 
 
@@ -59,8 +60,15 @@ async def to_row(msg):
     t = msg.get("type")
     source = str(msg.get("from") or "unknown")
     ts = float(msg.get("ts") or time.time())
-    if t in ("event", "mission", "intruder"):
+    if t in ("event", "mission", "intruder", "command", "alarm"):  # command: start / stop / regroup (누른 시각 = ts), alarm: 사이렌 on / off
         pass
+    elif t == "ready":  # STANDBY 준비 확인: all_ready 가 바뀔 때만 저장
+        if "all_ready" not in msg:
+            return None
+        ready = bool(msg["all_ready"])
+        if _last_ready.get(source) == ready:
+            return None
+        _last_ready[source] = ready
     elif t == "sound":
         if not msg.get("alert"):
             return None
