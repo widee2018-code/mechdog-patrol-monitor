@@ -1,0 +1,17 @@
+{
+  "B": {
+    "turn": 40,
+    "deg_per_sec": 13.3,
+    "deg_per_sec_left": 14.7,
+    "deg_per_sec_right": 11.9,
+    "speed": 80,
+    "m_per_sec": 0.093,
+    "turn_sign": -1,
+    "date": "2026-11-13",
+    "arc_turn": 33,
+    "arc_sign": 1,
+    "arc_deg_per_sec_left": 35.47,
+    "arc_deg_per_sec_right": 69.29,
+    "arc_date": "2026-11-13"
+  }
+}
