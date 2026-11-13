@@ -226,11 +226,18 @@
 
   <h3>상태 머신 (Pi에서 실행)</h3>
   <div class="diagram">
-  <svg viewBox="0 0 920 210" role="img" aria-label="상태 머신: EXPLORE, SUSPECT, CONFIRM, CONTAIN, HANDOVER, REGROUP 순서로 진행하고 다시 EXPLORE로 돌아감. SUSPECT와 CONFIRM에서 오탐이면 바로 EXPLORE로 돌아감">
+  <svg viewBox="0 0 1070 210" role="img" aria-label="상태 머신: 대기(STANDBY)에서 대시보드 시작 명령을 받으면 EXPLORE로 넘어감. 이후 EXPLORE, SUSPECT, CONFIRM, CONTAIN, HANDOVER, REGROUP 순서로 진행하고 다시 EXPLORE로 돌아감. SUSPECT와 CONFIRM에서 오탐이면 바로 EXPLORE로 돌아감">
     <defs>
       <marker id="arM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
       <marker id="arMr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--b)"/></marker>
     </defs>
+    <g font-family="-apple-system, 'Segoe UI', sans-serif">
+      <rect x="10" y="70" width="120" height="60" rx="10" class="s-state" style="stroke-dasharray:5 4"/>
+      <text x="70" y="96" text-anchor="middle" class="s-text">STANDBY</text><text x="70" y="116" text-anchor="middle" class="s-sub">일렬 대기, 준비 확인</text>
+      <text x="150" y="60" text-anchor="middle" class="s-sub">시작 버튼</text>
+    </g>
+    <path d="M132,100 L166,100" class="s-line" marker-end="url(#arM)"/>
+    <g transform="translate(150,0)">
     <g font-family="-apple-system, 'Segoe UI', sans-serif">
       <rect x="20" y="70" width="120" height="60" rx="10" class="s-state" style="stroke:var(--a);stroke-width:2"/>
       <text x="80" y="96" text-anchor="middle" class="s-text">EXPLORE</text><text x="80" y="116" text-anchor="middle" class="s-sub">행렬 + 매핑</text>
@@ -255,6 +262,7 @@
     <path d="M226,68 L226,35 L80,35 L80,66" class="s-line" style="stroke-dasharray:5 4" marker-end="url(#arM)"/>
     <path d="M372,68 L372,35 L226,35" class="s-line" style="stroke-dasharray:5 4"/>
     <text x="226" y="26" text-anchor="middle" class="s-sub">오탐 → 행렬이 안 깨졌으니 바로 재개</text>
+    </g>
   </svg>
   </div>
 
@@ -262,7 +270,8 @@
   <div class="tablewrap">
   <table>
     <tr><th>시간</th><th>장면</th><th>보여줄 포인트</th></tr>
-    <tr><td>0:00</td><td>A → B → C 행렬로 출발, 대시보드에 지도가 점점 그려짐</td><td>SLAM 매핑, 협동 이동</td></tr>
+    <tr><td>0:00</td><td>A → B → C가 일렬로 대기 (STANDBY). 대시보드 준비 표가 모두 초록이 되면 운영자가 "탐사 시작"을 누름</td><td>준비 확인, 관제 명령</td></tr>
+    <tr><td>0:10</td><td>A → B → C 행렬로 출발, 대시보드에 지도가 점점 그려짐</td><td>SLAM 매핑, 협동 이동</td></tr>
     <tr><td>1:00</td><td>A의 LiDAR에 지도에 없는 덩어리 → A 정지, 재스캔 (SUSPECT)</td><td>변화 탐지</td></tr>
     <tr><td>1:15</td><td>A가 돌아서 카메라로 사람/마커 확인 (CONFIRM)</td><td>다중 센서 교차 확인</td></tr>
     <tr><td>1:30</td><td>A는 관제탑, B·C가 대열을 벗어나 포위 (CONTAIN)</td><td>역할 전환, 포위 계산</td></tr>
@@ -749,12 +758,47 @@ for c in candidates:
     <tr><td><code>dog</code></td><td>Pi (위치) + 각 개 (센서)</td><td>10 Hz</td><td>방향이 표시된 개 마커, 상태 카드</td><td>A 위치는 SLAM, B·C 위치는 마커 체인 또는 A의 LiDAR 추적에서 옴</td></tr>
     <tr><td><code>intruder</code></td><td>Pi</td><td>5 Hz</td><td>빨간 마커, 원, 이동 궤적</td><td>그대로</td></tr>
     <tr><td><code>camera</code></td><td>A, B, C</td><td>실시간</td><td>실시간 화면, 증거 갤러리</td><td>카메라 3대 모두 사용 (<code>CAMERAS</code>에 3개 등록)</td></tr>
-    <tr><td><code>mission</code></td><td>Pi 상태 머신</td><td>변경 시</td><td>상단 상태 단계 표시</td><td>단계 이름을 EXPLORE / SUSPECT / CONFIRM / CONTAIN / HANDOVER / REGROUP으로 교체 (<code>web/app.js</code>의 <code>STATES</code>)</td></tr>
+    <tr><td><code>mission</code></td><td>Pi 상태 머신</td><td>변경 시</td><td>상단 상태 단계 표시</td><td>단계 이름을 STANDBY / EXPLORE / SUSPECT / CONFIRM / CONTAIN / HANDOVER / REGROUP으로 교체 (<code>web/app.js</code>의 <code>STATES</code>)</td></tr>
     <tr><td><code>event</code></td><td>Pi</td><td>발생 시</td><td>타임라인</td><td>그대로</td></tr>
     <tr><td><code>map</code> <span class="tag">신규</span></td><td>Pi (SLAM)</td><td>1 Hz</td><td>점점 그려지는 지도</td><td>새로 추가. 정적 <code>arena.json</code> 대신 SLAM 지도를 배경으로</td></tr>
+    <tr><td><code>ready</code> <span class="tag">신규</span></td><td>Pi 상태 머신</td><td>STANDBY 중 1 Hz</td><td>준비 확인 표 (초록/빨강)</td><td>개별 항목과 전체 <code>all_ready</code>. 아래 "시작 준비와 대시보드 명령" 참고</td></tr>
+    <tr><td><code>command</code> <span class="tag">신규</span></td><td>대시보드 → 서버 → Pi</td><td>버튼 누를 때</td><td>타임라인에 "누가 시작함" 기록</td><td><code>start</code> / <code>stop</code>(비상 정지) / <code>regroup</code>(즉시 재정렬). 다른 메시지와 방향이 반대</td></tr>
     <tr><td><code>sound</code></td><td>—</td><td>—</td><td>—</td><td>새 시나리오에서는 사용하지 않음</td></tr>
   </table></div>
   <p><span class="tag">왜 개 데이터를 나누나요?</span> MechDog은 자기가 어디 있는지 모릅니다. <b>위치</b>는 Pi(SLAM, 마커)에서 오고, <b>배터리, 초음파, 기울기</b>는 개에서 옵니다. 양쪽이 각각 일부 필드만 담은 <code>dog</code> 메시지를 보내고, 모니터가 이를 합칩니다.</p>
+
+  <h3>시작 준비와 대시보드 명령 (STANDBY)</h3>
+  <p>세 마리를 일렬로 세운 뒤 <b>모두 준비되면 대시보드에서 시작 명령</b>을 내립니다. 켜면 STANDBY로 시작하고, 시작 명령이 오기 전에는 아무도 움직이지 않습니다. 지금까지 대시보드는 보기 전용이었는데, 여기서 처음으로 <b>대시보드 → 로봇</b> 방향의 통로가 생깁니다.</p>
+<pre><code>[대시보드]  "탐사 시작" 버튼 (모두 준비되면 활성화)
+    │ POST /api/command {"cmd": "start"}
+    ▼
+[서버 hub]  같은 Wi-Fi에서 온 요청인지 확인 → event 기록 → Pi로 전달 (UDP 9200)
+    ▼
+[Pi 상태 머신]  준비 상태 다시 확인 → STANDBY → EXPLORE (mission 메시지)
+    ▼
+A 출발, B·C 따라감</code></pre>
+  <p><b>준비 확인은 상태 머신이 판단하고, 대시보드는 보여 주기만 합니다.</b> 그래야 대시보드, 키보드, 테스트 스크립트 어디서 시작하든 기준이 같습니다. 명령을 받았을 때 한 번 더 확인해서, 그사이 마커를 놓쳤으면 시작하지 않고 이유를 <code>event</code>로 알립니다.</p>
+  <div class="tablewrap"><table>
+    <tr><th>확인 항목</th><th>A</th><th>B</th><th>C</th></tr>
+    <tr><td>로봇견 연결 (<code>dog_cmd.py</code> 응답, 2초 이내)</td><td>✓</td><td>✓</td><td>✓</td></tr>
+    <tr><td>배터리 정상, 서 있음</td><td>✓</td><td>✓</td><td>✓</td></tr>
+    <tr><td>카메라 영상 들어옴</td><td>✓</td><td>✓</td><td>✓</td></tr>
+    <tr><td>앞 개 마커가 보이고 거리 적당</td><td>—</td><td>마커 1</td><td>마커 2</td></tr>
+    <tr><td>LiDAR 스캔 들어옴, SLAM 시작됨</td><td>✓</td><td>—</td><td>—</td></tr>
+  </table></div>
+  <div class="note"><b>보안:</b> 대시보드는 Cloudflare로 외부에 공개되어 있어, 막지 않으면 주소를 아는 누구나 로봇을 출발시킬 수 있습니다. <code>/api/command</code>는 <b>같은 Wi-Fi(현장 노트북)에서 온 요청만</b> 받습니다. 터널을 거쳐 들어온 요청(<code>Cf-Connecting-Ip</code> 헤더가 있음)은 거절하고, 공개 주소의 대시보드에서는 버튼이 회색으로 보입니다. 같은 통로로 "비상 정지"와 "즉시 재정렬" 버튼도 만듭니다.</div>
+
+  <h3>포트 목록</h3>
+  <p>포트는 담당자가 아니라 프로그램마다 정합니다. 로봇견과 카메라는 기기마다 IP가 달라서 같은 포트를 써도 겹치지 않습니다. 한 컴퓨터에서 서버를 두 개 띄울 때만 <code>--port 8001</code>처럼 바꿉니다.</p>
+  <div class="tablewrap"><table>
+    <tr><th>포트</th><th>프로그램</th><th>받는 것</th><th>위치</th></tr>
+    <tr><td>8000 (TCP)</td><td>서버 hub</td><td>대시보드 웹페이지, <code>/ws</code>, <code>/api/...</code></td><td>노트북 / Pi</td></tr>
+    <tr><td>9000 (UDP)</td><td>서버 hub</td><td>로봇견과 Pi가 보내는 상태 메시지</td><td>노트북 / Pi</td></tr>
+    <tr><td>9100 (UDP)</td><td><code>dog_cmd.py</code></td><td><code>move</code> 명령</td><td>각 로봇견</td></tr>
+    <tr><td>9200 (UDP) <span class="tag">예정</span></td><td>Pi 상태 머신</td><td>대시보드 명령 (<code>start</code> / <code>stop</code> / <code>regroup</code>)</td><td>노트북 / Pi</td></tr>
+    <tr><td>81 (TCP)</td><td>카메라 펌웨어</td><td>MJPEG 영상 스트림</td><td>각 카메라 모듈</td></tr>
+  </table></div>
+  <p>대시보드(<code>web/</code>)는 서버가 8000번으로 같이 보여 주고, 기록기(<code>recorder/</code>)는 서버 <code>/ws</code>에 붙는 쪽이라 자기 포트가 필요 없습니다.</p>
 
   <h3>좌표계</h3>
   <p>단위는 미터, x는 오른쪽, y는 위쪽, 각도는 +x에서 반시계 방향입니다. SLAM 지도는 A가 출발한 곳을 원점으로 잡으므로, <b>A를 항상 아레나의 정해진 출발점(예: 왼쪽 아래 모서리에서 (0.3, 0.3), +x 방향)에 두고 시작</b>하세요. 그러면 SLAM 좌표와 <code>web/arena.json</code>의 좌표가 일치해서, 출구나 숨을 곳 같은 라벨을 그대로 쓸 수 있습니다.</p>
@@ -765,7 +809,7 @@ pip install -r requirements.txt
 uvicorn server.app:app --host 0.0.0.0 --port 8000   # 터미널 1
 python -m server.simulator --speed 3                 # 터미널 2 (지금은 이전 시나리오를 재생)
 # http://localhost:8000 열기</code></pre>
-  <div class="note">시뮬레이터를 새 상태 머신(EXPLORE → … → REGROUP)으로 바꾸고(widee2018-code), 대시보드 화면을 거기에 맞추는 것(worksenddl2-source)이 관제 쪽 첫 작업입니다. LiDAR가 오기 전에 대시보드와 두뇌 로직을 먼저 만들어 둘 수 있습니다.</div>
+  <div class="note">시뮬레이터를 새 상태 머신(STANDBY → EXPLORE → … → REGROUP)으로 바꾸고(widee2018-code), 대시보드 화면을 거기에 맞추는 것(worksenddl2-source)이 관제 쪽 첫 작업입니다. LiDAR가 오기 전에 대시보드와 두뇌 로직을 먼저 만들어 둘 수 있습니다.</div>
 
   <h3>외부 공개 (Docker + Cloudflare Tunnel)</h3>
   <p>모니터 서버만 컨테이너로 돌리고, Cloudflare Tunnel로 공개 주소를 붙입니다. 공유기 설정이나 공인 IP가 필요 없고, 로봇·LiDAR·카메라 경로는 그대로입니다. LiDAR 처리와 <code>brain/</code>처럼 하드웨어를 쓰는 코드는 컨테이너에 넣지 않고 Pi에서 직접 실행합니다.</p>
@@ -973,6 +1017,7 @@ docker compose --profile tunnel up --build -d # + 고정 공개 주소 (.env의 
       <h3>MVP: 행렬 탐사 + 발견</h3>
       <div class="when">4–5주차 · 두뇌 + 전원</div>
       <ul class="check">
+        <li><label><input type="checkbox"><span>세 마리를 일렬로 세우면 대시보드 준비 표가 모두 초록이 되고, "탐사 시작" 버튼으로 STANDBY → EXPLORE가 됩니다. 공개 주소에서는 버튼이 눌리지 않는지도 확인합니다.</span></label></li>
         <li><label><input type="checkbox"><span>A가 지도의 미탐사 경계(frontier)를 향해 스스로 이동하고, B·C가 따라옵니다 (EXPLORE).</span></label></li>
         <li><label><input type="checkbox"><span>지도에 없고 B·C와도 매칭되지 않는 덩어리 → A 정지, 재스캔 → <code>intruder</code> 메시지, SUSPECT.</span></label></li>
         <li><label><input type="checkbox"><span>A가 돌아서 카메라로 확인(마커/색 조끼 또는 YOLO) → CONFIRM.</span></label></li>
