@@ -3,7 +3,7 @@
 # 안전 반사는 로봇견 안에서 돈다: 1초간 명령이 없으면 정지, 앞이 막혔으면 전진 금지.
 # 상태(초음파 거리, Wi-Fi 세기)는 dog_status.py처럼 모니터로 보낸다.
 #
-# 로봇견 안에 secrets.py(Wi-Fi 정보)를 저장해 두고, Thonny에서 아래 설정을 고친 뒤 Run을 누른다. 원래 main.py를 백업해 두기 전에는
+# 로봇견 안에 secrets.py(Wi-Fi 정보, 모니터 IP)를 저장해 두고, Thonny에서 아래 설정을 고친 뒤 Run을 누른다. 원래 main.py를 백업해 두기 전에는
 # 이 파일을 main.py로 덮어쓰지 말 것.
 #
 # 명령 형식 (UDP 9100):  {"cmd": "move", "v": 80, "turn": -20}   {"cmd": "stop"}
@@ -17,7 +17,10 @@ try:
     from secrets import WIFI_SSID, WIFI_PASS   # Wi-Fi 정보는 로봇견 안의 secrets.py에 둔다
 except ImportError:
     raise RuntimeError("로봇견에 secrets.py가 없습니다. firmware/secrets.py.example을 참고해 Thonny로 저장하세요.")
-MONITOR = ("192.168.219.103", 9000)   # server/app.py를 실행하는 컴퓨터의 IP
+try:
+    from secrets import MONITOR   # 모니터 서버(노트북) 주소도 장소마다 바뀌므로 secrets.py에 둔다
+except ImportError:
+    raise RuntimeError("secrets.py에 MONITOR = (\"노트북 IP\", 9000) 한 줄을 추가해 로봇견에 다시 저장하세요.")
 NAME = "B"                          # A, B 또는 C
 CMD_PORT = 9100
 

@@ -65,28 +65,28 @@ import os; os.listdir()
 
 ## 3. dog_cmd.py 실행
 
-### 노트북 IP 확인 (`MONITOR`에 넣을 값)
+### 노트북 IP 확인 (`secrets.py`의 `MONITOR`에 넣을 값)
 - macOS: 터미널에서 `ipconfig getifaddr en0`
 - Windows: `ipconfig` → Wi-Fi 어댑터의 IPv4 주소
 
 ### Wi-Fi 정보 저장 (처음 한 번만)
-Wi-Fi 이름과 비밀번호는 코드에 넣지 않고 **로봇견 안의 `secrets.py`** 에 따로 둡니다. 저장소가 공개되어 있어서 비밀번호가 커밋되는 것을 막기 위해서입니다.
+Wi-Fi 이름·비밀번호와 노트북 IP(`MONITOR`)는 코드에 넣지 않고 **로봇견 안의 `secrets.py`** 에 따로 둡니다. 비밀번호가 공개 저장소에 커밋되는 것을 막고, 장소를 옮길 때 코드를 고치지 않기 위해서입니다.
 
 1. 노트북에서 `firmware/secrets.py.example` 을 `firmware/secrets.py` 로 복사하고 값을 채웁니다. 이 파일은 `.gitignore`에 들어 있어 커밋되지 않습니다.
    ```python
-   WIFI_SSID = "YOUR_WIFI"       # 공유기 이름 (2.4 GHz)
-   WIFI_PASS = "YOUR_PASSWORD"   # 공유기 비밀번호
+   WIFI_SSID = "YOUR_WIFI"            # 공유기 이름 (2.4 GHz)
+   WIFI_PASS = "YOUR_PASSWORD"        # 공유기 비밀번호
+   MONITOR = ("192.168.0.11", 9000)   # 노트북 IP (위 "노트북 IP 확인")
    ```
 2. Thonny에서 `firmware/secrets.py` 를 열고 **파일 → 다른 이름으로 저장 → MicroPython 장치** 를 골라 이름을 `secrets.py` 로 저장합니다. (또는 View → Files 에서 파일을 오른쪽 클릭 → "Upload to /")
-3. 로봇견 파일 목록에 `secrets.py` 가 보이면 됩니다. 로봇견을 껐다 켜도 남아 있어서, Wi-Fi가 바뀔 때만 다시 저장하면 됩니다.
+3. 로봇견 파일 목록에 `secrets.py` 가 보이면 됩니다. 로봇견을 껐다 켜도 남아 있어서, **장소를 옮겨 Wi-Fi나 노트북 IP가 바뀔 때만** 다시 저장하면 됩니다.
 
 `secrets.py` 가 없으면 실행할 때 "로봇견에 secrets.py가 없습니다" 오류가 납니다. 로봇견이 여러 대면 각각에 저장합니다.
 
 ### 코드 준비
 1. Thonny에서 `firmware/dog_cmd.py` 를 엽니다.
-2. 위쪽 설정을 확인합니다. Wi-Fi 정보는 여기 없습니다.
+2. 위쪽 `NAME`만 확인합니다. Wi-Fi 정보와 노트북 IP는 `secrets.py`에 있습니다.
    ```python
-   MONITOR = ("192.168.0.11", 9000) # 노트북 IP
    NAME = "B"                       # A, B 또는 C
    ```
 

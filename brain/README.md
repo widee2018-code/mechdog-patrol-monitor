@@ -54,7 +54,7 @@ python brain/marker_follow.py --camera http://localhost:8000/api/camera/B/stream
 
 ## 4. 로봇견이 명령 받기
 
-1. ([Thonny 연결 방법](../docs/mechdog_thonny_guide.md) 참고) Thonny에서 `firmware/dog_cmd.py`를 열고 Wi-Fi, `MONITOR`, `NAME`을 고친 뒤 Run. 출력되는 로봇견 IP를 적어 둡니다. **실제 Wi-Fi 비밀번호를 넣은 상태로 커밋하지 마세요.**
+1. ([Thonny 연결 방법](../docs/mechdog_thonny_guide.md) 참고) 로봇견 안에 `secrets.py`(Wi-Fi, `MONITOR`)를 저장해 두고, Thonny에서 `firmware/dog_cmd.py`의 `NAME`을 확인한 뒤 Run. 출력되는 로봇견 IP를 적어 둡니다.
 2. 로봇견을 들어 올린 상태(다리가 허공)에서 키보드 조종으로 확인합니다.
    ```bash
    python brain/teleop.py --dog 192.168.0.31
