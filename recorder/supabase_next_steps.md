@@ -1,6 +1,6 @@
 # Supabase — 지금 상태
 
-마지막 확인: 2026-11-12. 프로젝트 `mechdog_patrol_monitor` (도쿄 리전).
+마지막 확인: 2026-11-13. 프로젝트 `mechdog_patrol_monitor` (도쿄 리전).
 **데이터베이스 구축은 완료됐다.** 2절은 필요할 때 참고하는 선택 사항이다.
 
 ## 1. 지금 되는 것 (확인 완료)
@@ -12,8 +12,26 @@
 | 이벤트 | 온라인/오프라인, 명령 대기, "카메라 실시간 영상 연결됨"이 `event` 행으로 기록된다. |
 | 증거 사진 | `evidence: true`인 `camera` 메시지의 JPEG가 Storage `evidence` 버킷(비공개)에 올라가고, 행에는 `storage_path`만 남는다(수동 테스트로 확인). |
 | 보안 점검 | 경고 1건(INFO): RLS는 켜져 있고 정책이 없다. 쓰기는 recorder(service_role)만 하므로 의도한 설정이다. |
+| 증거 버킷 RLS (이슈 #19) | 확인 완료(아래 표). 지금 상태가 맞다. |
 
-코드와 설명서는 `yujeong` 브랜치의 `recorder/`, `recorder/README.md`에 있다.
+코드와 설명서는 `recorder/`, `recorder/README.md`에 있다.
+
+### 증거 버킷 RLS 확인 결과 (2026-11-13)
+
+설정: `evidence` 버킷은 비공개(`public=false`), `storage.objects`와 `telemetry_log` 모두 RLS 켜짐, 정책은 하나도 없음(기본이 전부 거부).
+
+`anon` 키로 실제로 접근해 본 결과:
+
+| 시도 | 결과 |
+|---|---|
+| `telemetry_log` 읽기 | 200, 빈 목록 `[]` (행이 있어도 보이지 않음) |
+| `telemetry_log` 쓰기 | 401, RLS 위반 |
+| `evidence` 파일 목록 | 200, 빈 목록 `[]` |
+| 증거 사진 내려받기 (인증 경로 / 공개 경로) | 404 / 404 |
+| `evidence`에 파일 올리기 | 403 |
+
+- `anon`, `authenticated` 역할에 테이블 권한(GRANT)이 넓게 부여돼 있다(Supabase 기본값). 지금은 RLS가 막아 주지만 **RLS가 유일한 방어선**이다. 정책을 추가할 때 `using (true)`처럼 넓게 열지 말고, 필요한 `select` 하나만 조건을 좁혀서 추가한다.
+- 브라우저에 증거 사진을 보여야 하면(이슈 #20) 버킷을 공개로 바꾸지 말고 서버가 만든 서명된 URL(signed URL)을 쓴다. 사진에 사람이나 장소가 찍힐 수 있다.
 
 ## 2. 나중에 필요할 때 (DB 구축은 끝났고, 아래는 선택 사항)
 
