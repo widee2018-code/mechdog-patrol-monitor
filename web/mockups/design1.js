@@ -59,8 +59,11 @@
 
   // ── 사이렌 (#6) ─────────────────────────────────────────────
   // 알리는 방법 4가지: 사이렌 소리 · 경광등 그림 깜빡임 · 경보 배너(위 banner) · 브라우저 알림 팝업
-  // 울림/멈춤 시점은 #6 ③④ 결정 전 임시값: 포위(CONTAIN) 시작 때 울림 → "확인" 버튼 또는 REGROUP에서 멈춤
-  const RING_MISSIONS = new Set(["CONTAIN", "HANDOVER"]);
+  // 울림: 범인 확인(CONFIRM) 단계가 시작될 때 (팀 결정, #6)
+  // 멈춤: "확인" 버튼 또는 REGROUP 시작 중 먼저 오는 것 · 비상 정지 · 오탐으로 탐사 복귀
+  // 이 시안의 가짜 시나리오는 "의심·확인"(SUSPECT)이 한 단계라서, 그 단계의 뒤쪽 절반을 확인 단계로 봄
+  const RING_MISSIONS = new Set(["CONFIRM", "CONTAIN", "HANDOVER"]);
+  const inConfirm = () => RING_MISSIONS.has(S.mission) || (S.mission === "SUSPECT" && S.pt >= S.dur * 0.5);
   const siren = { armed: false, ringing: false, ackedId: null, notifiedId: null, ctx: null, osc: null, gain: null, timer: null,
     ringId: null, ringAt: 0, ringArmed: false };
 
@@ -113,13 +116,14 @@
 
   function updateSiren() {
     const id = S.target && S.target.id;
-    const ringing = RING_MISSIONS.has(S.mission) && !S.estop && id != null && siren.ackedId !== id;
+    const ringing = inConfirm() && !S.estop && id != null && siren.ackedId !== id;
     // 울림 시작 / 확인 없이 멈춤 기록
     if (ringing && siren.ringId !== id) {
       siren.ringId = id; siren.ringAt = Date.now();
-      sirenLog("alert", `🚨 사이렌 울림 · 사건 #${id} · 포위 시작` + (siren.armed ? "" : " (알림 꺼져 있어 소리 · 팝업 안 나옴)"));
+      sirenLog("alert", `🚨 사이렌 울림 · 사건 #${id} · 범인 확인 단계 시작` + (siren.armed ? "" : " (알림 꺼져 있어 소리 · 팝업 안 나옴)"));
     } else if (!ringing && siren.ringId != null) {
-      const why = S.estop ? "비상 정지" : S.mission === "REGROUP" ? "줄 다시 서기(REGROUP) 시작" : S.mission;
+      const why = S.estop ? "비상 정지" : S.mission === "REGROUP" ? "줄 다시 서기(REGROUP) 시작"
+        : (S.mission === "EXPLORE" || S.mission === "PATROL") ? "오탐 · 탐사로 복귀" : S.mission;
       sirenLog("warn", `⚠ 사이렌 자동 멈춤 · 사건 #${siren.ringId} · ${why} · 아무도 확인하지 않음 (울린 시간 ${since(siren.ringAt)})`);
       siren.ringId = null;
     }
