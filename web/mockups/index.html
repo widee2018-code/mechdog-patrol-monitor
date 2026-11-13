@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>대시보드 재설계 · 진단과 시안</title>
+<title>대시보드 재설계 · 진단과 1안</title>
 <style>
 :root { --bg: #f6f7f9; --card: #fff; --line: #e4e7ec; --text: #1a2029; --muted: #667085; --accent: #2f7bf5; --alert: #e0453c; --ok: #12a36b;
   --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif; }
@@ -36,11 +36,11 @@ code { background: #eef1f5; padding: 1px 6px; border-radius: 5px; font-size: 13p
 </head>
 <body>
 <div class="wrap">
-  <h1>웹 대시보드 재설계 · 진단과 시안 3개</h1>
+  <h1>웹 대시보드 재설계 · 진단과 선택한 1안</h1>
   <p class="lead">지금 대시보드(<code>web/index.html</code>)를 살펴본 결과와, 행렬 순찰 시나리오에 맞춘 디자인 시안입니다.
     시안은 가짜 데이터로 <b>지도 만들기 → 순찰 → 의심 → 포위 → 인계 → 줄 다시 서기</b>를 약 1분 주기로 반복하니, 1~2분 지켜보면서 비교해 보세요.</p>
 
-  <h2>디자인 시안</h2>
+  <h2>디자인 시안 (팀 회의에서 1안으로 결정)</h2>
   <div class="cards">
     <a class="d" href="design1.html">
       <div class="sw" style="background:linear-gradient(135deg,#0a0e14 55%,#4da3ff 55% 70%,#3ecf8e 70% 85%,#f5b942 85%)"></div>
@@ -49,21 +49,8 @@ code { background: #eef1f5; padding: 1px 6px; border-radius: 5px; font-size: 13p
       <p><b style="font-size:13px">어울리는 곳:</b> 프로젝터 발표, 관제 느낌 연출</p>
       <span class="go">열어 보기 →</span>
     </a>
-    <a class="d" href="design2.html">
-      <div class="sw" style="background:linear-gradient(135deg,#f3f5f8 55%,#2f7bf5 55% 70%,#12a36b 70% 85%,#d99a0b 85%);border:1px solid #e3e8ef"></div>
-      <span class="no">2안</span><b>카드형</b>
-      <p>밝은 화면, 로봇견마다 카드 하나(카메라 + 큰 숫자). 아래에 지도, 증거 사진, 이벤트. 휴대폰에서도 보기 좋음.</p>
-      <p><b style="font-size:13px">어울리는 곳:</b> 개발 중 점검, 보고서 캡처</p>
-      <span class="go">열어 보기 →</span>
-    </a>
-    <a class="d" href="design3.html">
-      <div class="sw" style="background:linear-gradient(90deg,#f6f5f1 50%,#120d0e 50%);border:1px solid #e6e3dc"></div>
-      <span class="no">3안</span><b>사건 중심형</b>
-      <p>평소엔 "순찰 중 · 이상 없음" 한 문장과 지도만. 사건이 나면 화면 전체가 어두운 사건 화면(카메라, 포위 배치, 진행 단계, 인계 버튼)으로 바뀜.</p>
-      <p><b style="font-size:13px">어울리는 곳:</b> 시연 스토리텔링, 실제 경비 서비스 느낌</p>
-      <span class="go">열어 보기 →</span>
-    </a>
   </div>
+  <p class="good"><b>2안(카드형) · 3안(사건 중심형)은 정리했습니다.</b> 팀 회의에서 1안으로 정해서 파일을 지웠고, 어떤 시안이었는지는 <code>DESIGN_LOG.md</code> 2절과 7절에 남겨 두었습니다. 예전 파일은 git 기록(커밋 938a5c5)에서 다시 꺼낼 수 있습니다.</p>
 
   <h2>지금 대시보드 진단</h2>
   <table>
@@ -102,7 +89,7 @@ code { background: #eef1f5; padding: 1px 6px; border-radius: 5px; font-size: 13p
 
   <h2>다음 단계</h2>
   <ol class="next">
-    <li>조원들과 시안을 보고 고르기 (섞어도 됨. 예: 1안 배치 + 3안 사건 화면)</li>
+    <li>✅ 조원들과 시안 고르기 → <b>1안(관제실형)</b>으로 결정</li>
     <li>고른 안을 <code>web/index.html</code>에 적용하고 가짜 데이터 대신 실제 WebSocket 메시지 연결</li>
     <li>서버에 추가: 카메라 B·C, 임무 단계(<code>mission</code>) 새 이름, 전체 정지 버튼 → 로봇견에 <code>{"cmd":"stop"}</code></li>
     <li>시뮬레이터(<code>server/simulator.py</code>)를 새 시나리오로 바꿔서 시험 → 실제 개 1마리로 확인</li>

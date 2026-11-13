@@ -655,7 +655,7 @@
     el.setAttribute("aria-label", "시안 이동");
     el.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:50;display:flex;gap:4px;padding:5px;border-radius:999px;" +
       "background:rgba(20,24,32,.88);box-shadow:0 4px 18px rgba(0,0,0,.3);font:600 12px " + FONT;
-    const items = [["index.html", "진단"], ["design1.html", "1안"], ["design2.html", "2안"], ["design3.html", "3안"]];
+    const items = [["index.html", "진단"], ["design1.html", "1안"]];
     el.innerHTML = items.map(([href, label]) =>
       `<a href="${href}" style="padding:6px 12px;border-radius:999px;text-decoration:none;color:${href === current ? "#0b0f15" : "#d6dde8"};` +
       `background:${href === current ? "#ffffff" : "transparent"}">${label}</a>`).join("");
