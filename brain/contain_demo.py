@@ -29,6 +29,15 @@ MechDog는 자기 위치를 모르므로, 개마다 "회전값 T로 초당 몇 �
 실제 실행:
     python brain/contain_demo.py run --dog 192.168.0.19 --name B --monitor 127.0.0.1
     python brain/contain_demo.py run --dog 192.168.0.19 --name C   # C는 왼쪽으로 크게
+
+두 마리 함께 (이름·IP·카메라를 쉼표로): Enter 한 번에 B·C가 동시에 포위하고,
+재정렬은 B 먼저 끝난 뒤 C (C는 B 등의 마커를 보고 정렬하므로).
+    python brain/contain_demo.py run --name B,C --dog <B IP>,<C IP> --monitor 127.0.0.1 \
+        --camera http://localhost:8000/api/camera/B/stream,http://localhost:8000/api/camera/C/stream
+
+개마다 경로를 다듬은 값은 --save로 calibration.json에 저장해 두면 다음부터(두 마리 모드 포함) 그 값을 쓴다:
+    python brain/contain_demo.py run --dog <C IP> --name C --out 0.5 --forward 0.4 --turn-in 95 --save
+설정 우선순위: 명령줄 > calibration.json의 그 개 값 > 이름별 기본값.
 """
 import argparse
 import json
@@ -49,8 +58,8 @@ CALIB_FILE = Path(__file__).resolve().parent / "calibration.json"
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="포위와 재정렬 연습 (추측 항법)")
     p.add_argument("mode", choices=("calibrate", "run"), help="calibrate: 회전·직진 속도 재기 / run: 포위 → 재정렬")
-    p.add_argument("--dog", help="로봇견 IP. 없으면 명령을 보내지 않는 연습 모드")
-    p.add_argument("--name", default="B", help="로봇견 이름 (보정값 저장 키, 모니터 표시용)")
+    p.add_argument("--dog", help="로봇견 IP (두 마리면 쉼표로). 없으면 명령을 보내지 않는 연습 모드")
+    p.add_argument("--name", default="B", help="로봇견 이름 (두 마리면 B,C). 보정값 저장 키, 모니터 표시용")
     p.add_argument("--side", choices=("left", "right", "both"),
                    help="포위 방향. 기본: B는 right(침입자 둘레 시계 반대), C는 left(시계). both = 양쪽 차례로")
     p.add_argument("--slot", type=int, help="줄에서 A 뒤 몇 번째인지. 기본: B는 1, C는 2")
@@ -64,34 +73,59 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--turn", type=int, default=40, help="제자리 회전 값 (보정할 때와 같은 값을 써야 함)")
     p.add_argument("--path", choices=("lines", "arc"), default="lines",
                    help="lines: 옆으로 꺾어 직진 → 앞으로 직진 (기본) / arc: 곡선 하나 (calibrate --arc 필요)")
-    p.add_argument("--turn-in", type=float, default=100.0,
+    p.add_argument("--turn-in", type=float,
                    help="포위 3번째 동작(옆으로 빠진 뒤 다시 앞을 보는 회전) 각도. 계산상 90°지만 실측에 맞춰 조정 (B 실측 2026-11-13: 100)")
-    p.add_argument("--turn-back", type=float, default=190.0,
+    p.add_argument("--turn-back", type=float,
                    help="복귀 첫 동작(뒤로 도는 회전) 각도. 계산상 180°지만 실측에 맞춰 조정 (B 실측 2026-11-13: 190)")
     p.add_argument("--face", action="store_true", help="도착 후 제자리에서 침입자 쪽으로 돈다 (기본: 앞을 보고 멈춤)")
     p.add_argument("--arc-turn", type=int, default=20,
                    help="걸으면서 돌 때(곡선) 보정에 쓰는 회전 값. 경로에 맞게 이 값에 비례해 조절한다")
     p.add_argument("--arc", action="store_true", help="calibrate에서 곡선(걸으며 회전) 보정만 한다")
-    p.add_argument("--turn-sign", type=int, choices=(1, -1), default=-1,
-                   help="MechDog B 실측(2026-11-12)은 -1. 보정할 때 반대로 돌면 바꾼다")
+    p.add_argument("--turn-sign", type=int, choices=(1, -1),
+                   help="회전 방향 부호. 기본: 보정할 때 저장한 값, 없으면 -1 (MechDog B 실측)")
     p.add_argument("--deg-per-sec", type=float, help="보정값 직접 입력 (calibration.json보다 우선)")
     p.add_argument("--m-per-sec", type=float, help="보정값 직접 입력 (calibration.json보다 우선)")
     p.add_argument("--intruder", type=float, nargs=2, default=(3.5, 2.0), metavar=("X", "Y"),
                    help="대시보드 지도에 그릴 침입자 위치 (web/arena.json 좌표, m)")
     p.add_argument("--monitor", help="모니터 서버 IP. 주면 상태, 이벤트, 추측 위치를 대시보드로 보낸다")
-    p.add_argument("--camera", help="복귀 끝에 앞 개 마커를 화면 가운데로 맞출 카메라 (marker_follow.py와 같은 형식)")
+    p.add_argument("--camera", help="복귀 끝에 앞 개 마커를 화면 가운데로 맞출 카메라 (두 마리면 쉼표로)")
     p.add_argument("--marker-id", type=int, help="복귀 끝에 맞출 앞 개 마커 ID. 기본: B는 1, C는 2")
     p.add_argument("--center-max", type=float, default=15.0, help="마커 정렬 때 복귀 방향에서 최대 몇 도까지 돌지")
     p.add_argument("--center-tol", type=float, default=0.1,
                    help="마커가 가운데로부터 이 범위(화면 반폭 대비, 0.1 = 약 3°) 안이면 정렬 완료")
-    a = p.parse_args()
-    is_c = a.name.upper() == "C"
-    a.side = a.side or ("left" if is_c else "right")
-    a.forward = a.forward if a.forward is not None else (0.6 if is_c else 0.2)
-    a.out = a.out if a.out is not None else (0.6 if is_c else 0.2)
-    a.slot = a.slot or (2 if is_c else 1)
-    a.marker_id = a.marker_id if a.marker_id is not None else (2 if is_c else 1)
-    return a
+    p.add_argument("--save", action="store_true",
+                   help="run 할 때 이 개의 경로 설정(--side, --out, --forward, --turn-in, --turn-back)을 calibration.json에 저장")
+    return p.parse_args()
+
+
+# 개마다 다를 수 있는 경로 설정과 이름별 기본값 (B는 2026-11-13 실측으로 다듬은 값)
+PATH_KEYS = ("side", "out", "forward", "turn_in", "turn_back")
+DEFAULTS = {
+    "B": {"side": "right", "out": 0.2, "forward": 0.2, "turn_in": 100.0, "turn_back": 190.0, "slot": 1, "marker_id": 1},
+    "C": {"side": "left", "out": 0.6, "forward": 0.6, "turn_in": 100.0, "turn_back": 190.0, "slot": 2, "marker_id": 2},
+}
+
+
+def split(value: str | None, n: int) -> list:
+    """쉼표로 나눈 값을 n개로 (모자라면 None)."""
+    items = [x.strip() or None for x in value.split(",")] if value else []
+    if len(items) > n:
+        sys.exit(f"값이 {n}개보다 많습니다: {value}")
+    return items + [None] * (n - len(items))
+
+
+def dog_args(a: argparse.Namespace, name: str, dog: str | None, camera: str | None) -> argparse.Namespace:
+    """한 마리 몫의 설정. 명령줄 > calibration.json의 그 개 값 > 이름별 기본값."""
+    d = argparse.Namespace(**vars(a))
+    d.name, d.dog, d.camera = name, dog, camera
+    c = json.loads(CALIB_FILE.read_text()).get(name, {}) if CALIB_FILE.exists() else {}
+    saved, base = c.get("path", {}), DEFAULTS.get(name.upper(), DEFAULTS["B"])
+    for key in PATH_KEYS + ("slot", "marker_id"):
+        if getattr(a, key) is None:
+            setattr(d, key, saved.get(key, base[key]))
+    if a.turn_sign is None:
+        d.turn_sign = c.get("turn_sign", -1)
+    return d
 
 
 # ---------------------------------------------------------------- 명령 보내기
@@ -138,7 +172,7 @@ class Link:
             self.sock.sendto(json.dumps(msg).encode(), (self.a.monitor, MONITOR_PORT))
 
     def event(self, text: str, level: str = "info") -> None:
-        print(f"[{time.strftime('%H:%M:%S')}] {text}")
+        print(f"[{time.strftime('%H:%M:%S')}] {self.a.name} | {text}")
         self.monitor({"type": "event", "from": self.a.name, "level": level, "text": f"Dog {self.a.name}: {text}"})
 
 
@@ -179,10 +213,10 @@ def calibrate(a: argparse.Namespace, link: Link) -> None:
     link.stop()
     m_per_sec = 1.0 / dt
     data = json.loads(CALIB_FILE.read_text()) if CALIB_FILE.exists() else {}
-    data[a.name] = {"turn": a.turn, "deg_per_sec": round(sum(rates) / 2, 1),
+    data.setdefault(a.name, {}).update({"turn": a.turn, "deg_per_sec": round(sum(rates) / 2, 1),
                     "deg_per_sec_left": round(rates[0], 1), "deg_per_sec_right": round(rates[1], 1),
                     "speed": a.speed, "m_per_sec": round(m_per_sec, 3),
-                    "turn_sign": a.turn_sign, "date": time.strftime("%Y-%m-%d")}
+                    "turn_sign": a.turn_sign, "date": time.strftime("%Y-%m-%d")})   # 저장해 둔 경로 설정(path)은 남긴다
     CALIB_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     print(f"\n저장: {CALIB_FILE.name} → {a.name} {data[a.name]}")
     if abs(rates[0] - rates[1]) / max(rates) > 0.2:
@@ -435,61 +469,95 @@ def center_marker(a, link: Link, rates: dict, cam: Camera) -> bool:
 
 # ---------------------------------------------------------------- 실행
 
-def run(a: argparse.Namespace, link: Link) -> None:
-    rates = load_rates(a)
-    sides = ["left", "right"] if a.side == "both" else [a.side]
-    mode = f"로봇견 {a.dog}" if a.dog else "연습 모드 (명령 안 보냄)"
-    print(f"Dog {a.name} 포위 연습 · {mode} · {' → '.join(f'{KO[x]} ({AROUND[x]})' for x in sides)} · "
-          f"앞으로 {a.forward} m, 옆으로 {a.out} m · 줄 {a.slot}번째")
-    if not (rates["ok"] and (rates["arc_ok"] or a.path == "lines")):
-        missing = "calibrate" if not rates["ok"] else "calibrate --arc"
-        if a.dog:
-            sys.exit(f"Dog {a.name} 보정값이 없습니다. 먼저: python brain/contain_demo.py {missing} --dog {a.dog} --name {a.name}")
-        print(f"보정값이 없어 어림값으로 계산합니다 ({missing} 필요).")
-    for side in sides:
-        contain, regroup, start, target = plan(a, side, rates)
-        print(f"\n[{KO[side]}] 포위: {describe(contain, rates)}")
-        print(f"[{KO[side]}] 복귀: {describe(regroup, rates)}")
-        print(f"[{KO[side]}] 출발 ({start[0]:.2f}, {start[1]:.2f}) → 목표 ({target[0]:.2f}, {target[1]:.2f}) m (침입자 기준)\n")
-        contain_once(a, link, rates, side, contain, regroup, start, target)
+def run(a: argparse.Namespace, dogs: list) -> None:
+    """dogs: (설정, Link) 목록. 한 마리면 기존처럼, 여러 마리면 동시에 포위하고 줄 순서대로 재정렬한다."""
+    ready = []
+    for d, link in dogs:
+        rates = load_rates(d)
+        mode = f"로봇견 {d.dog}" if d.dog else "연습 모드 (명령 안 보냄)"
+        print(f"\nDog {d.name} · {mode} · {KO[d.side] if d.side in KO else d.side} ({AROUND.get(d.side, '양쪽')}) · "
+              f"옆으로 {d.out} m, 앞으로 {d.forward} m · 줄 {d.slot}번째 · turn-sign {d.turn_sign}"
+              f"{' · 카메라 정렬 마커 ' + str(d.marker_id) if d.camera else ''}")
+        if not (rates["ok"] and (rates["arc_ok"] or d.path == "lines")):
+            missing = "calibrate" if not rates["ok"] else "calibrate --arc"
+            if d.dog:
+                sys.exit(f"Dog {d.name} 보정값이 없습니다. 먼저: python brain/contain_demo.py {missing} --dog {d.dog} --name {d.name}")
+            print(f"  보정값이 없어 어림값으로 계산합니다 ({missing} 필요).")
+        if a.save:
+            save_path(d)
+        ready.append((d, link, rates))
+    if len(ready) == 1 and ready[0][0].side == "both":
+        d, link, rates = ready[0]
+        for side in ("left", "right"):
+            d.side = side
+            contain_together(a, [(d, link, rates)])
+        return
+    contain_together(a, ready)
+
+
+def save_path(d: argparse.Namespace) -> None:
+    data = json.loads(CALIB_FILE.read_text()) if CALIB_FILE.exists() else {}
+    data.setdefault(d.name, {})["path"] = {k: getattr(d, k) for k in PATH_KEYS}
+    CALIB_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    print(f"  저장: {CALIB_FILE.name} → {d.name} path {data[d.name]['path']}")
 
 
 KO = {"left": "왼쪽", "right": "오른쪽"}
 AROUND = {"left": "침입자 둘레 시계 방향", "right": "침입자 둘레 시계 반대 방향"}
 
 
-def contain_once(a, link: Link, rates: dict, side: str, contain: list, regroup: list, start: tuple, target: tuple) -> None:
-    pose = Pose(a, link, *start, 0.0)
+def contain_together(a: argparse.Namespace, dogs: list) -> None:
+    """STANDBY → (Enter) 모두 동시에 포위 → HOLD → (Enter) 줄 앞쪽 개부터 하나씩 재정렬 → STANDBY."""
+    plans = []
+    for d, link, rates in dogs:
+        contain, regroup, start, target = plan(d, d.side, rates)
+        print(f"\n[{d.name}] 포위: {describe(contain, rates)}")
+        print(f"[{d.name}] 복귀: {describe(regroup, rates)}")
+        plans.append((d, link, rates, contain, regroup, Pose(d, link, *start, 0.0), target))
+    names = ", ".join(d.name for d, *_ in dogs)
+    first = dogs[0][1]   # 공통 상태(mission, intruder)는 한 번만 보낸다
     ix, iy = a.intruder
-    pose.send("standby")
-    link.monitor({"type": "dog", "from": "A", "x": ix - a.radius, "y": iy, "heading_deg": 0, "state": "tower"})
-    link.monitor({"type": "mission", "state": "STANDBY"})
-    link.event("STANDBY: 일렬 대기")
-    input(f"Enter = 침입자 발견, {KO[side]} 포위 시작 (Ctrl+C = 정지)")
+    for d, link, rates, contain, regroup, pose, target in plans:
+        pose.send("standby")
+    first.monitor({"type": "dog", "from": "A", "x": ix - a.radius, "y": iy, "heading_deg": 0, "state": "tower"})
+    first.monitor({"type": "mission", "state": "STANDBY"})
+    first.event(f"STANDBY: {names} 일렬 대기")
+    input(f"\nEnter = 침입자 발견, {names} 포위 시작 (Ctrl+C = 모두 정지)")
 
-    link.monitor({"type": "intruder", "x": ix, "y": iy, "confidence": 1.0})
-    link.monitor({"type": "mission", "state": "CONTAIN"})
-    link.event(f"CONTAIN: {KO[side]} {a.out} m, 앞 {a.forward} m로 이동 ({AROUND[side]})", "alert")
-    execute(a, link, pose, contain, rates, "contain")
-    link.stop()
+    first.monitor({"type": "intruder", "x": ix, "y": iy, "confidence": 1.0})
+    first.monitor({"type": "mission", "state": "CONTAIN"})
+    for d, link, *_ in plans:
+        link.event(f"CONTAIN: {KO[d.side]} {d.out} m, 앞 {d.forward} m로 이동 ({AROUND[d.side]})", "alert")
+    threads = [threading.Thread(target=execute, args=(d, link, pose, contain, rates, "contain"), daemon=True)
+               for d, link, rates, contain, regroup, pose, target in plans]
+    for t in threads:
+        t.start()
+    for t in threads:
+        while t.is_alive():   # join(timeout)으로 기다려야 Ctrl+C가 바로 먹는다
+            t.join(0.2)
+    for d, link, *_ in plans:
+        link.stop()
 
-    link.monitor({"type": "mission", "state": "HANDOVER"})
-    link.event("HOLD: 포위 완료, 확인 후 재정렬 명령 대기", "alert")
-    link.cmd = None   # 명령을 멈춰 teleop.py로 조정할 수 있게 (로봇견은 1초 뒤 스스로 정지)
+    first.monitor({"type": "mission", "state": "HANDOVER"})
+    first.event(f"HOLD: {names} 포위 완료, 확인 후 재정렬 명령 대기", "alert")
+    for d, link, *_ in plans:
+        link.cmd = None   # 명령을 멈춰 teleop.py로 조정할 수 있게 (로봇견은 1초 뒤 스스로 정지)
     input("확인했으면 Enter = 재정렬 (필요하면 그 전에 teleop.py로 위치 조정 후 끄기)")
 
-    link.cmd = (0, 0)
-    link.monitor({"type": "mission", "state": "REGROUP"})
-    link.event("REGROUP: 줄 자리로 복귀")
-    pose.x, pose.y = target   # 조정했더라도 계산상 목표 지점에서 출발
-    execute(a, link, pose, regroup, rates, "regroup")
-    link.stop()
-    if a.camera:
-        link.event(f"복귀 경로 끝: 마커 {a.marker_id}로 방향 맞추기")
-        center_marker(a, link, rates, Camera(a.camera, a.marker_id))
+    for d, link, *_ in plans:
+        link.cmd = (0, 0)   # 차례를 기다리는 개는 제자리에 세워 둔다
+    first.monitor({"type": "mission", "state": "REGROUP"})
+    for d, link, rates, contain, regroup, pose, target in sorted(plans, key=lambda x: x[0].slot):
+        link.event(f"REGROUP: {d.name} 줄 자리로 복귀")
+        pose.x, pose.y = target   # 조정했더라도 계산상 목표 지점에서 출발
+        execute(d, link, pose, regroup, rates, "regroup")
         link.stop()
-    link.monitor({"type": "mission", "state": "STANDBY"})
-    link.event("복귀 완료, 다시 일렬 대기")
+        if d.camera:
+            link.event(f"복귀 경로 끝: 마커 {d.marker_id}로 방향 맞추기")
+            center_marker(d, link, rates, Camera(d.camera, d.marker_id))
+            link.stop()
+    first.monitor({"type": "mission", "state": "STANDBY"})
+    first.event(f"복귀 완료, {names} 다시 일렬 대기")
 
 
 def plan_face(target: tuple) -> float:
@@ -498,14 +566,19 @@ def plan_face(target: tuple) -> float:
 
 def main() -> None:
     a = parse_args()
-    link = Link(a)
+    names = [x.strip() for x in a.name.split(",") if x.strip()]
+    ips, cams = split(a.dog, len(names)), split(a.camera, len(names))
+    dogs = [(d, Link(d)) for d in (dog_args(a, n, ip, cam) for n, ip, cam in zip(names, ips, cams))]
+    if a.mode == "calibrate" and len(dogs) != 1:
+        sys.exit("보정은 한 마리씩 합니다: --name B --dog <IP>")
     try:
-        calibrate(a, link) if a.mode == "calibrate" else run(a, link)
+        calibrate(*dogs[0]) if a.mode == "calibrate" else run(a, dogs)
     except (KeyboardInterrupt, EOFError):
         print("\n중단")
     finally:
-        link.stop()
-        if a.dog:
+        for d, link in dogs:
+            link.stop()
+        if any(d.dog for d, _ in dogs):
             print("정지 명령 전송")
 
 
