@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시안 2 · 카드형</title>
+<style>
+:root {
+  --bg: #f3f5f8; --card: #ffffff; --line: #e3e8ef; --text: #18202b; --muted: #667085; --soft: #f7f9fc;
+  --a: #2f7bf5; --b: #12a36b; --c: #d99a0b; --ok: #12a36b; --warn: #d99a0b; --alert: #e0453c; --accent: #2f7bf5;
+  --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+button { font: inherit; cursor: pointer; }
+
+.bar { display: flex; align-items: center; gap: 20px; padding: 14px 24px; background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
+.logo { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.logo .mark { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; }
+.logo b { display: block; font-size: 16px; }
+.logo small { color: var(--muted); font-size: 12px; }
+
+.prog { flex: 1; display: flex; list-style: none; margin: 0; padding: 0; justify-content: center; }
+.prog li { display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; flex: 0 1 92px; font-size: 12px; color: var(--muted); font-weight: 600; text-align: center; }
+.prog li::before { content: ""; position: absolute; top: 11px; left: calc(-50% + 14px); right: calc(50% + 14px); height: 2px; background: var(--line); }
+.prog li:first-child::before { display: none; }
+.prog .n { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); background: var(--card); display: grid; place-items: center; font-size: 11px; position: relative; }
+.prog li.now { color: var(--text); }
+.prog li.now .n { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 0 4px rgba(47,123,245,.18); }
+.prog li.now.hot .n { background: var(--alert); border-color: var(--alert); box-shadow: 0 0 0 4px rgba(224,69,60,.2); }
+.prog li.now.hot { color: var(--alert); }
+
+.btn { border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 9px 16px; border-radius: 10px; font-weight: 600; white-space: nowrap; }
+.btn:hover { background: var(--soft); }
+.btn.danger { background: var(--alert); border-color: var(--alert); color: #fff; }
+
+.wrap { max-width: 1400px; margin: 0 auto; padding: 18px 24px 80px; display: grid; gap: 18px; }
+.banner { padding: 14px 18px; border-radius: 14px; display: flex; align-items: center; gap: 14px; font-weight: 600; font-size: 15px; }
+.banner[hidden] { display: none; }
+.banner .ico { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
+.banner.warn { background: #fff7e6; border: 1px solid #f3d38c; color: #8a5a00; }
+.banner.warn .ico { background: var(--warn); }
+.banner.alert { background: #fdecea; border: 1px solid #f2b8b3; color: #9b2119; }
+.banner.alert .ico { background: var(--alert); }
+.banner.stop { background: var(--alert); color: #fff; }
+.banner.stop .ico { background: rgba(255,255,255,.25); }
+.banner .btn { margin-left: auto; }
+
+.dogs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.dog { overflow: hidden; }
+.dog .cam { position: relative; aspect-ratio: 4 / 3; background: #222; }
+.dog .cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dog .cam .over { position: absolute; left: 10px; top: 10px; display: flex; gap: 6px; }
+.pill { padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,.92); color: var(--text); }
+.pill.live { color: var(--alert); }
+.dog .body { padding: 14px 16px 16px; }
+.dog .head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.dog .badge { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 16px; }
+.dog .head b { display: block; font-size: 15px; }
+.dog .head small { color: var(--muted); font-size: 12px; }
+.state { margin-left: auto; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--soft); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.state.walk { background: #eaf2ff; color: var(--accent); border-color: #cfe0fd; }
+.state.watch { background: #fdecea; color: var(--alert); border-color: #f6c9c4; }
+.state.stop { background: var(--alert); color: #fff; border-color: var(--alert); }
+.metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.m { background: var(--soft); border-radius: 10px; padding: 8px 10px; }
+.m span { display: block; font-size: 11.5px; color: var(--muted); }
+.m b { font-size: 18px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.m b small { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 2px; }
+.m .bar2 { height: 5px; background: #e4e9f0; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.m .bar2 i { display: block; height: 100%; background: var(--ok); }
+.m.warn b { color: var(--warn); } .m.warn .bar2 i { background: var(--warn); }
+.m.alert b { color: var(--alert); } .m.alert .bar2 i { background: var(--alert); }
+.follow { margin-top: 10px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.follow i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+.follow.off i { background: var(--warn); }
+
+.row2 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.sec { padding: 16px 18px; }
+.sec h2 { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; gap: 10px; }
+.sec h2 .meta { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 500; }
+#map { width: 100%; aspect-ratio: 6.6 / 4.6; display: block; border-radius: 12px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+.side { display: grid; gap: 18px; }
+.ev { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ev figure { margin: 0; }
+.ev img { width: 100%; border-radius: 8px; display: block; aspect-ratio: 4 / 3; object-fit: cover; }
+.ev figcaption { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.ev:empty::before { content: "아직 증거 사진이 없습니다. 포위가 끝나면 3장이 자동으로 저장됩니다."; grid-column: 1 / -1; color: var(--muted); font-size: 13px; padding: 14px; background: var(--soft); border-radius: 10px; }
+.log { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
+.log li { display: grid; grid-template-columns: 8px 1fr auto; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.log li:last-child { border-bottom: 0; }
+.log .lv { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.log .lv.warn { background: var(--warn); } .log .lv.alert { background: var(--alert); }
+.log time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1100px) {
+  .bar { flex-wrap: wrap; }
+  .prog { order: 3; flex-basis: 100%; }
+  .row2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .bar { padding: 12px 16px; gap: 12px; }
+  .logo small { display: none; }
+  .prog li { font-size: 0; }
+  .prog li.now { font-size: 12px; }
+  .wrap { padding: 14px 16px 80px; }
+  .dogs { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="logo"><span class="mark">M</span><div><b>MechDog 순찰 모니터</b><small>시안 2 · 로봇견 카드형</small></div></div>
+  <ol class="prog" id="prog"></ol>
+  <button class="btn" id="pause">일시정지</button>
+  <button class="btn danger" id="estop">전체 정지</button>
+</header>
+
+<div class="wrap">
+  <div class="banner" id="banner" hidden></div>
+  <section class="dogs" id="dogs"></section>
+  <section class="row2">
+    <div class="card sec">
+      <h2>공간 지도 <span class="meta" id="mapmeta"></span></h2>
+      <canvas id="map"></canvas>
+      <div class="legend">
+        <span><i style="background:#0aa5c9"></i>LiDAR 점</span>
+        <span><i style="background:var(--alert)"></i>침입자 (점선 = 포위 반경 0.6 m)</span>
+        <span><i style="background:#98a2b3"></i>알림 완료 물체</span>
+        <span><i style="background:#d5dce6"></i>아직 모르는 곳</span>
+      </div>
+    </div>
+    <div class="side">
+      <div class="card sec"><h2>증거 사진 <span class="meta" id="evmeta">0장</span></h2><div class="ev" id="ev"></div></div>
+      <div class="card sec"><h2>이벤트 <span class="meta" id="logmeta"></span></h2><ul class="log" id="log"></ul></div>
+    </div>
+  </section>
+</div>
+
+<script src="mock.js"></script>
+<script src="design2.js"></script>
+</body>
+</html>

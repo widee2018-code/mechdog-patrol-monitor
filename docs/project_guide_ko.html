@@ -765,7 +765,7 @@ pip install -r requirements.txt
 uvicorn server.app:app --host 0.0.0.0 --port 8000   # 터미널 1
 python -m server.simulator --speed 3                 # 터미널 2 (지금은 이전 시나리오를 재생)
 # http://localhost:8000 열기</code></pre>
-  <div class="note">시뮬레이터를 새 상태 머신(EXPLORE → … → REGROUP)으로 바꾸는 것이 담당3(관제·통합)의 첫 작업입니다. LiDAR가 오기 전에 대시보드와 두뇌 로직을 먼저 만들어 둘 수 있습니다.</div>
+  <div class="note">시뮬레이터를 새 상태 머신(EXPLORE → … → REGROUP)으로 바꾸고(widee2018-code), 대시보드 화면을 거기에 맞추는 것(worksenddl2-source)이 관제 쪽 첫 작업입니다. LiDAR가 오기 전에 대시보드와 두뇌 로직을 먼저 만들어 둘 수 있습니다.</div>
 
   <h3>외부 공개 (Docker + Cloudflare Tunnel)</h3>
   <p>모니터 서버만 컨테이너로 돌리고, Cloudflare Tunnel로 공개 주소를 붙입니다. 공유기 설정이나 공인 IP가 필요 없고, 로봇·LiDAR·카메라 경로는 그대로입니다. LiDAR 처리와 <code>brain/</code>처럼 하드웨어를 쓰는 코드는 컨테이너에 넣지 않고 Pi에서 직접 실행합니다.</p>
@@ -1046,14 +1046,14 @@ docker compose --profile tunnel up --build -d # + 고정 공개 주소 (.env의 
 <section id="team">
   <div class="num">12</div>
   <h2>팀 구성 (3명)</h2>
-  <p>2026-11-12에 WBS의 4개 트랙을 3명으로 다시 묶었습니다. 각자 자기 폴더에서 작업하고, 서로를 잇는 <b>공통 약속</b>만 함께 관리하면 병렬로 진행할 수 있습니다.</p>
+  <p>2026-11-13에 역할을 다시 정했습니다. 대시보드 디자인과 DB를 한 명씩 맡고, 나머지(하드웨어, 행동, 통합)는 한 명이 맡습니다. 각자 자기 폴더에서 작업하고, 서로를 잇는 <b>공통 약속</b>만 함께 관리하면 병렬로 진행할 수 있습니다. 폴더 주인은 <code>.github/CODEOWNERS</code>에 있어 PR에 자동으로 리뷰어로 지정됩니다.</p>
   <div class="grid2">
-    <div class="card"><h4><span class="tag a">담당1</span> 하드웨어 → 지도</h4><p>MechDog 펌웨어(상태 전송, 명령 수신, 안전 반사), 카메라 펌웨어, 기초 성능 측정, LiDAR 브리지(ESP32-C3), SLAM, frontier 탐사와 침입자 후보 탐지(담당2와 함께).</p><p><code>firmware/</code>, <code>slam/</code>(예정)</p></div>
-    <div class="card"><h4><span class="tag b">담당2</span> 행동 두뇌</h4><p>마커 따라가기와 행렬, 상태 머신, CONFIRM 판단, 포위 지점 계산과 인계, 다시 줄 서기. <code>mission</code>, <code>intruder</code>, <code>event</code>를 보냅니다.</p><p><code>brain/</code></p></div>
-    <div class="card"><h4><span class="tag r">담당3</span> 관제 · 통합 · 클라우드</h4><p>대시보드 새 시나리오 반영, 시뮬레이터, 메시지 스키마 관리, Docker와 외부 공개, Supabase 기록, 테스트 계획서와 결과서, 시연 영상.</p><p><code>server/</code>, <code>web/</code>, <code>recorder/</code>, <code>cloud/</code>, <code>tools/</code></p></div>
-    <div class="card"><h4><span class="tag c">공통 약속</span> 바꿀 때는 PR + 두 명 리뷰</h4><p><code>docs/message_schema.md</code> (주인: 담당3) · UDP 9100 <code>move</code> 명령 (담당1) · SLAM 결과(지도, A 위치, 후보 덩어리) → 두뇌 (담당1 → 담당2) · 상태 이름 (담당2 → 대시보드)</p></div>
+    <div class="card"><h4><span class="tag a">대시보드 디자인</span> worksenddl2-source</h4><p>대시보드 화면 디자인, 새 시나리오(EXPLORE → … → REGROUP) 상태와 행렬·포위 표시, 휴대폰 화면 대응.</p><p><code>web/</code></p></div>
+    <div class="card"><h4><span class="tag b">DB · 기록</span> jyj25</h4><p>Supabase 프로젝트 생성, 테이블 설계(<code>schema.sql</code>), 증거 사진 Storage 버킷, 보안 정책(RLS), hub의 <code>/ws</code>를 받아 Supabase에 저장하는 기록기(recorder), 기록 데이터 조회와 정리.</p><p><code>cloud/supabase/</code>, <code>recorder/</code></p></div>
+    <div class="card"><h4><span class="tag r">하드웨어 · 행동 · 통합</span> widee2018-code</h4><p>MechDog·카메라 펌웨어, LiDAR 브리지와 SLAM, 마커 행렬과 상태 머신·포위·다시 줄 서기, 서버와 시뮬레이터, Docker와 외부 공개, 테스트 문서와 시연 영상.</p><p><code>firmware/</code>, <code>brain/</code>, <code>server/</code>, <code>tools/</code>, <code>docs/</code>, <code>slam/</code>(예정)</p></div>
+    <div class="card"><h4><span class="tag c">공통 약속</span> 바꿀 때는 PR + 영향받는 사람 리뷰</h4><p><code>docs/message_schema.md</code>(메시지 형식, 상태 이름, web과 recorder가 읽음): widee2018-code + worksenddl2-source + jyj25 · <code>docker-compose.yml</code>(hub와 recorder를 함께 띄움): widee2018-code + jyj25 · <code>web/</code>에는 Supabase <code>service_role</code> 키를 넣지 않음</p></div>
   </div>
-  <div class="note">담당2는 12월 7~16일에 포위·인계와 다시 줄 서기가 겹쳐 가장 바쁩니다. 이 시기에는 담당3이 시뮬레이터로 상태 머신 시험을 돕습니다. 실물 시험(안전 반사, 행렬, 통합)은 전원이 함께 합니다.</div>
+  <div class="note">하드웨어와 행동 쪽이 한 명에게 몰려 있습니다. 12월 7~16일(포위·인계, 다시 줄 서기)이 가장 바쁘니, 대시보드 담당은 시뮬레이터로 새 상태 화면을 미리 맞춰 두고, DB 담당은 기록 조회 화면이나 시연 후 리포트를 준비해 두면 좋습니다. 실물 시험(안전 반사, 행렬, 통합)은 전원이 함께 합니다.</div>
 </section>
 
 <section id="code">

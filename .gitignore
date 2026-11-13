@@ -17,3 +17,9 @@ docs/marker_follow_notes.md
 
 # Personal blocklist for the pre-commit hook
 .git-blocklist.local
+
+# Daily work log (local only)
+docs/devlog/
+
+# MechDog MicroPython Wi-Fi credentials
+firmware/secrets.py

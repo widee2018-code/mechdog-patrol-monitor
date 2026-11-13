@@ -4,6 +4,42 @@
 
 프로젝트 진행 가이드(다이어그램, 스크린샷 포함)는 **[docs/project_guide_ko.html](docs/project_guide_ko.html)**에 있습니다. 2026-11-11부터 가이드는 **행렬 탐사 순찰** 시나리오(정찰견 등에 LiDAR, 확인견 2마리가 줄지어 따라가며 매핑 → 발견 → 포위 → 다시 탐사)를 기준으로 합니다. 대시보드와 시뮬레이터 코드는 아직 이전 시나리오 그대로입니다. (영문판 [docs/project_guide.html](docs/project_guide.html)은 이전 시나리오 기준)
 
+## 팀 역할 (3명)
+
+| 담당 | GitHub | 맡은 일 | 폴더 |
+|---|---|---|---|
+| 대시보드 디자인 | `worksenddl2-source` | 대시보드 화면 디자인, 새 시나리오(행렬 탐사) 상태 표시 | `web/` |
+| DB · 기록 | `jyj25` | Supabase 프로젝트와 테이블 설계, 기록기(recorder), 기록 데이터 조회 | `cloud/supabase/`, `recorder/` |
+| 하드웨어 · 행동 · 통합 | `widee2018-code` | 펌웨어, LiDAR·SLAM, 행동 알고리즘, 서버·시뮬레이터, Docker와 외부 공개, 문서 | 그 외 전부 (`firmware/`, `brain/`, `server/`, `tools/`, `docs/` 등) |
+
+- 각자 자기 폴더에서 작업하고, `dev`에서 브랜치를 따서 PR로 합칩니다. 폴더 주인은 `.github/CODEOWNERS`에 있어 PR에 자동으로 리뷰어로 지정됩니다.
+- **함께 정하는 약속**은 바꿀 때 영향을 받는 사람의 리뷰를 받습니다.
+  - `docs/message_schema.md` (메시지 형식, 상태 이름): 서버가 보내고 `web/`과 `recorder/`가 읽음 → `widee2018-code` + `worksenddl2-source` + `jyj25`
+  - `docker-compose.yml` (hub와 recorder 컨테이너를 함께 띄움): `widee2018-code` + `jyj25`
+- `web/`에는 Supabase `service_role` 키를 절대 넣지 않습니다. 브라우저에서 DB를 읽어야 하면 `anon` 키 + RLS 정책으로 합니다.
+
+## 진행 현황
+
+목표 흐름: 정찰견 A가 매핑하며 전진 → B·C가 마커로 따라감 → Edge AI로 범인 인식 → 포위 → 대시보드 사이렌 → 일정 시간 뒤 재정렬 → 멈춘 곳부터 매핑 재개
+
+| 단계 | 상태 | 이슈 |
+|---|---|---|
+| A가 매핑하며 전진 (LiDAR, SLAM, frontier) | ⬜ 아직 | #14 |
+| B·C가 마커로 따라감 | 🟡 B 1마리 마커 따라가기 시연 완료 (2026-11-12) | #11, #12 |
+| Edge AI로 범인 인식 | ⬜ 방식 결정 필요 | #5, #13 |
+| 포위 | ⬜ 아직 | #15 |
+| 대시보드 사이렌 | ⬜ 범위 결정 필요 | #6, #18 |
+| 일정 시간 뒤 재정렬 → 매핑 재개 | ⬜ 시점 결정 필요 | #7, #16 |
+| 상태 머신, 메시지 형식, 시뮬레이터 | ⬜ 예전 시나리오 그대로 (먼저 할 일) | #8, #9, #10 |
+| 대시보드 새 시나리오 반영 | 🟡 디자인 시안 3안 (PR #3) | #17 |
+| Supabase 기록 | 🟡 기록기 동작 확인 (PR #4) | #19, #20 |
+
+할 일은 [GitHub Issues](https://github.com/widee2018-code/mechdog-patrol-monitor/issues)에서 관리합니다. 담당별 보기:
+[worksenddl2-source](https://github.com/widee2018-code/mechdog-patrol-monitor/issues?q=is%3Aopen+assignee%3Aworksenddl2-source) ·
+[jyj25](https://github.com/widee2018-code/mechdog-patrol-monitor/issues?q=is%3Aopen+assignee%3Ajyj25) ·
+[widee2018-code](https://github.com/widee2018-code/mechdog-patrol-monitor/issues?q=is%3Aopen+assignee%3Awidee2018-code) ·
+[결정 필요](https://github.com/widee2018-code/mechdog-patrol-monitor/issues?q=is%3Aopen+label%3A%22%EA%B2%B0%EC%A0%95+%ED%95%84%EC%9A%94%22)
+
 ## 빠른 시작 (시뮬레이션 로봇)
 
 ```bash
@@ -56,6 +92,7 @@ mechdog-patrol-monitor/
 ├── firmware/
 │   ├── dog_status.py   # MechDog(MicroPython)용 상태 전송 코드
 │   ├── dog_cmd.py      # MechDog: Wi-Fi move 명령 받기 + 안전 반사
+│   ├── secrets.py.example # Wi-Fi 정보 틀: secrets.py로 복사해 로봇견에 저장 (커밋 안 됨)
 │   └── mechdog_cam/    # 카메라 모듈 펌웨어: 기존 Wi-Fi에 접속 (Arduino)
 ├── tools/
 │   ├── send_test.py    # 실제 하드웨어 없이 서버를 확인하는 테스트 송신기
@@ -76,7 +113,7 @@ Pi와 로봇견이 `udp://<모니터-IP>:9000` 으로 [docs/message_schema.md](d
 ## 실제 MechDog로 첫 테스트
 
 1. 서버만 실행합니다(시뮬레이터 없이). `python tools/send_test.py` 를 실행해서 http://localhost:8000 에 움직이는 Dog B가 나오는지 확인한 뒤 멈춥니다.
-2. Thonny에서 `firmware/dog_status.py` 를 열고 `WIFI_SSID`, `WIFI_PASS`, `MONITOR`(이 컴퓨터의 IP), `NAME` 을 설정한 다음 USB로 로봇견에서 실행합니다. **실제 Wi-Fi 비밀번호를 넣은 상태로 커밋하지 마세요.**
+2. `firmware/secrets.py.example` 을 `firmware/secrets.py` 로 복사해 Wi-Fi 이름과 비밀번호를 넣고, Thonny로 로봇견 안에 `secrets.py` 로 저장합니다([Thonny 가이드](docs/mechdog_thonny_guide.md) 3절). 그다음 `firmware/dog_status.py` 에서 `MONITOR`(이 컴퓨터의 IP), `NAME` 을 설정하고 USB로 로봇견에서 실행합니다. `secrets.py` 는 `.gitignore`에 들어 있어 커밋되지 않습니다.
 3. 로봇견 카드가 활성화되어 Wi-Fi 세기가 표시되고, 타임라인에 "Dog B 온라인"이 떠야 합니다. 그다음 센서 함수를 하나씩 채웁니다.
 4. Pi + LiDAR가 동작하기 전에는 로봇견의 위치가 없습니다. 그동안 지도에 표시하려면: `python tools/send_test.py --dog B --x 1.2 --y 0.8`
 
@@ -144,7 +181,7 @@ git config core.hooksPath .githooks
 
 - 공통 규칙(내 컴퓨터 경로, MAC 주소, API 키, 비밀번호 값 등): `.githooks/blocked-patterns.txt`
 - 나만의 금지어(이름, 이메일 등): 저장소 최상위에 `.git-blocklist.local` 을 만들고 한 줄에 하나씩 적습니다. 이 파일은 git에 올라가지 않습니다.
-- `secrets.h` 의 Wi-Fi 이름과 비밀번호는 자동으로 검사합니다.
+- `secrets.h`, `secrets.py` 의 Wi-Fi 이름과 비밀번호는 자동으로 검사합니다. 두 파일 자체도 커밋할 수 없습니다.
 - 저장소 전체 검사: `.githooks/pre-commit --all`
 - 오탐인 줄은 끝에 `allow-secret` 주석을 달면 건너뜁니다.
 - GitHub에 푸시하거나 PR을 올리면 같은 검사가 GitHub Actions(`.github/workflows/privacy-check.yml`)에서 다시 돌아갑니다. hook을 안 켰거나 `--no-verify` 로 건너뛴 커밋도 여기서 잡힙니다. 로그에는 파일:줄번호만 나옵니다.

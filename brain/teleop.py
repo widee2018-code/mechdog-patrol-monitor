@@ -6,7 +6,7 @@
     w 전진   s 후진   a 왼쪽 회전   d 오른쪽 회전   q/e 전진하며 왼쪽/오른쪽
     스페이스 정지   1~3 속도 단계   x 종료
 마지막 키를 0.3초 넘게 누르지 않으면 멈춘다. 처음에는 a/d로 회전 방향 부호를 확인하고,
-반대로 돌면 --turn-sign -1 로 실행한다 (marker_follow.py에도 같은 값을 쓴다).
+기본값 -1은 MechDog B 실측값. 반대로 돌면 --turn-sign 1 로 실행한다 (marker_follow.py에도 같은 값을 쓴다).
 """
 import argparse
 import json
@@ -20,7 +20,7 @@ CMD_PORT = 9100
 
 p = argparse.ArgumentParser()
 p.add_argument("--dog", required=True, help="로봇견 IP")
-p.add_argument("--turn-sign", type=int, choices=(1, -1), default=1)
+p.add_argument("--turn-sign", type=int, choices=(1, -1), default=-1)
 a = p.parse_args()
 
 SPEEDS = {ord("1"): 60, ord("2"): 90, ord("3"): 120}

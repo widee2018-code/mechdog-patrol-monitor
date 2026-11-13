@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>대시보드 재설계 · 진단과 시안</title>
+<style>
+:root { --bg: #f6f7f9; --card: #fff; --line: #e4e7ec; --text: #1a2029; --muted: #667085; --accent: #2f7bf5; --alert: #e0453c; --ok: #12a36b;
+  --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.65 var(--font); }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 40px 20px 90px; }
+h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 6px; line-height: 1.25; }
+.lead { color: var(--muted); margin: 0 0 32px; }
+h2 { font-size: 19px; margin: 40px 0 14px; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.d { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 6px; transition: border-color .15s, transform .15s; }
+.d:hover { border-color: var(--accent); transform: translateY(-2px); }
+.d .no { font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: .06em; }
+.d b { font-size: 17px; }
+.d p { margin: 0; color: var(--muted); font-size: 14px; }
+.d .sw { height: 70px; border-radius: 10px; margin-bottom: 8px; }
+.d .go { margin-top: auto; padding-top: 8px; font-weight: 700; color: var(--accent); font-size: 14px; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; font-size: 14px; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: #f9fafb; font-size: 13px; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; font-weight: 700; }
+.sev { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 700; }
+.sev.h { background: #fdecea; color: var(--alert); } .sev.m { background: #fff4e0; color: #a26a00; } .sev.l { background: #eef2f6; color: var(--muted); }
+.good { background: #ecf8f2; border: 1px solid #c4ead7; border-radius: 12px; padding: 12px 16px; font-size: 14px; }
+ol.next { padding-left: 20px; } ol.next li { margin: 4px 0; }
+code { background: #eef1f5; padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+@media (max-width: 800px) { .cards { grid-template-columns: 1fr; } table { font-size: 13px; } td:first-child { white-space: normal; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>웹 대시보드 재설계 · 진단과 시안 3개</h1>
+  <p class="lead">지금 대시보드(<code>web/index.html</code>)를 살펴본 결과와, 행렬 순찰 시나리오에 맞춘 디자인 시안입니다.
+    시안은 가짜 데이터로 <b>지도 만들기 → 순찰 → 의심 → 포위 → 인계 → 줄 다시 서기</b>를 약 1분 주기로 반복하니, 1~2분 지켜보면서 비교해 보세요.</p>
+
+  <h2>디자인 시안</h2>
+  <div class="cards">
+    <a class="d" href="design1.html">
+      <div class="sw" style="background:linear-gradient(135deg,#0a0e14 55%,#4da3ff 55% 70%,#3ecf8e 70% 85%,#f5b942 85%)"></div>
+      <span class="no">1안</span><b>관제실형</b>
+      <p>어두운 화면, 큰 지도가 가운데. 오른쪽에 카메라 3대, 아래에 로봇견 카드와 이벤트. 한 화면에 전부 보임.</p>
+      <p><b style="font-size:13px">어울리는 곳:</b> 프로젝터 발표, 관제 느낌 연출</p>
+      <span class="go">열어 보기 →</span>
+    </a>
+    <a class="d" href="design2.html">
+      <div class="sw" style="background:linear-gradient(135deg,#f3f5f8 55%,#2f7bf5 55% 70%,#12a36b 70% 85%,#d99a0b 85%);border:1px solid #e3e8ef"></div>
+      <span class="no">2안</span><b>카드형</b>
+      <p>밝은 화면, 로봇견마다 카드 하나(카메라 + 큰 숫자). 아래에 지도, 증거 사진, 이벤트. 휴대폰에서도 보기 좋음.</p>
+      <p><b style="font-size:13px">어울리는 곳:</b> 개발 중 점검, 보고서 캡처</p>
+      <span class="go">열어 보기 →</span>
+    </a>
+    <a class="d" href="design3.html">
+      <div class="sw" style="background:linear-gradient(90deg,#f6f5f1 50%,#120d0e 50%);border:1px solid #e6e3dc"></div>
+      <span class="no">3안</span><b>사건 중심형</b>
+      <p>평소엔 "순찰 중 · 이상 없음" 한 문장과 지도만. 사건이 나면 화면 전체가 어두운 사건 화면(카메라, 포위 배치, 진행 단계, 인계 버튼)으로 바뀜.</p>
+      <p><b style="font-size:13px">어울리는 곳:</b> 시연 스토리텔링, 실제 경비 서비스 느낌</p>
+      <span class="go">열어 보기 →</span>
+    </a>
+  </div>
+
+  <h2>지금 대시보드 진단</h2>
+  <table>
+    <thead><tr><th>문제</th><th>지금 화면</th><th>새 시나리오에서 필요한 것</th></tr></thead>
+    <tbody>
+      <tr><td><span class="sev h">중요</span> 예전 시나리오 기준</td>
+        <td>지도에 고정된 <code>Pi + LiDAR</code> 점, <b>소리 센서(ReSpeaker) 카드</b>, 역할 "추적견·봉쇄견", 개별 순찰 구역 A·B·C</td>
+        <td>A 등에 LiDAR, B·C는 마커를 따라 줄지어 걷기. 소리 센서 없음</td></tr>
+      <tr><td><span class="sev h">중요</span> 단계 이름이 다름</td>
+        <td>PATROL · SUSPECT · ALERT · INTERCEPT · CONTAIN · HANDOVER · RETURN (영어만)</td>
+        <td>지도 만들기 · 순찰 · 의심·확인 · 포위 · 인계 · 줄 다시 서기 (한글 + 영어)</td></tr>
+      <tr><td><span class="sev h">중요</span> 사건이 눈에 안 띔</td>
+        <td>경보가 떠도 위쪽 단계 표시만 깜빡임. 증거 사진은 맨 아래까지 스크롤해야 보임</td>
+        <td>화면 위 경보 띠(또는 사건 화면 전환), 경과 시간, 증거 사진 바로 보이기</td></tr>
+      <tr><td><span class="sev h">중요</span> 조작 버튼 없음</td>
+        <td>보기만 가능</td>
+        <td><b>전체 정지(비상)</b>, 일시정지·재개, 인계 완료 버튼</td></tr>
+      <tr><td><span class="sev m">보통</span> 카메라가 A 1대만</td>
+        <td>카메라 칸 하나 (<code>LIVE_CAM = "A"</code> 고정)</td>
+        <td>A·B·C 3대. B·C 화면에서 앞 개의 마커 인식 상태가 보이면 좋음</td></tr>
+      <tr><td><span class="sev m">보통</span> 로봇견 정보가 한 줄에 몰림</td>
+        <td>위치·방향·앞거리·기울기·전압·Wi-Fi가 작은 회색 글씨 두 줄. 배터리 부족 경고색 없음. 로봇견이 보내지 않는 x, y는 "—"로 표시</td>
+        <td>배터리(색으로 경고), 앞 장애물, 상태, 마커 따라가기 거리를 큰 글씨로</td></tr>
+      <tr><td><span class="sev m">보통</span> 지도에 탐사 정보 없음</td>
+        <td>벽·장애물·LiDAR 점만</td>
+        <td>아는 곳/모르는 곳(지도 완성률), 이미 알린 물체 기억 표시, 따라가기 줄, 포위 위치·반경</td></tr>
+      <tr><td><span class="sev l">작음</span> 글씨가 작음</td>
+        <td>본문 11~13px. 프로젝터에서 3 m 떨어지면 읽기 어려움</td>
+        <td>중요한 숫자는 16px 이상</td></tr>
+      <tr><td><span class="sev l">작음</span> 연결 상태가 하나뿐</td>
+        <td>서버 연결(연결됨/끊김)만 표시</td>
+        <td>로봇견·카메라마다 온라인/오프라인</td></tr>
+    </tbody>
+  </table>
+  <p class="good"><b>그대로 살릴 좋은 점:</b> WebSocket 실시간 전송, 카메라를 서버가 한 번만 받아서 나눠 주는 구조(<code>/api/camera/A/stream</code>), 캔버스 지도, 인터넷 없이 동작(외부 라이브러리 없음), 오프라인 로봇견 자동 표시.</p>
+
+  <h2>다음 단계</h2>
+  <ol class="next">
+    <li>조원들과 시안을 보고 고르기 (섞어도 됨. 예: 1안 배치 + 3안 사건 화면)</li>
+    <li>고른 안을 <code>web/index.html</code>에 적용하고 가짜 데이터 대신 실제 WebSocket 메시지 연결</li>
+    <li>서버에 추가: 카메라 B·C, 임무 단계(<code>mission</code>) 새 이름, 전체 정지 버튼 → 로봇견에 <code>{"cmd":"stop"}</code></li>
+    <li>시뮬레이터(<code>server/simulator.py</code>)를 새 시나리오로 바꿔서 시험 → 실제 개 1마리로 확인</li>
+  </ol>
+</div>
+<script src="mock.js"></script>
+<script>Mock.nav("index.html");</script>
+</body>
+</html>

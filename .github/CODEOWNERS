@@ -1,0 +1,12 @@
+# 폴더 주인: 이 폴더를 바꾸는 PR에 자동으로 리뷰어로 지정된다 (README "팀 역할" 참고).
+# 아래쪽 줄이 위쪽 줄보다 우선한다.
+
+*                           @widee2018-code
+
+/web/                       @worksenddl2-source
+/cloud/supabase/            @jyj25
+/recorder/                  @jyj25
+
+# 함께 정하는 약속: 영향을 받는 사람이 같이 리뷰
+/docs/message_schema.md     @widee2018-code @worksenddl2-source @jyj25
+/docker-compose.yml         @widee2018-code @jyj25

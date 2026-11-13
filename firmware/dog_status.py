@@ -1,10 +1,12 @@
 # MechDog(ESP32-S3)용 MicroPython: Wi-Fi에 연결해서 모니터로 `dog` 상태를 보낸다.
-# Thonny에서 열고 아래 설정 네 개를 고친 뒤 Run을 누른다. 로봇견의 원래 main.py를
+# 로봇견 안에 secrets.py(Wi-Fi 정보)를 저장해 두고, Thonny에서 아래 설정 두 개를 고친 뒤 Run을 누른다. 로봇견의 원래 main.py를
 # 백업해 두기 전에는 이 파일을 main.py로 덮어쓰지 말 것.
 import network, socket, json, time
 
-WIFI_SSID = "YOUR_WIFI"
-WIFI_PASS = "YOUR_PASSWORD"
+try:
+    from secrets import WIFI_SSID, WIFI_PASS   # Wi-Fi 정보는 로봇견 안의 secrets.py에 둔다
+except ImportError:
+    raise RuntimeError("로봇견에 secrets.py가 없습니다. firmware/secrets.py.example을 참고해 Thonny로 저장하세요.")
 MONITOR = ("192.168.0.11", 9000)   # server/app.py를 실행하는 컴퓨터의 IP
 NAME = "B"                          # A, B 또는 C
 

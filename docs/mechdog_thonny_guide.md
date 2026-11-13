@@ -69,16 +69,26 @@ import os; os.listdir()
 - macOS: 터미널에서 `ipconfig getifaddr en0`
 - Windows: `ipconfig` → Wi-Fi 어댑터의 IPv4 주소
 
-### 코드 준비
-1. Thonny **파일 → 새 파일**에 `firmware/dog_cmd.py` 내용을 붙여 넣습니다.
-2. 위쪽 설정을 고칩니다.
+### Wi-Fi 정보 저장 (처음 한 번만)
+Wi-Fi 이름과 비밀번호는 코드에 넣지 않고 **로봇견 안의 `secrets.py`** 에 따로 둡니다. 저장소가 공개되어 있어서 비밀번호가 커밋되는 것을 막기 위해서입니다.
+
+1. 노트북에서 `firmware/secrets.py.example` 을 `firmware/secrets.py` 로 복사하고 값을 채웁니다. 이 파일은 `.gitignore`에 들어 있어 커밋되지 않습니다.
    ```python
-   WIFI_SSID = "YOUR_WIFI"          # 공유기 이름으로 바꾸기 (2.4 GHz)
-   WIFI_PASS = "YOUR_PASSWORD"      # 공유기 비밀번호로 바꾸기
+   WIFI_SSID = "YOUR_WIFI"       # 공유기 이름 (2.4 GHz)
+   WIFI_PASS = "YOUR_PASSWORD"   # 공유기 비밀번호
+   ```
+2. Thonny에서 `firmware/secrets.py` 를 열고 **파일 → 다른 이름으로 저장 → MicroPython 장치** 를 골라 이름을 `secrets.py` 로 저장합니다. (또는 View → Files 에서 파일을 오른쪽 클릭 → "Upload to /")
+3. 로봇견 파일 목록에 `secrets.py` 가 보이면 됩니다. 로봇견을 껐다 켜도 남아 있어서, Wi-Fi가 바뀔 때만 다시 저장하면 됩니다.
+
+`secrets.py` 가 없으면 실행할 때 "로봇견에 secrets.py가 없습니다" 오류가 납니다. 로봇견이 여러 대면 각각에 저장합니다.
+
+### 코드 준비
+1. Thonny에서 `firmware/dog_cmd.py` 를 엽니다.
+2. 위쪽 설정을 확인합니다. Wi-Fi 정보는 여기 없습니다.
+   ```python
    MONITOR = ("192.168.0.11", 9000) # 노트북 IP
    NAME = "B"                       # A, B 또는 C
    ```
-3. **저장소 안의 원본 파일에 비밀번호를 넣어 저장하지 마세요.** 새 파일에 붙여 넣어 쓰거나, 저장소 밖(바탕화면 등)에 저장합니다.
 
 ### 실행
 **Run(F5)** 을 누릅니다. 로봇견 메모리에서만 실행되므로 원래 `main.py`는 바뀌지 않고, 로봇견을 껐다 켜면 원래 앱 조종 프로그램으로 돌아갑니다. Shell에 다음이 나오면 성공입니다.
@@ -145,7 +155,7 @@ sock.sendto(json.dumps({"cmd": "stop"}).encode(), DOG)
 
 1. 배터리를 켜고 Run. 로봇견을 **들고 있거나 받침대에 올려 다리가 허공에 뜨게** 합니다.
 2. `teleop.py` 실행 → 다리가 움직이는지 확인.
-3. `a`를 눌렀을 때 **왼쪽으로 도는지** 확인. 반대면 이후 명령에 `--turn-sign -1`을 붙입니다.
+3. `a`를 눌렀을 때 **왼쪽으로 도는지** 확인. 반대면 이후 명령에 `--turn-sign 1`을 붙입니다 (기본값 -1은 MechDog B 실측값).
 4. 키에서 손을 떼면 멈추는지, teleop을 끄면 1초 안에 멈추는지 확인.
 5. 초음파 앞에 손을 15 cm 안으로 대면 전진만 막히는지(LED 빨강) 확인.
 6. 바닥에 내려놓고 속도 `1`단계부터 시험.

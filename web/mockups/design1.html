@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>시안 1 · 관제실형</title>
+<style>
+:root {
+  --bg: #0a0e14; --panel: #111821; --panel2: #0d131b; --line: #1f2a38; --text: #e6edf3; --muted: #7d8ba1;
+  --a: #4da3ff; --b: #3ecf8e; --c: #f5b942; --ok: #3ecf8e; --warn: #f5b942; --alert: #ff5a52;
+  --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); display: flex; flex-direction: column; min-height: 100vh; }
+button { font: inherit; cursor: pointer; }
+
+.top { display: flex; align-items: center; gap: 16px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--panel2); }
+.brand { display: flex; flex-direction: column; line-height: 1.2; white-space: nowrap; }
+.brand b { font-size: 16px; letter-spacing: -.01em; }
+.brand small { color: var(--muted); font-size: 11px; }
+.steps { display: flex; list-style: none; margin: 0; padding: 0 0 0 6px; flex: 1; justify-content: center; }
+.steps li { padding: 5px 16px 5px 20px; margin-left: -6px; background: #141c27; color: var(--muted); font-size: 13px; font-weight: 600;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%); white-space: nowrap; }
+.steps li .en { display: block; font-size: 9.5px; letter-spacing: .1em; opacity: .65; font-weight: 700; }
+.steps li.now { background: var(--a); color: #fff; }
+.steps li.now.hot { background: var(--alert); animation: pulse 1s infinite alternate; }
+@keyframes pulse { to { filter: brightness(1.25); } }
+.clock { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.btn { border: 1px solid var(--line); background: #17202c; color: var(--text); padding: 8px 14px; border-radius: 8px; font-weight: 600; white-space: nowrap; }
+.btn:hover { background: #1d2836; }
+.btn.danger { background: var(--alert); border-color: var(--alert); color: #fff; }
+.btn.danger:hover { filter: brightness(1.1); }
+
+.banner { margin: 12px 18px 0; padding: 10px 14px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-weight: 600; }
+.banner[hidden] { display: none; }
+.banner .ico { font-size: 18px; }
+.banner.warn { background: rgba(245,185,66,.1); border: 1px solid rgba(245,185,66,.5); color: #ffd27a; }
+.banner.alert { background: rgba(255,90,82,.12); border: 1px solid rgba(255,90,82,.6); color: #ffaaa5; }
+.banner.stop { background: var(--alert); color: #fff; }
+.banner .btn { margin-left: auto; }
+
+main { flex: 1; display: grid; gap: 12px; padding: 12px 18px 18px; min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(380px, 1fr) auto;
+  grid-template-areas: "map cams" "dogs log"; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; min-height: 0; }
+.ph { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.ph h2 { margin: 0; font-size: 13px; font-weight: 700; color: #c4cfdd; }
+.ph .meta { color: var(--muted); font-size: 12px; }
+.legend { margin-left: auto; display: flex; gap: 12px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+
+.map { grid-area: map; }
+.mapbox { flex: 1; position: relative; min-height: 300px; }
+.mapbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 8px; display: block; }
+
+.cams { grid-area: cams; display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 10px; min-height: 0; }
+.cam { margin: 0; position: relative; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); min-height: 140px; }
+.cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cam figcaption { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; text-shadow: 0 1px 2px #000; }
+.cam .badge { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: #0a0e14; font-weight: 800; font-size: 11px; text-shadow: none; }
+.cam .live { margin-left: auto; color: #ff7b75; font-size: 11px; }
+.cam .note { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: rgba(255,255,255,.55); }
+
+.dogs { grid-area: dogs; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.dog { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 12px; padding: 12px 14px; }
+.dog header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.dog .badge { width: 32px; height: 32px; border-radius: 50%; background: var(--c); color: #0a0e14; display: grid; place-items: center; font-weight: 800; }
+.dog header b { display: block; font-size: 14px; }
+.dog header small { color: var(--muted); font-size: 12px; }
+.chip { margin-left: auto; padding: 3px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #1a2430; color: #c4cfdd; white-space: nowrap; }
+.chip.walk { background: rgba(77,163,255,.15); color: #8cc4ff; }
+.chip.watch { background: rgba(255,90,82,.15); color: #ff9a94; }
+.chip.stop { background: var(--alert); color: #fff; }
+.kv { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; border-top: 1px dashed #1b2532; }
+.kv span { color: var(--muted); }
+.kv b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .alert { color: var(--alert); }
+.batt { height: 6px; background: #1b2532; border-radius: 3px; overflow: hidden; margin: 2px 0 6px; }
+.batt i { display: block; height: 100%; background: var(--ok); }
+.batt.warn i { background: var(--warn); } .batt.alert i { background: var(--alert); }
+
+.log { grid-area: log; }
+.log ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: 220px; font-size: 13px; }
+.log li { display: grid; grid-template-columns: 62px 8px 1fr; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid #172030; }
+.log time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.log .lv { width: 8px; height: 8px; border-radius: 50%; background: var(--a); }
+.log .lv.warn { background: var(--warn); } .log .lv.alert { background: var(--alert); }
+
+@media (max-width: 1100px) {
+  main { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "map" "cams" "dogs" "log"; }
+  .mapbox { min-height: 0; aspect-ratio: 6.6 / 4.6; flex: none; }
+  .cams { grid-template-rows: none; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cam { aspect-ratio: 4 / 3; min-height: 0; }
+  .steps li { padding: 5px 10px 5px 16px; }
+}
+@media (max-width: 720px) {
+  .top { flex-wrap: wrap; padding: 10px 16px; }
+  .steps { order: 3; flex-basis: 100%; overflow-x: auto; justify-content: flex-start; }
+  .steps li .en { display: none; }
+  .clock { display: none; }
+  main { padding: 12px 16px 70px; }
+  .banner { margin: 12px 16px 0; }
+  .cams, .dogs { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>MechDog 관제실</b><small>행렬 순찰 · 실시간 모니터 · 시안 1</small></div>
+  <ol class="steps" id="steps"></ol>
+  <span class="clock" id="clock"></span>
+  <button class="btn" id="pause">일시정지</button>
+  <button class="btn danger" id="estop">■ 전체 정지</button>
+</header>
+
+<div class="banner" id="banner" hidden></div>
+
+<main>
+  <section class="panel map">
+    <div class="ph">
+      <h2>공간 지도</h2><span class="meta" id="mapmeta"></span>
+      <div class="legend">
+        <span><i style="background:#5ee1ff"></i>LiDAR</span>
+        <span><i style="background:var(--alert)"></i>침입자</span>
+        <span><i style="background:#7d8ba1"></i>알림 완료</span>
+        <span><i style="background:#1a222d;border:1px solid #33404f"></i>미탐사</span>
+      </div>
+    </div>
+    <div class="mapbox"><canvas id="map"></canvas></div>
+  </section>
+
+  <section class="cams" id="cams"></section>
+  <section class="dogs" id="dogs"></section>
+
+  <section class="panel log">
+    <div class="ph"><h2>이벤트</h2><span class="meta" id="evcount"></span></div>
+    <ul id="log"></ul>
+  </section>
+</main>
+
+<script src="mock.js"></script>
+<script src="design1.js"></script>
+</body>
+</html>

@@ -36,20 +36,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--marker-id", type=int, default=1, help="따라갈 마커 ID (A 등 뒤 = 1)")
     p.add_argument("--marker-cm", type=float, default=7.0, help="출력한 마커의 실제 한 변 길이 (검은 테두리 포함, cm)")
     p.add_argument("--hfov", type=float, default=62.0, help="카메라 가로 화각(도). 거리 추정에 사용")
-    p.add_argument("--target-m", type=float, default=0.6, help="유지할 거리 (m)")
-    p.add_argument("--back-m", type=float, default=0.3, help="이보다 가까우면 뒤로 물러남 (m)")
-    p.add_argument("--k-speed", type=float, default=300.0, help="거리 오차 1 m당 속도")
+    p.add_argument("--target-m", type=float, default=0.15, help="유지할 거리 (m)")
+    p.add_argument("--back-m", type=float, default=0.0, help="이보다 가까우면 뒤로 물러남 (m). 0이면 후진 안 함")
+    p.add_argument("--k-speed", type=float, default=500.0, help="거리 오차 1 m당 속도")
     p.add_argument("--k-turn", type=float, default=60.0, help="화면 끝(dx=1)일 때 회전값")
     p.add_argument("--min-speed", type=int, default=40, help="이보다 작은 전진 속도는 걷지 못하므로 올림")
     p.add_argument("--max-speed", type=int, default=120)
     p.add_argument("--back-speed", type=int, default=40)
     p.add_argument("--max-turn", type=int, default=50)
-    p.add_argument("--turn-sign", type=int, choices=(1, -1), default=1,
-                   help="마커가 오른쪽에 있을 때 오른쪽으로 돌지 않으면 -1로 바꾼다")
-    p.add_argument("--lost-sec", type=float, default=0.7, help="마커를 놓친 뒤 찾기 시작할 때까지 (초)")
+    p.add_argument("--turn-sign", type=int, choices=(1, -1), default=-1,
+                   help="MechDog B 실측(2026-11-12)은 -1. 마커 반대쪽으로 돌면 부호를 바꾼다")
+    p.add_argument("--lost-sec", type=float, default=1.5, help="마커를 놓친 뒤 찾기 시작할 때까지 (초)")
     p.add_argument("--search-sec", type=float, default=12.0, help="이 시간 동안 못 찾으면 포기하고 정지 (초)")
     p.add_argument("--search-speed", type=int, default=0, help="찾는 동안 전진 속도 (제자리 회전이 안 되면 40 정도)")
-    p.add_argument("--search-turn", type=int, default=30)
+    p.add_argument("--search-turn", type=int, default=10)
     p.add_argument("--rate", type=float, default=10.0, help="명령 주기 (Hz)")
     p.add_argument("--dog", help="로봇견 IP. 없으면 명령을 보내지 않는 연습 모드")
     p.add_argument("--name", default="B", help="로봇견 이름 (모니터 표시용)")
@@ -236,9 +236,21 @@ def main() -> None:
         if a.monitor:
             sock.sendto(json.dumps(msg).encode(), (a.monitor, MONITOR_PORT))
 
+    dog_err = [None]   # 같은 전송 오류를 매 주기 출력하지 않도록 마지막 오류만 기억
+
     def to_dog(speed: int, turn: int) -> None:
-        if a.dog:
+        if not a.dog:
+            return
+        try:
             sock.sendto(json.dumps({"cmd": "move", "v": speed, "turn": turn}).encode(), (a.dog, CMD_PORT))
+            if dog_err[0]:
+                print(f"[{time.strftime('%H:%M:%S')}] 로봇견 {a.dog} 전송 다시 됨")
+                dog_err[0] = None
+        except OSError as e:   # 로봇견이 꺼졌거나 IP가 바뀜: 죽지 말고 계속 시도
+            if dog_err[0] != e.errno:
+                print(f"[{time.strftime('%H:%M:%S')}] 로봇견 {a.dog}에 전송 실패 ({e.strerror}). "
+                      "Thonny에서 dog_cmd.py 실행과 IP를 확인하세요.")
+                dog_err[0] = e.errno
 
     mode = f"로봇견 {a.dog}:{CMD_PORT}로 명령 전송" if a.dog else "연습 모드 (명령 전송 안 함)"
     print(f"마커 ID {a.marker_id} 따라가기 · {mode} · 카메라 {a.camera} · Ctrl+C로 종료")
