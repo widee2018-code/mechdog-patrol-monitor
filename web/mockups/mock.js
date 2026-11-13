@@ -12,6 +12,7 @@
     obstacles: [{ x: 1.6, y: 2.6, w: 0.5, h: 0.5, name: "책상" }, { x: 3.9, y: 0.9, w: 0.6, h: 0.4, name: "선반" }],
   };
   const MISSIONS = [
+    { key: "STANDBY", ko: "대기" },
     { key: "MAP", ko: "지도 만들기" },
     { key: "PATROL", ko: "순찰" },
     { key: "SUSPECT", ko: "의심·확인" },
@@ -140,10 +141,19 @@
     return { m: "PATROL", pt: 0, dur: 1 };
   }
 
+  // ---------------------------------------------------------------- 시작 준비 (STANDBY)
+  // 일렬 대기 중 확인하는 항목. at = 준비되는 시각(초, 가짜 시나리오용)
+  const READY_ITEMS = {
+    A: [["conn", "로봇견 연결", 0.6], ["batt", "배터리 · 서 있음", 1.4], ["cam", "카메라", 2.2], ["lidar", "LiDAR · SLAM", 5.6]],
+    B: [["conn", "로봇견 연결", 0.9], ["batt", "배터리 · 서 있음", 1.7], ["cam", "카메라", 2.6], ["marker", "마커 1 보임", 3.6]],
+    C: [["conn", "로봇견 연결", 1.2], ["batt", "배터리 · 서 있음", 2.0], ["cam", "카메라", 3.0], ["marker", "마커 2 보임", 4.6]],
+  };
+
   // ---------------------------------------------------------------- 시뮬레이터
   function createSim() {
     const S = {
-      t: 0, s: 1.2, mission: "MAP", pt: 0, dur: MAP_T, paused: false, estop: false,
+      t: 0, s: 1.2, mission: "STANDBY", pt: 0, dur: 1, paused: false, estop: false,
+      started: false, standbyT: 0, ready: {}, allReady: false, regroupReq: false, holdT: 0,
       dogs: {}, target: null, remembered: [], events: [], evidence: [], evSeq: 0,
       known: new Uint8Array(GW * GH), knownPct: 0, mapDone: false, incident: 0, incidentStart: 0,
       scan: [], scanT: 0, slots: null, routes: null, lineH: 0, lowWarned: false,
@@ -170,7 +180,7 @@
         if (prev === "MAP") { S.mapDone = true; S.known.fill(1); S.knownPct = 100; ev("info", "지도 완성 · 지도를 고정하고 순찰을 시작합니다"); }
         else if (prev === "REGROUP") ev("info", "줄 다시 서기 완료 · 멈췄던 곳부터 순찰 재개");
       } else if (m === "SUSPECT") {
-        S.incident += 1; S.incidentStart = S.t; S.lineH = D.A.h;
+        S.incident += 1; S.incidentStart = S.t; S.holdT = 0; S.lineH = D.A.h;
         // 포위할 공간(바깥 원 + 여유)이 있고 A가 직접 볼 수 있는 빈 바닥 중, A와 가까운 곳에 침입자가 나타난다.
         const need = OUTER_R + 0.15;
         const seen = (p) => cast(S, D.A.x, D.A.y, angTo(D.A, p)) >= Math.hypot(p.x - D.A.x, p.y - D.A.y) - 0.05;
@@ -196,10 +206,11 @@
         ev("info", "포위 완료 · 0.6 m 거리 유지 (사람이 30 cm 안으로 오면 물러남)");
         for (const n of DOGS) S.evidence.unshift({ id: S.target.id, dog: n, ts: Date.now(), img: snapshot(S, n) });
         if (S.evidence.length > 12) S.evidence.length = 12;
-        ev("info", "증거 사진 3장 저장 · 관리자 인계 대기");
+        ev("info", "증거 사진 3장 저장 · 포위 유지 · 재정렬 신호 대기");
       } else if (m === "REGROUP") {
         const T = S.target;
-        ev("info", `사건 #${T.id} 인계 완료 · 이 위치는 기억하고 다시 알리지 않음`);
+        S.regroupReq = false;
+        ev("info", `사건 #${T.id} 포위 해제 · 다시 줄 서기 시작 · 이 위치는 기억하고 다시 알리지 않음`);
         S.routes = planRegroup(T, D); S.sched = S.routes.sched;
         S.remembered.push({ x: T.x, y: T.y, id: T.id });
         S.target = null;
@@ -332,7 +343,28 @@
         for (const n of DOGS) Object.assign(D[n], { stride: 0, turn: 0, state: S.estop ? "stopped" : "paused" });
         return;
       }
-      S.t += dt;
+      // STANDBY: 시작 명령 전에는 아무도 움직이지 않고, 준비 항목이 하나씩 확인됨
+      if (!S.started) {
+        S.standbyT += dt;
+        let all = true;
+        for (const n of DOGS) {
+          S.ready[n] = READY_ITEMS[n].map(([key, label, at]) => {
+            const ok = S.standbyT >= at;
+            if (!ok) all = false;
+            const val = key === "marker" ? (ok ? `ID ${MARKER_ID[AHEAD[n]]} · ${GAP.toFixed(2)} m` : "찾는 중") : ok ? "확인" : "확인 중";
+            return { key, label, ok, val };
+          });
+          Object.assign(D[n], { state: "idle", stride: 0, turn: 0 });
+          if (D[n].follow) D[n].follow.seen = S.ready[n].find((r) => r.key === "marker").ok;
+        }
+        if (all && !S.allReady) ev("info", "준비 완료 · 세 마리 모두 초록 · \"탐사 시작\"을 누를 수 있습니다");
+        S.allReady = all;
+        return;
+      }
+      // HANDOVER: 재정렬 신호(버튼)가 올 때까지 포위를 계속 유지
+      const holdEnd = (() => { const p = phaseAt(S.t); return p.m === "HANDOVER" ? S.t - p.pt + p.dur - 0.001 : null; })();
+      if (holdEnd !== null && !S.regroupReq && S.t + dt >= holdEnd) { S.holdT += Math.max(0, S.t + dt - holdEnd); S.t = holdEnd; }
+      else S.t += dt;
       const ph = phaseAt(S.t);
       if (ph.m !== S.mission) { const prev = S.mission; S.mission = ph.m; enter(ph.m, prev); }
       S.pt = ph.pt; S.dur = ph.dur;
@@ -402,7 +434,7 @@
     }
 
     ev("info", "시안 모드: 가짜 데이터로 시나리오를 반복 재생합니다");
-    ev("info", "정찰견 A가 앞장서서 지도 만들기 시작 (MAP)");
+    ev("info", "세 마리 일렬 대기 (STANDBY) · 시작 준비 확인 중");
 
     return {
       S, update,
@@ -411,8 +443,19 @@
         S.estop = !S.estop;
         ev(S.estop ? "alert" : "info", S.estop ? "비상 정지! 모든 로봇견에 stop 명령 전송" : "비상 정지 해제");
       },
-      handoverDone() { if (S.mission === "HANDOVER") S.t += S.dur - S.pt + 0.01; },
-      elapsed() { return S.target ? S.t - S.incidentStart : 0; },
+      start() {
+        if (S.started || !S.allReady || S.estop) return false;
+        S.started = true; S.mission = "MAP"; S.pt = 0; S.dur = MAP_T;
+        ev("info", "▶ 관제가 \"탐사 시작\"을 누름 → STANDBY에서 지도 만들기(MAP) 시작");
+        return true;
+      },
+      regroupNow() {
+        if (S.mission !== "HANDOVER" || S.regroupReq) return false;
+        S.regroupReq = true; S.t += S.dur - S.pt + 0.01;
+        ev("info", "↺ 관제가 \"재정렬\" 신호를 보냄");
+        return true;
+      },
+      elapsed() { return S.target ? S.t - S.incidentStart + S.holdT : 0; },
     };
   }
 
@@ -663,7 +706,7 @@
   }
 
   G.Mock = {
-    ARENA, MISSIONS, HOT, ROLE, ROLE_SUB, STATE_KO, DOGS, FONT,
+    ARENA, MISSIONS, HOT, ROLE, ROLE_SUB, STATE_KO, DOGS, FONT, READY_ITEMS,
     createSim, drawMap, drawCam, run, nav, fmtTime, fmtDur, battPct, battLevel,
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -17,6 +17,8 @@
       <figcaption><span class="badge" style="background:${COLOR[n]}">${n}</span>${M.ROLE[n]}<span class="live">● LIVE</span></figcaption>
       <span class="note">모의 영상</span>
     </figure>`).join("");
+  $("start").onclick = () => sim.start() && renderDom();
+  $("regroup").onclick = () => sim.regroupNow() && renderDom();
   $("pause").onclick = () => { sim.togglePause(); $("pause").textContent = S.paused ? "재개" : "일시정지"; };
   $("estop").onclick = () => { sim.toggleEstop(); $("estop").textContent = S.estop ? "정지 해제" : "■ 전체 정지"; };
 
@@ -48,13 +50,13 @@
     if (S.estop) { cls = "stop"; html = `<span class="ico">■</span>비상 정지됨 · 모든 로봇견이 멈췄습니다<button class="btn" id="bx">정지 해제</button>`; }
     else if (S.mission === "SUSPECT") { cls = "warn"; html = `<span class="ico">▲</span>정찰견 A가 지도에 없는 물체를 확인하고 있습니다 · 사건 #${S.target.id}`; }
     else if (S.mission === "CONTAIN") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.target.id} 침입자 확인 · A·B·C 3방향 포위 중 · 경과 ${M.fmtDur(sim.elapsed())}`; }
-    else if (S.mission === "HANDOVER") { cls = "alert"; html = `<span class="ico">●</span>포위 완료 · 증거 사진 3장 저장 · 관리자 인계 대기 (${M.fmtDur(sim.elapsed())})<button class="btn" id="bx">인계 완료</button>`; }
+    else if (S.mission === "HANDOVER") { cls = "alert"; html = `<span class="ico">●</span>포위 유지 중 · 증거 사진 3장 저장 · 상황이 끝나면 재정렬을 누르세요 (${M.fmtDur(sim.elapsed())})<button class="btn hold" id="bx">↺ 재정렬</button>`; }
     if (!html) { b.hidden = true; b.dataset.k = ""; return; }
     const key = cls + (S.mission === "CONTAIN" || S.mission === "HANDOVER" ? Math.floor(sim.elapsed()) : S.mission);
     if (b.dataset.k === key) return;
     b.dataset.k = key; b.hidden = false; b.className = `banner ${cls}`; b.innerHTML = html;
     const bx = $("bx");
-    if (bx) bx.onclick = () => (S.estop ? $("estop").click() : sim.handoverDone());
+    if (bx) bx.onclick = () => (S.estop ? $("estop").click() : $("regroup").click());
   }
 
   // ── 사이렌 (#6) ─────────────────────────────────────────────
@@ -122,7 +124,7 @@
       siren.ringId = id; siren.ringAt = Date.now();
       sirenLog("alert", `🚨 사이렌 울림 · 사건 #${id} · 범인 확인 단계 시작` + (siren.armed ? "" : " (알림 꺼져 있어 소리 · 팝업 안 나옴)"));
     } else if (!ringing && siren.ringId != null) {
-      const why = S.estop ? "비상 정지" : S.mission === "REGROUP" ? "줄 다시 서기(REGROUP) 시작"
+      const why = S.estop ? "비상 정지" : S.mission === "REGROUP" ? "재정렬 신호 → 줄 다시 서기(REGROUP) 시작"
         : (S.mission === "EXPLORE" || S.mission === "PATROL") ? "오탐 · 탐사로 복귀" : S.mission;
       sirenLog("warn", `⚠ 사이렌 자동 멈춤 · 사건 #${siren.ringId} · ${why} · 아무도 확인하지 않음 (울린 시간 ${since(siren.ringAt)})`);
       siren.ringId = null;
@@ -140,13 +142,31 @@
       : (siren.armed ? "소리 · 팝업 준비됨" : "알림이 꺼져 있어요");
   }
 
+  // ── 시작 준비 (STANDBY) ─────────────────────────────────────
+  function renderReady() {
+    $("ready").hidden = S.started;
+    if (S.started) return;
+    $("readyGrid").innerHTML = M.DOGS.map((n) => {
+      const items = S.ready[n] || [], ok = items.filter((r) => r.ok).length;
+      return `<article class="rcard" style="--c:${COLOR[n]}">
+        <header><span class="badge">${n}</span>${M.ROLE[n]}<span class="sum ${ok === items.length ? "ok" : "warn"}">${ok}/${items.length}</span></header>
+        ${items.map((r) => `<div class="ritem ${r.ok ? "ok" : ""}"><i></i><span>${r.label}</span><b>${r.val}</b></div>`).join("")}
+      </article>`;
+    }).join("");
+    $("start").disabled = !S.allReady || S.estop;
+    $("readySub").textContent = S.estop ? "비상 정지 중에는 시작할 수 없어요"
+      : S.allReady ? "모두 준비됐어요 · 탐사 시작을 누르세요" : "세 마리를 일렬로 세우고 모든 항목이 초록이 되면 탐사를 시작할 수 있어요";
+  }
+
   let evSeen = -1;
   function renderDom() {
     updateSiren();
+    renderReady();
+    $("regroup").disabled = S.mission !== "HANDOVER" || S.estop;
     const idx = M.MISSIONS.findIndex((m) => m.key === S.mission);
     [...$("steps").children].forEach((li, i) => { li.className = i === idx ? (M.HOT.has(S.mission) ? "now hot" : "now") : ""; });
     $("clock").textContent = M.fmtTime(Date.now());
-    $("mapmeta").textContent = S.mapDone ? `지도 고정됨 · 알림 완료 물체 ${S.remembered.length}개` : `지도 만드는 중 · ${S.knownPct}%`;
+    $("mapmeta").textContent = !S.started ? "대기 중 · 탐사를 시작하면 지도를 만들어요" : S.mapDone ? `지도 고정됨 · 알림 완료 물체 ${S.remembered.length}개` : `지도 만드는 중 · ${S.knownPct}%`;
     $("dogs").innerHTML = M.DOGS.map((n) => dogCard(S.dogs[n])).join("");
     banner();
     if (evSeen !== S.evSeq) {
