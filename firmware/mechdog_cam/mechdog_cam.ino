@@ -17,7 +17,7 @@
 
 const char* HOSTNAME = "mechdog-cam-a";   // http://mechdog-cam-a.local 로도 접속 가능
 const char* AP_SSID = "MechDog-Cam-A";    // Wi-Fi 접속 실패 시 여는 AP
-const char* AP_PASS = "mechdog123";       // 8자 이상
+const char* AP_PASS = "mechdog123";       // 8자 이상. 데모용 비상 AP 비밀번호라 공개해도 됨 allow-secret
 
 // 고정 IP를 쓰면 relay 주소가 바뀌지 않는다. 공유기의 대역에 맞게 고친다.
 const bool USE_STATIC_IP = false;
