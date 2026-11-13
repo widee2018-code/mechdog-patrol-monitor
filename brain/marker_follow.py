@@ -3,8 +3,13 @@
 마커가 화면 가운데에서 벗어난 정도는 회전으로, 마커 크기로 잰 거리는 속도로 바꾼다(P 제어).
 마커를 놓치면 멈추고, 잠시 뒤 마지막으로 본 쪽으로 돌며 다시 찾는다.
 
-일시정지 상태로 시작한다: 마커 인식 여부를 보여 주기만 하고, 스페이스(카메라 창) 또는
-Enter(터미널)를 누르면 따라가기 시작, 다시 누르면 일시정지. 바로 시작하려면 --autostart.
+STANDBY(일시정지) 상태로 시작한다: 움직이지 않고 준비 확인만 한다. 앞 개의 마커가 보이고, 앞 개와의
+거리가 0.12~0.25 m이고, 로봇견(dog_cmd.py)이 응답하는 상태가 1초 이상 이어지면 "EXPLORE 준비 완료"를
+대시보드 타임라인에 띄운다. 준비가 된 뒤 스페이스(카메라 창) 또는 Enter(터미널)를 누르면 출발, 다시 누르면
+일시정지. 준비 확인 없이 출발하려면 --no-ready-check, 바로 시작하려면 --autostart.
+
+거리는 로봇견 초음파(front_cm)를 먼저 쓰고, 없으면 카메라로 잰 마커 거리를 쓴다. 초음파와 로봇견 응답은
+모니터 서버(--monitor)의 /api/dogs에서 읽으므로, --monitor가 없으면 카메라만으로 판단한다.
 
 개 없이 연습 (노트북 웹캠, 명령은 화면과 터미널에만 표시):
     python brain/marker_follow.py --camera 0 --show
@@ -27,6 +32,7 @@ import numpy as np
 
 CMD_PORT = 9100       # firmware/dog_cmd.py가 명령을 받는 포트
 MONITOR_PORT = 9000   # server/app.py의 UDP 포트
+MONITOR_HTTP = 8000   # server/app.py의 HTTP 포트 (/api/dogs)
 STALE_SEC = 0.5       # 새 프레임이 이 시간 동안 안 오면 영상이 멈춘 것으로 보고 정지
 
 
@@ -57,6 +63,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--show", action="store_true", help="카메라 화면 창 띄우기 (스페이스: 시작/일시정지, q: 종료)")
     p.add_argument("--autostart", action="store_true",
                    help="시작 키를 기다리지 않고 마커가 보이면 바로 따라가기 (기본은 일시정지 상태로 시작)")
+    p.add_argument("--ready-min-m", type=float, default=0.12, help="준비 완료로 볼 앞 개와의 최소 거리 (m)")
+    p.add_argument("--ready-max-m", type=float, default=0.25, help="준비 완료로 볼 앞 개와의 최대 거리 (m)")
+    p.add_argument("--ready-hold-sec", type=float, default=1.0, help="조건이 이 시간 이상 이어져야 준비 완료 (초)")
+    p.add_argument("--link-sec", type=float, default=2.0, help="로봇견이 이 시간 안에 상태를 보냈으면 연결된 것으로 봄 (초)")
+    p.add_argument("--no-ready-check", action="store_true", help="준비 확인 없이 시작 키로 바로 출발")
     return p.parse_args()
 
 
@@ -203,11 +214,88 @@ class Follower:
         return 0, 0
 
 
-STATE_TEXT = {"paused": "일시정지 (시작 대기)", "wait": "마커 기다리는 중", "follow": "따라가는 중", "hold": "잠깐 놓침, 정지",
+class DogLink:
+    """모니터 서버의 /api/dogs를 0.5초마다 읽어 로봇견 초음파 거리와 마지막 응답 시각을 알려 준다."""
+
+    def __init__(self, monitor: str | None, name: str):
+        self.url = f"http://{monitor}:{MONITOR_HTTP}/api/dogs" if monitor else None
+        self.name = name
+        self.front_cm: float | None = None
+        self.age: float | None = None   # 로봇견이 마지막으로 보낸 지 몇 초 (모름 = None)
+        self.at = 0.0                   # 마지막으로 서버에서 읽은 시각
+        if self.url:
+            threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        while True:
+            try:
+                with urllib.request.urlopen(self.url, timeout=1) as r:
+                    body = json.load(r)
+                dog = body["dogs"].get(self.name, {})
+                self.front_cm = dog.get("front_cm")
+                self.age = body["now"] - dog["self_ts"] if "self_ts" in dog else None
+                self.at = time.time()
+            except Exception:
+                pass   # 서버가 아직 안 떴거나 예전 서버(/api/dogs 없음): 카메라만으로 판단
+            time.sleep(0.5)
+
+    def fresh(self, link_sec: float) -> bool:
+        return self.age is not None and self.age + (time.time() - self.at) <= link_sec
+
+
+class ReadyCheck:
+    """STANDBY 동안 '출발해도 되는가'를 판단한다. 조건이 hold 시간 이상 이어져야 준비 완료,
+    조건이 0.5초 넘게 깨져야 준비 취소 (마커 인식이 잠깐 깜빡여도 표시가 흔들리지 않게)."""
+
+    def __init__(self, a: argparse.Namespace, link: DogLink):
+        self.a, self.link = a, link
+        self.ready = False
+        self.reason = "확인 중"
+        self.dist: float | None = None
+        self.dist_src = ""
+        self._ok_since: float | None = None
+        self._bad_since: float | None = None
+
+    def step(self, seen: tuple[float, float] | None, now: float) -> bool:
+        a = self.a
+        reasons = []
+        if seen is None:
+            reasons.append(f"marker {a.marker_id} not seen")
+        use_link = bool(a.dog and self.link.url)
+        link_ok = use_link and self.link.fresh(a.link_sec)
+        if use_link and not link_ok:
+            reasons.append("dog not responding (dog_cmd.py?)")
+        if link_ok and self.link.front_cm is not None:
+            self.dist, self.dist_src = self.link.front_cm / 100, "sonar"
+        elif seen is not None:
+            self.dist, self.dist_src = seen[1], "camera"
+        else:
+            self.dist, self.dist_src = None, ""
+        if self.dist is not None and not a.ready_min_m <= self.dist <= a.ready_max_m:
+            reasons.append(f"gap {self.dist:.2f} m ({a.ready_min_m}-{a.ready_max_m} m)")
+        ok = not reasons
+        self.reason = "; ".join(reasons)
+        if ok:
+            self._bad_since = None
+            self._ok_since = self._ok_since or now
+            if now - self._ok_since >= a.ready_hold_sec:
+                self.ready = True
+            else:
+                self.reason = f"holding {a.ready_hold_sec:.0f} s"   # 조건은 맞고 유지 시간을 기다리는 중
+        else:
+            self._ok_since = None
+            self._bad_since = self._bad_since or now
+            if now - self._bad_since > 0.5:
+                self.ready = False
+        return self.ready
+
+
+STATE_TEXT = {"paused": "STANDBY (일렬 대기)", "wait": "마커 기다리는 중", "follow": "따라가는 중", "hold": "잠깐 놓침, 정지",
               "search": "다시 찾는 중", "gave_up": "못 찾음, 정지", "no_video": "영상 끊김, 정지"}
 
 
-def draw(frame: np.ndarray, corners: np.ndarray | None, seen, state: str, cmd: tuple[int, int], a) -> None:
+def draw(frame: np.ndarray, corners: np.ndarray | None, seen, state: str, cmd: tuple[int, int], a,
+         ready: ReadyCheck | None = None) -> None:
     h, w = frame.shape[:2]
     cv2.line(frame, (w // 2, 0), (w // 2, h), (180, 180, 180), 1)
     if corners is not None:
@@ -216,7 +304,13 @@ def draw(frame: np.ndarray, corners: np.ndarray | None, seen, state: str, cmd: t
         cv2.line(frame, (w // 2, cy), (cx, cy), (0, 0, 255), 2)
     color = (0, 160, 0) if state == "follow" else (0, 140, 255)
     lines = [f"{state}  cmd v={cmd[0]} turn={cmd[1]}"]
-    if state == "paused":
+    if state == "paused" and ready is not None:
+        color = (0, 160, 0) if ready.ready else (0, 0, 220)
+        lines = ["STANDBY - READY for EXPLORE" if ready.ready else "STANDBY - not ready",
+                 "SPACE (or Enter) = start" if ready.ready else ready.reason]
+        if ready.dist is not None:
+            lines.append(f"gap {ready.dist:.2f} m ({ready.dist_src})")
+    elif state == "paused":
         color = (0, 160, 0) if seen else (0, 0, 220)
         lines = [f"PAUSED - marker {'OK' if seen else 'NOT seen'}", "SPACE (or Enter in terminal) = start"]
     if seen:
@@ -230,6 +324,8 @@ def main() -> None:
     cam = LatestFrame(a.camera)
     detector = make_detector()
     follower = Follower(a)
+    link = DogLink(a.monitor, a.name)
+    ready = None if a.no_ready_check else ReadyCheck(a, link)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     def to_monitor(msg: dict) -> None:
@@ -255,7 +351,13 @@ def main() -> None:
     mode = f"로봇견 {a.dog}:{CMD_PORT}로 명령 전송" if a.dog else "연습 모드 (명령 전송 안 함)"
     print(f"마커 ID {a.marker_id} 따라가기 · {mode} · 카메라 {a.camera} · Ctrl+C로 종료")
     if not a.autostart:
-        print("일시정지 상태로 시작합니다. 마커가 보이면 스페이스(카메라 창) 또는 Enter(터미널)로 시작/일시정지.")
+        if ready:
+            print(f"STANDBY로 시작합니다. 마커 {a.marker_id}가 보이고 앞 개와 {a.ready_min_m}~{a.ready_max_m} m 거리가 "
+                  f"{a.ready_hold_sec:.0f}초 이상 유지되면 준비 완료. 그다음 스페이스(카메라 창) 또는 Enter(터미널)로 출발.")
+            if a.dog and not a.monitor:
+                print("  --monitor가 없어 초음파와 로봇견 응답은 확인하지 않고 카메라로만 판단합니다.")
+        else:
+            print("일시정지 상태로 시작합니다. 스페이스(카메라 창) 또는 Enter(터미널)로 시작/일시정지 (준비 확인 안 함).")
     to_monitor({"type": "event", "from": a.name, "level": "info",
                 "text": f"Dog {a.name} 마커 {a.marker_id} 따라가기 준비 ({'실제' if a.dog else '연습'})"})
 
@@ -274,6 +376,7 @@ def main() -> None:
     period = 1 / a.rate
     running = a.autostart
     last_seq, last_state, last_print, last_frame_at = -1, None, 0.0, time.time()
+    was_ready = None
     cmd, corners, seen = (0, 0), None, None
     try:
         while True:
@@ -281,7 +384,11 @@ def main() -> None:
             if toggle.is_set():
                 toggle.clear()
                 running = not running
-                if running:
+                if running and ready and not ready.ready:
+                    running = False   # 준비가 안 됐으면 출발하지 않는다
+                    print(f"\n[{time.strftime('%H:%M:%S')}] 아직 준비 안 됨: {ready.reason}. "
+                          "준비 확인 없이 출발하려면 --no-ready-check")
+                elif running:
                     follower = Follower(a)   # 이전에 놓쳤던 기록 없이 새로 시작
                     print(f"\n[{time.strftime('%H:%M:%S')}] 시작" + ("" if seen else " (마커가 아직 안 보임: 보이면 따라감)"))
                 else:
@@ -305,6 +412,21 @@ def main() -> None:
             elif t0 - last_frame_at > STALE_SEC:
                 # 영상이 멈췄으면 오래된 화면을 보고 움직이지 않도록 정지한다
                 follower.state, cmd = "no_video", (0, 0)
+            if ready and not running:
+                ready.step(None if t0 - last_frame_at > STALE_SEC else seen, t0)   # 영상이 멈췄으면 준비 아님
+                if ready.ready != was_ready:
+                    if ready.ready:
+                        text = f"Dog {a.name} STANDBY: EXPLORE 준비 완료 (마커 {a.marker_id}, 거리 {ready.dist:.2f} m)"
+                        print(f"\n[{time.strftime('%H:%M:%S')}] 준비 완료. 스페이스 또는 Enter로 출발")
+                    else:
+                        text = f"Dog {a.name} STANDBY: 준비 안 됨 ({ready.reason})"
+                        if was_ready:
+                            print(f"\n[{time.strftime('%H:%M:%S')}] 준비 취소: {ready.reason}")
+                    if was_ready is not None or ready.ready:
+                        to_monitor({"type": "event", "from": a.name, "level": "info" if ready.ready else "warn", "text": text})
+                    was_ready = ready.ready
+            elif running:
+                was_ready = None   # 다시 일시정지하면 준비 확인을 처음부터
             to_dog(*cmd)   # 같은 명령이라도 매 주기 보낸다: 로봇견 워치독(1초)이 멈추지 않게
 
             if follower.state != last_state:
@@ -315,13 +437,14 @@ def main() -> None:
                             "text": f"Dog {a.name}: {what}{STATE_TEXT[follower.state]}"})
                 last_state = follower.state
             if t0 - last_print > 0.5:
-                to_monitor({"type": "dog", "from": a.name, "state": follower.state})
+                to_monitor({"type": "dog", "from": a.name, "state": follower.state,
+                            **({"ready": ready.ready} if ready and not running else {})})
                 print(f"  {follower.state:8s} v={cmd[0]:4d} turn={cmd[1]:4d}", end="\r")
                 last_print = t0
 
             if a.show:
                 view = frame.copy()
-                draw(view, corners, seen, follower.state, cmd, a)
+                draw(view, corners, seen, follower.state, cmd, a, ready)
                 cv2.imshow(f"marker follow - Dog {a.name}", view)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):

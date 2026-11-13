@@ -72,6 +72,8 @@ def ingest(msg: dict) -> None:
         # 위치는 Pi(LiDAR 추적)에서, 배터리/센서는 로봇견 자신에게서 오므로 둘을 합친다.
         key = f"dog:{msg['from']}"
         latest[key] = {**latest.get(key, {}), **msg}
+        if "front_cm" in msg or "rssi" in msg:   # 로봇견 자신(dog_cmd.py)이 보낸 메시지: 살아 있다는 표시
+            latest[key]["self_ts"] = msg["ts"]
         if msg["from"] in offline:
             offline.discard(msg["from"])
             ingest({"type": "event", "from": "monitor", "level": "info", "text": f"Dog {msg['from']} 다시 온라인"})
@@ -220,6 +222,12 @@ async def http_ingest(request: Request):
 @app.get("/api/state")
 async def state():
     return {"latest": latest, "events": history["event"], "evidence": history["evidence"]}
+
+
+@app.get("/api/dogs")
+async def dogs():
+    """로봇견별 최신 상태만 가볍게 (brain/marker_follow.py의 준비 확인이 0.5초마다 읽는다)."""
+    return {"now": time.time(), "dogs": {k[4:]: v for k, v in latest.items() if k.startswith("dog:")}}
 
 
 @app.get("/api/cameras")
