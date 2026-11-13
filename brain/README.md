@@ -54,7 +54,7 @@ python brain/marker_follow.py --camera http://localhost:8000/api/camera/B/stream
 
 ## 4. 로봇견이 명령 받기
 
-1. ([Thonny 연결 방법](../docs/mechdog_thonny_guide.md) 참고) 로봇견 안에 `secrets.py`(Wi-Fi, `MONITOR`)를 저장해 두고, Thonny에서 `firmware/dog_cmd.py`의 `NAME`을 확인한 뒤 Run. 출력되는 로봇견 IP를 적어 둡니다.
+1. ([Thonny 연결 방법](../docs/mechdog_thonny_guide.md) 참고) 로봇견 안에 `secrets.py`(Wi-Fi, `MONITOR`, `NAME`)를 저장해 두고, Thonny에서 `firmware/dog_cmd.py`를 Run. 출력되는 로봇견 IP를 적어 둡니다.
 2. 로봇견을 들어 올린 상태(다리가 허공)에서 키보드 조종으로 확인합니다.
    ```bash
    python brain/teleop.py --dog 192.168.0.31
@@ -129,7 +129,17 @@ python brain/contain_demo.py run --dog 192.168.0.19 --name B --monitor 127.0.0.1
 
 # C (맨 뒤, 왼쪽으로 크게)
 python brain/contain_demo.py run --dog <C의 IP> --name C --monitor 127.0.0.1
+
+# B·C 함께: Enter 한 번에 동시에 포위 → HOLD → Enter 한 번에 B 복귀·정렬이 끝난 뒤 C 복귀·정렬
+python brain/contain_demo.py run --name B,C --dog <B IP>,<C IP> --monitor 127.0.0.1 \
+    --camera http://localhost:8000/api/camera/B/stream,http://localhost:8000/api/camera/C/stream
+
+# 한 마리로 다듬은 경로 값을 저장해 두기 (다음부터, 두 마리 모드에서도 이 값을 씀)
+python brain/contain_demo.py run --dog <C IP> --name C --out 0.5 --forward 0.4 --turn-in 95 --save
 ```
+
+- 개마다 다른 값(회전 방향 `turn_sign`, 경로 `path`)은 `brain/calibration.json`의 그 개 항목에 저장됩니다. 우선순위: 명령줄 > `calibration.json` > 이름별 기본값.
+- **포위 전에 `marker_follow.py`는 반드시 `q`로 끄세요.** 일시정지 상태에서도 정지 명령을 계속 보내서 포위 명령과 섞입니다.
 
 - 바닥 배치: 침입자(상자)를 두고, A(또는 A 대신 마커를 붙인 상자)를 침입자 앞 `--radius` 0.8 m, B를 그 뒤 `--spacing` 0.45 m(개 중심 사이)에 같은 방향으로 세웁니다.
 - 공간: B는 출발 위치에서 오른쪽·앞으로 0.2 m씩 움직입니다. 처음에는 손으로 잡을 수 있게 옆에서 따라가세요. Ctrl+C면 바로 정지합니다.

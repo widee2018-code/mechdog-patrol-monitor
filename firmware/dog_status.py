@@ -1,5 +1,5 @@
 # MechDog(ESP32-S3)용 MicroPython: Wi-Fi에 연결해서 모니터로 `dog` 상태를 보낸다.
-# 로봇견 안에 secrets.py(Wi-Fi 정보, 모니터 IP)를 저장해 두고, Thonny에서 아래 NAME을 고친 뒤 Run을 누른다. 로봇견의 원래 main.py를
+# 로봇견 안에 secrets.py(Wi-Fi 정보, 모니터 IP, 이 개의 이름)를 저장해 두고, Thonny에서 Run을 누른다. 로봇견의 원래 main.py를
 # 백업해 두기 전에는 이 파일을 main.py로 덮어쓰지 말 것.
 import network, socket, json, time
 
@@ -11,7 +11,10 @@ try:
     from secrets import MONITOR   # 모니터 서버(노트북) 주소도 장소마다 바뀌므로 secrets.py에 둔다
 except ImportError:
     raise RuntimeError("secrets.py에 MONITOR = (\"노트북 IP\", 9000) 한 줄을 추가해 로봇견에 다시 저장하세요.")
-NAME = "B"                          # A, B 또는 C
+try:
+    from secrets import NAME      # 로봇견 이름(A, B, C)은 개마다 다르므로 그 개의 secrets.py에 둔다
+except ImportError:
+    raise RuntimeError("secrets.py에 NAME = \"B\"처럼 이 로봇견 이름(A, B, C) 한 줄을 추가해 다시 저장하세요.")
 
 # 센서 함수. 본문을 사용 중인 펌웨어에 맞는 Hiwonder MechDog 예제 코드로 바꾼다.
 # 그 전까지는 None을 반환하며, 대시보드는 값이 없는 항목을 "—"로 표시한다.

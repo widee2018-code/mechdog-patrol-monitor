@@ -93,7 +93,7 @@ mechdog-patrol-monitor/
 ├── firmware/
 │   ├── dog_status.py   # MechDog(MicroPython)용 상태 전송 코드
 │   ├── dog_cmd.py      # MechDog: Wi-Fi move 명령 받기 + 안전 반사
-│   ├── secrets.py.example # Wi-Fi 정보·노트북 IP 틀: secrets.py로 복사해 로봇견에 저장 (커밋 안 됨)
+│   ├── secrets.py.example # Wi-Fi 정보·노트북 IP·개 이름 틀: secrets.py로 복사해 로봇견마다 저장 (커밋 안 됨)
 │   └── mechdog_cam/    # 카메라 모듈 펌웨어: 기존 Wi-Fi에 접속 (Arduino)
 ├── tools/
 │   ├── send_test.py    # 실제 하드웨어 없이 서버를 확인하는 테스트 송신기
@@ -114,7 +114,7 @@ Pi와 로봇견이 `udp://<모니터-IP>:9000` 으로 [docs/message_schema.md](d
 ## 실제 MechDog로 첫 테스트
 
 1. 서버만 실행합니다(시뮬레이터 없이). `python tools/send_test.py` 를 실행해서 http://localhost:8000 에 움직이는 Dog B가 나오는지 확인한 뒤 멈춥니다.
-2. `firmware/secrets.py.example` 을 `firmware/secrets.py` 로 복사해 Wi-Fi 이름·비밀번호와 `MONITOR`(이 컴퓨터의 IP)를 넣고, Thonny로 로봇견 안에 `secrets.py` 로 저장합니다([Thonny 가이드](docs/mechdog_thonny_guide.md) 3절). 그다음 `firmware/dog_status.py` 에서 `NAME` 을 설정하고 USB로 로봇견에서 실행합니다. `secrets.py` 는 `.gitignore`에 들어 있어 커밋되지 않습니다.
+2. `firmware/secrets.py.example` 을 `firmware/secrets.py` 로 복사해 Wi-Fi 이름·비밀번호, `MONITOR`(이 컴퓨터의 IP), `NAME`(로봇견 이름)을 넣고, Thonny로 로봇견 안에 `secrets.py` 로 저장합니다([Thonny 가이드](docs/mechdog_thonny_guide.md) 3절). 그다음 `firmware/dog_status.py` 를 USB로 로봇견에서 실행합니다. `secrets.py` 는 `.gitignore`에 들어 있어 커밋되지 않습니다.
 3. 로봇견 카드가 활성화되어 Wi-Fi 세기가 표시되고, 타임라인에 "Dog B 온라인"이 떠야 합니다. 그다음 센서 함수를 하나씩 채웁니다.
 4. Pi + LiDAR가 동작하기 전에는 로봇견의 위치가 없습니다. 그동안 지도에 표시하려면: `python tools/send_test.py --dog B --x 1.2 --y 0.8`
 
