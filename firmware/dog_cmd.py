@@ -9,7 +9,7 @@
 # 명령 형식 (UDP 9100):  {"cmd": "move", "v": 80, "turn": -20}   {"cmd": "stop"}
 #   v    : 전진(+)/후진(-) 속도. 원래 앱 코드는 전진 80~120, 후진 -40을 쓴다.
 #   turn : 회전. 원래 앱 코드는 -50~50을 쓴다. 어느 부호가 왼쪽인지는 처음에 확인할 것.
-import network, socket, json, time
+import network, socket, json, time, gc
 import Hiwonder_IIC
 from HW_MechDog import MechDog
 
@@ -17,7 +17,7 @@ try:
     from secrets import WIFI_SSID, WIFI_PASS   # Wi-Fi 정보는 로봇견 안의 secrets.py에 둔다
 except ImportError:
     raise RuntimeError("로봇견에 secrets.py가 없습니다. firmware/secrets.py.example을 참고해 Thonny로 저장하세요.")
-MONITOR = ("192.168.0.11", 9000)   # server/app.py를 실행하는 컴퓨터의 IP
+MONITOR = ("192.168.219.103", 9000)   # server/app.py를 실행하는 컴퓨터의 IP
 NAME = "B"                          # A, B 또는 C
 CMD_PORT = 9100
 
@@ -60,7 +60,17 @@ def led(r, g, b):
 wlan = connect()
 ip = wlan.ifconfig()[0]
 mon = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-send = lambda msg: mon.sendto(json.dumps(msg).encode(), MONITOR)
+
+
+def send(msg):
+    # 상태 전송은 실패해도 된다. Wi-Fi가 느리면 전송 버퍼가 차서 OSError(ENOMEM)가 나는데,
+    # 이걸로 프로그램이 죽으면 워치독도 같이 멈추므로 메시지 하나만 버리고 계속 돈다.
+    try:
+        mon.sendto(json.dumps(msg).encode(), MONITOR)
+    except OSError:
+        gc.collect()
+
+
 cmd_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 cmd_sock.bind(("0.0.0.0", CMD_PORT))
 cmd_sock.settimeout(0.05)
@@ -78,53 +88,58 @@ last_report = 0
 front_cm = None
 led_state = None
 
-while True:
-    try:
-        data, _ = cmd_sock.recvfrom(256)
-        msg = json.loads(data)
-        if msg.get("cmd") == "move":
-            want = (clamp(msg.get("v", 0), MAX_SPEED), clamp(msg.get("turn", 0), MAX_TURN))
-            last_cmd = time.ticks_ms()
-        elif msg.get("cmd") == "stop":
-            want = (0, 0)
-            last_cmd = time.ticks_ms()
-    except OSError:
-        pass            # 0.05초 동안 명령 없음
-    except ValueError:
-        pass            # 깨진 JSON은 무시
-
-    now = time.ticks_ms()
-    if time.ticks_diff(now, last_report) >= 100:
+try:
+    while True:
         try:
-            front_cm = sonar.getDistance()
-        except Exception:
-            front_cm = None
+            data, _ = cmd_sock.recvfrom(256)
+            msg = json.loads(data)
+            if msg.get("cmd") == "move":
+                want = (clamp(msg.get("v", 0), MAX_SPEED), clamp(msg.get("turn", 0), MAX_TURN))
+                last_cmd = time.ticks_ms()
+            elif msg.get("cmd") == "stop":
+                want = (0, 0)
+                last_cmd = time.ticks_ms()
+        except OSError:
+            pass            # 0.05초 동안 명령 없음
+        except ValueError:
+            pass            # 깨진 JSON은 무시
 
-    v, turn = want
-    if time.ticks_diff(now, last_cmd) > WATCHDOG_MS:
-        v, turn, state = 0, 0, "idle"
-    elif v > 0 and front_cm is not None and front_cm < STOP_CM:
-        v, state = 0, "blocked"
-    else:
-        state = "moving" if (v, turn) != (0, 0) else "stopped"
+        now = time.ticks_ms()
+        if time.ticks_diff(now, last_report) >= 100:
+            try:
+                front_cm = sonar.getDistance()
+            except Exception:
+                front_cm = None
 
-    if (v, turn) != current:
-        dog.move(v, turn)
-        current = (v, turn)
-    colors = {"idle": (0, 0, 0x40), "blocked": (0xff, 0, 0), "moving": (0, 0xff, 0), "stopped": (0xff, 0xcc, 0)}
-    if state != led_state:
-        led(*colors[state])
-        led_state = state
+        v, turn = want
+        if time.ticks_diff(now, last_cmd) > WATCHDOG_MS:
+            v, turn, state = 0, 0, "idle"
+        elif v > 0 and front_cm is not None and front_cm < STOP_CM:
+            v, state = 0, "blocked"
+        else:
+            state = "moving" if (v, turn) != (0, 0) else "stopped"
 
-    if time.ticks_diff(now, last_report) >= 100:
-        last_report = now
-        msg = {"type": "dog", "from": NAME, "state": state, "front_cm": front_cm}
-        try:
-            msg["rssi"] = wlan.status("rssi")
-        except Exception:
-            pass
-        send({k: x for k, x in msg.items() if x is not None})
-        if not wlan.isconnected():
-            dog.move(0, 0)
-            current = (0, 0)
-            wlan = connect()
+        if (v, turn) != current:
+            dog.move(v, turn)
+            current = (v, turn)
+        colors = {"idle": (0, 0, 0x40), "blocked": (0xff, 0, 0), "moving": (0, 0xff, 0), "stopped": (0xff, 0xcc, 0)}
+        if state != led_state:
+            led(*colors[state])
+            led_state = state
+
+        if time.ticks_diff(now, last_report) >= 100:
+            last_report = now
+            msg = {"type": "dog", "from": NAME, "state": state, "front_cm": front_cm}
+            try:
+                msg["rssi"] = wlan.status("rssi")
+            except Exception:
+                pass
+            send({k: x for k, x in msg.items() if x is not None})
+            if not wlan.isconnected():
+                dog.move(0, 0)
+                current = (0, 0)
+                wlan = connect()
+finally:
+    # 어떤 이유로든 끝나면(오류, Thonny Stop) 반드시 멈춘다. 걷던 중에 죽으면 마지막 move가 남아 계속 걷기 때문
+    dog.move(0, 0)
+    led(0, 0, 0)
