@@ -285,18 +285,39 @@ function connect() {
   };
 }
 
-// 서버가 카메라 스트림을 받고 있으면 스냅샷 위에 실시간 영상을 겹쳐 보여 준다.
-// 끊기면 src를 지워서 아래의 camera 메시지 스냅샷이 다시 보이게 한다.
+// 서버 CAMERAS에 있는 카메라마다 카드 하나. A는 HTML에 있는 카드(스냅샷 겸용), 나머지는 여기서 만든다.
+function camCard(name) {
+  if (name === LIVE_CAM) return { img: $("cam-live"), meta: $("cam-meta"), empty: $("cam-empty") };
+  let card = $(`cam-card-${name}`);
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "card cam-card";
+    card.id = `cam-card-${name}`;
+    card.innerHTML = `<div class="card-head"><h2>카메라 · Dog ${name}</h2><span class="muted">—</span></div>
+      <div class="camera"><img alt="Dog ${name} 카메라 실시간"><span>영상 대기 중</span></div>`;
+    const cards = document.querySelectorAll(".cam-card");
+    cards[cards.length - 1].after(card);
+  }
+  return { img: card.querySelector("img"), meta: card.querySelector(".card-head .muted"), empty: card.querySelector(".camera span") };
+}
+
+// 서버가 카메라 스트림을 받고 있으면 실시간 영상을 보여 준다 (A는 스냅샷 위에 겹쳐서).
+// 끊기면 src를 지워서 A는 아래의 camera 메시지 스냅샷이 다시 보이게 한다.
 function pollLive() {
   fetch("/api/cameras").then((r) => r.json()).then((cams) => {
-    const live = cams[LIVE_CAM]?.online === true;
-    const img = $("cam-live");
-    if (live && !img.getAttribute("src")) img.src = `/api/camera/${LIVE_CAM}/stream`;
-    if (!live) img.removeAttribute("src");
-    S.camLive = live;
-    if (live) {
-      $("cam-empty").hidden = true;
-      $("cam-meta").textContent = "실시간";
+    for (const name of Object.keys(cams).sort()) {
+      const live = cams[name].online === true;
+      const c = camCard(name);
+      if (live && !c.img.getAttribute("src")) c.img.src = `/api/camera/${name}/stream${cams[name].markers ? "?markers=1" : ""}`;
+      if (!live) c.img.removeAttribute("src");
+      if (name === LIVE_CAM) S.camLive = live;
+      if (live) {
+        c.empty.hidden = true;
+        c.meta.textContent = "실시간";
+      } else if (name !== LIVE_CAM) {
+        c.empty.hidden = false;
+        c.meta.textContent = "연결 끊김";
+      }
     }
   }).catch(() => {}).finally(() => setTimeout(pollLive, 3000));
 }

@@ -15,6 +15,7 @@ Pi 관제탑과 로봇견들이 보내는 JSON 메시지(UDP 또는 HTTP POST)�
 
 import asyncio
 import json
+import math
 import os
 import secrets
 import threading
@@ -27,7 +28,15 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+try:   # 대시보드 영상에 마커 표시용. opencv가 없으면(서버만 설치) 원본 영상만 보낸다.
+    import cv2
+    import numpy as np
+except ImportError:
+    cv2 = None
+
 UDP_PORT = 9000
+MARKER_M = 0.07    # 출력한 마커 한 변 (brain/marker_follow.py --marker-cm)
+CAM_HFOV = 62.0    # 카메라 가로 화각 (brain/marker_follow.py --hfov)
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 MAX_EVENTS = 200
 MAX_EVIDENCE = 24
@@ -112,6 +121,27 @@ def mjpeg_frames(url: str):
                 buf = b""
 
 
+def draw_markers(detector, jpg: bytes) -> bytes:
+    """ArUco 마커(DICT_4X4_50)마다 테두리, ID, 어림 거리를 그린다. 거리는 marker_follow.py와 같은 핀홀 모델."""
+    img = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        return jpg
+    corners, ids, _ = detector.detectMarkers(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+    w = img.shape[1]
+    focal_px = (w / 2) / math.tan(math.radians(CAM_HFOV) / 2)
+    for c, marker_id in zip(corners, [] if ids is None else ids.flatten()):
+        c = c.reshape(4, 2)
+        side_px = np.mean([np.linalg.norm(c[i] - c[(i + 1) % 4]) for i in range(4)])
+        x, y = c.min(axis=0).astype(int)
+        cv2.polylines(img, [c.astype(int)], True, (0, 200, 0), 2)
+        cv2.putText(img, f"ID {marker_id}  {focal_px * MARKER_M / side_px:.2f} m", (x, max(y - 6, 14)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 0), 2)
+    if ids is None:
+        cv2.putText(img, "no marker", (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 220), 2)
+    ok, out = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    return out.tobytes() if ok else jpg
+
+
 class CameraFeed:
     """카메라 스트림 연결을 하나만 열어 두고 최신 프레임을 여러 대시보드에 나눠 준다.
 
@@ -126,6 +156,18 @@ class CameraFeed:
         self.last_error: str | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._new: asyncio.Event | None = None
+        # 마커 표시 영상: 보는 대시보드가 여러 개여도 프레임마다 한 번만 그린다.
+        self._mark_lock = threading.Lock()
+        self._marked_src: bytes | None = None
+        self._marked: bytes | None = None
+        self._detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50),
+                                                 cv2.aruco.DetectorParameters()) if cv2 else None
+
+    def marked(self, jpg: bytes) -> bytes:
+        with self._mark_lock:
+            if self._marked_src is not jpg:
+                self._marked, self._marked_src = draw_markers(self._detector, jpg), jpg
+            return self._marked
 
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop, self._new = loop, asyncio.Event()
@@ -232,17 +274,22 @@ async def dogs():
 
 @app.get("/api/cameras")
 async def cameras():
-    return {name: {"online": feed.online, "url": feed.url, "error": feed.last_error} for name, feed in feeds.items()}
+    return {name: {"online": feed.online, "url": feed.url, "error": feed.last_error, "markers": cv2 is not None}
+            for name, feed in feeds.items()}
 
 
 @app.get("/api/camera/{name}/stream")
-async def camera_stream(name: str):
+async def camera_stream(name: str, markers: bool = False):
+    """markers=1이면 마커 표시를 그린 영상 (대시보드용). 따라가기·포위 프로그램은 원본을 읽는다."""
     feed = feeds.get(name)
     if feed is None:
         raise HTTPException(404, f"Dog {name} 카메라가 CAMERAS에 설정되지 않음")
+    markers = markers and cv2 is not None
 
     async def body():
         async for jpg in feed.frames():
+            if markers:
+                jpg = await asyncio.to_thread(feed.marked, jpg)
             yield b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n%s\r\n" % (len(jpg), jpg)
 
     return StreamingResponse(body(), media_type="multipart/x-mixed-replace; boundary=frame",
