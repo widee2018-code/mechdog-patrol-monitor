@@ -53,6 +53,28 @@ button { font: inherit; cursor: pointer; }
 @keyframes raysBlink { 0% { opacity: 1; } 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .siren.on .dome, .siren.on .rays { animation: none; } .siren.on .rays { opacity: 1; } }
 
+/* 시작 준비 (STANDBY) */
+.ready { margin: 12px 18px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
+.ready[hidden] { display: none; }
+.ready-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ready-head b { display: block; font-size: 14px; }
+.ready-head small { color: var(--muted); font-size: 12px; }
+.btn.go { margin-left: auto; background: var(--ok); border-color: var(--ok); color: #06140d; font-size: 15px; padding: 9px 18px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; filter: grayscale(.6); }
+.ready-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.rcard { border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 10px; padding: 8px 10px; background: var(--panel2); }
+.rcard header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+.rcard header .badge { width: 22px; height: 22px; border-radius: 50%; background: var(--c); color: #0a0e14; display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+.rcard header .sum { margin-left: auto; font-size: 11px; font-weight: 700; }
+.ritem { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; border-top: 1px dashed #1b2532; }
+.ritem i { width: 10px; height: 10px; border-radius: 50%; background: var(--alert); flex: none; }
+.ritem.ok i { background: var(--ok); }
+.ritem span { color: var(--muted); }
+.ritem b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ritem.ok b { color: var(--ok); }
+.btn.hold { background: var(--warn); border-color: var(--warn); color: #1a1405; }
+@media (max-width: 720px) { .ready-grid { grid-template-columns: 1fr; } .ready { margin: 12px 16px 0; } }
+
 .banner { margin: 12px 18px 0; padding: 10px 14px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-weight: 600; }
 .banner[hidden] { display: none; }
 .banner .ico { font-size: 18px; }
@@ -143,11 +165,20 @@ main { flex: 1; display: grid; gap: 12px; padding: 12px 18px 18px; min-height: 0
   </div>
   <ol class="steps" id="steps"></ol>
   <span class="clock" id="clock"></span>
+  <button class="btn" id="regroup" disabled title="포위 · 인계 중에만 누를 수 있어요">↺ 재정렬</button>
   <button class="btn" id="pause">일시정지</button>
   <button class="btn danger" id="estop">■ 전체 정지</button>
 </header>
 
 <div class="banner" id="banner" hidden></div>
+
+<section class="ready" id="ready" aria-label="시작 준비 확인">
+  <div class="ready-head">
+    <div><b>시작 준비 확인 · STANDBY</b><small id="readySub">세 마리를 일렬로 세우고 모든 항목이 초록이 되면 탐사를 시작할 수 있어요</small></div>
+    <button class="btn go" id="start" disabled>▶ 탐사 시작</button>
+  </div>
+  <div class="ready-grid" id="readyGrid"></div>
+</section>
 
 <main>
   <section class="panel map">
