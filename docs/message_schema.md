@@ -11,8 +11,9 @@
 | `intruder` | Pi | 추적 중 5 Hz | `x`, `y`, `confidence`(0–1) |
 | `sound` | Pi (ReSpeaker) | 1 Hz + 경보 시 | `label`(예: `glass_break`, `door`, `ambient`), `doa_deg`, `level_db`, `confidence`, `alert`(bool) |
 | `camera` | Dog A (또는 대신 보내는 Pi) | 약 1 Hz | `from`, `image`(data URL: `data:image/jpeg;base64,...`), `evidence`(bool: 증거 갤러리에 추가), `note` |
-| `mission` | Pi 상태 머신 | 변경 시 | `state`: PATROL / SUSPECT / ALERT / INTERCEPT / CONTAIN / HANDOVER / RETURN |
+| `mission` | Pi 상태 머신 | 변경 시 | `state`: STANDBY / EXPLORE / SUSPECT / CONFIRM / CONTAIN / HANDOVER / REGROUP (옛 이름 PATROL / ALERT / INTERCEPT / RETURN도 받음). 사건 중이면 서버가 `incident`(사건 번호)를 붙여 대시보드로 보낸다 |
 | `event` | Pi | 발생 시 | `level`(`info` / `warn` / `alert`), `text` |
+| `alarm` | 모니터 서버 (`from: "monitor"`) | 사이렌이 켜지고 꺼질 때 | `state`(`on`/`off`), `reason`(`confirm` / `ack` / `regroup` / `false_alarm`), `incident`(사건 번호), `x`, `y`(울릴 때 마지막 침입자 위치). 서버가 `mission` 변화로 만든다. 직접 보낼 필요 없음 |
 
 ## 예시
 

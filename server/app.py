@@ -70,11 +70,57 @@ async def broadcast(msg: dict) -> None:
         clients.discard(ws)
 
 
+# 사이렌 (#6): 서버 한 곳에서 판단해 alarm 메시지를 보낸다. 대시보드를 여러 개 열어도 기록은 한 번만 남고,
+# recorder 가 alarm/event 를 Supabase 에 저장한다 (cloud/supabase/incidents.sql 이 읽는 형식).
+# 울림: 범인 확인(CONFIRM) 이후 단계로 들어갈 때. 멈춤: 확인 버튼(ack) / 줄 다시 서기(regroup) / 대기·탐사로 복귀(false_alarm)
+MISSION_ALIAS = {"MAP": "EXPLORE", "PATROL": "EXPLORE", "ALERT": "CONFIRM", "INTERCEPT": "CONTAIN", "RETURN": "REGROUP"}
+INCIDENT_STATES = {"SUSPECT", "CONFIRM", "CONTAIN", "HANDOVER", "REGROUP"}
+RING_STATES = {"CONFIRM", "CONTAIN", "HANDOVER"}
+siren = {"mission": None, "incident": 0, "on": False, "acked": 0, "since": 0.0}
+
+
+def fmt_dur(sec: float) -> str:
+    return f"{int(sec // 60):02d}:{int(sec % 60):02d}"
+
+
+def siren_off(reason: str, text: str, level: str, ts: float) -> None:
+    siren["on"] = False
+    n, dur = siren["incident"], fmt_dur(ts - siren["since"])
+    ingest({"type": "alarm", "from": "monitor", "ts": ts, "state": "off", "reason": reason, "incident": n})
+    ingest({"type": "event", "from": "monitor", "ts": ts, "level": level, "text": text.format(n=n, dur=dur)})
+
+
+def on_mission(msg: dict) -> None:
+    state = MISSION_ALIAS.get(msg.get("state"), msg.get("state"))
+    prev, siren["mission"] = siren["mission"], state
+    if state in INCIDENT_STATES and prev not in INCIDENT_STATES:
+        siren["incident"] += 1
+    if state in INCIDENT_STATES:
+        msg["incident"] = siren["incident"]   # 대시보드가 같은 사건 번호를 쓰도록 붙여 보낸다
+    if state == prev:
+        return
+    # 사이렌 기록은 원인이 된 mission 과 같은 시각으로 남긴다 (incidents 뷰가 사건 시간 범위로 묶기 때문)
+    ts = msg["ts"]
+    if state in RING_STATES and not siren["on"] and siren["acked"] != siren["incident"]:
+        siren["on"], siren["since"] = True, ts
+        n, intr = siren["incident"], latest.get("intruder:pi", {})
+        ingest({"type": "alarm", "from": "monitor", "ts": ts, "state": "on", "reason": "confirm", "incident": n,
+                **{k: intr[k] for k in ("x", "y") if k in intr}})
+        ingest({"type": "event", "from": "monitor", "ts": ts, "level": "alert", "text": f"🚨 사이렌 울림 · 사건 #{n} · 범인 확인 단계 시작"})
+    elif state not in RING_STATES and siren["on"]:
+        if state == "REGROUP":
+            siren_off("regroup", "⚠ 사이렌 자동 멈춤 · 사건 #{n} · 줄 다시 서기(REGROUP) 시작 · 아무도 확인하지 않음 (울린 시간 {dur})", "warn", ts)
+        else:
+            siren_off("false_alarm", "⚠ 사이렌 자동 멈춤 · 사건 #{n} · 오탐 · 탐사로 복귀 · 아무도 확인하지 않음 (울린 시간 {dur})", "warn", ts)
+
+
 def ingest(msg: dict) -> None:
     if not isinstance(msg, dict) or "type" not in msg:
         return
     msg.setdefault("ts", time.time())
     kind = msg["type"]
+    if kind == "mission":
+        on_mission(msg)
     if kind in HISTORY_TYPES:
         history[kind] = (history[kind] + [msg])[-HISTORY_TYPES[kind]:]
     elif kind == "dog":
@@ -258,6 +304,17 @@ async def http_ingest(request: Request):
     body = await request.json()
     for msg in body if isinstance(body, list) else [body]:
         ingest(msg)
+    return {"ok": True}
+
+
+@app.post("/api/alarm/ack")
+async def alarm_ack(request: Request):
+    """대시보드의 사이렌 "확인" 버튼. 공개 주소(Cloudflare 터널)로 연 화면에서는 받지 않는다."""
+    if request.headers.get("cf-connecting-ip"):
+        raise HTTPException(403, "공개 주소에서는 사이렌을 끌 수 없음")
+    if siren["on"]:
+        siren["acked"] = siren["incident"]
+        siren_off("ack", "✅ 사이렌 확인 · 사건 #{n} · 관제가 확인 버튼을 누름 (울린 지 {dur})", "info", time.time())
     return {"ok": True}
 
 
