@@ -39,6 +39,7 @@
     incident: 0, incidentStart: 0,
     dogs: {},          // name -> {msg, seen}
     lidar: null, lidarSeen: 0,
+    detect: {},        // name -> 마지막 사람 인식 메시지 (+seen)
     intruder: null, trail: [],
     cams: {},          // name -> {online, configured}
     events: [], eventKeys: new Set(),
@@ -67,6 +68,7 @@
     const m = ALIAS[raw] || raw;
     if (incident) S.incident = incident;   // 사건 번호는 서버(server/app.py)가 붙여 보낸다
     if (m === S.mission) return;
+    mission.error = "";
     // 평소 단계 → 의심·확인·포위로 들어가면 새 사건
     if (HOT.has(m) && !HOT.has(S.mission)) { if (!incident) S.incident++; S.incidentStart = ts ? ts * 1000 : Date.now(); S.trail = []; }
     if (!HOT.has(m)) S.incidentStart = 0;
@@ -83,6 +85,7 @@
       S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now() };
     },
     lidar(m) { S.lidar = m; S.lidarSeen = Date.now(); },
+    detect(m) { S.detect[m.from] = { ...m, seen: Date.now() }; renderFound(); },
     intruder(m) {
       S.intruder = { ...m, seen: Date.now() };
       S.trail.push([m.x, m.y]);
@@ -155,6 +158,8 @@
   }
 
   // ── 시작 준비 (STANDBY): 받은 데이터로 항목마다 준비(초록) / 아직(빨강) / 정보 없음(회색) ──
+  // 확인견이 앞 개 마커를 보고 있음: marker_follow.py 가 대기(paused) 중에 ready 를 계속 보낼 때만
+  const markerReady = (n) => fresh(S.dogs[n]) && S.dogs[n].msg.state === "paused" && S.dogs[n].msg.ready === true;
   function readyItems(n) {
     const d = S.dogs[n], m = d?.msg || {}, cam = S.cams[n];
     const items = [
@@ -171,7 +176,7 @@
     } else {
       // marker_follow.py가 준비 확인 중에 ready(마커 + 거리 0.12~0.25 m)를 보낸다
       items.push(m.ready == null ? { label: `마커 ${MARKER_OF[n]} 보임`, st: "na", val: "따라가기 꺼짐" }
-        : { label: `마커 ${MARKER_OF[n]} 보임`, st: m.ready ? "ok" : "bad", val: m.ready ? "준비됨" : "찾는 중" });
+        : { label: `마커 ${MARKER_OF[n]} 보임`, st: markerReady(n) ? "ok" : "bad", val: markerReady(n) ? "준비됨" : fresh(d) ? "찾는 중" : "끊김" });
     }
     return items;
   }
@@ -191,16 +196,49 @@
     }).join("");
     $("readySub").textContent = all ? "확인할 수 있는 항목이 모두 준비됐어요 · 탐사를 시작하세요 (회색 = 정보 없음)"
       : "세 마리를 일렬로 세우고 모든 항목이 초록이 되면 탐사를 시작하세요 (회색 = 정보 없음)";
+    // 시작 버튼은 확인견 B·C가 앞 개 마커를 인식했을 때만 (서버 /api/mission/start 도 같은 조건을 다시 확인한다)
+    const waiting = ["B", "C"].filter((n) => !markerReady(n));
+    $("start").disabled = waiting.length > 0 || mission.busy;
+    if (mission.error) $("readySub").textContent = mission.error;
+    else if (waiting.length) $("readySub").textContent += ` · 마커 인식 기다리는 중: ${waiting.join(", ")}`;
   }
+
+  // ── 발견 표시: 사람 인식(detect)이 최근 1.5초 안에 왔으면 불이 들어온다 (서버 DETECT_HOLD 와 같은 값) ──
+  const DETECT_MS = 1500;
+  function renderFound() {
+    const hits = Object.values(S.detect).filter((d) => Date.now() - d.seen < DETECT_MS);
+    const best = hits.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+    const text = best ? `👤 사람 발견 · ${best.from}${typeof best.confidence === "number" ? ` ${best.confidence.toFixed(2)}` : ""}` : "👤 발견";
+    document.querySelectorAll("[data-found]").forEach((el) => { el.classList.toggle("on", !!best); el.textContent = text; });
+    $("foundTop").hidden = S.mission === "STANDBY";   // 대기 중에는 준비 칸의 탐사 시작 버튼 옆에 보인다
+  }
+
+  // ── 탐사 시작 / 대기로: 서버가 mission 을 바꾸면 B·C 의 marker_follow.py 가 출발·일시정지한다 ──
+  const mission = { busy: false, error: "" };
+  function missionPost(path) {
+    mission.busy = true; mission.error = "";
+    fetch(path, { method: "POST" }).then(async (r) => {
+      if (r.ok) return;
+      const detail = (await r.json().catch(() => ({}))).detail;
+      mission.error = r.status === 403 ? "공개 주소에서는 누를 수 없어요" : `실패: ${detail || r.status}`;
+    }).catch(() => { mission.error = "서버에 연결할 수 없어요"; }).finally(() => {
+      mission.busy = false;
+      if (mission.error && S.mission !== "STANDBY") addEvent(Date.now(), "warn", mission.error);   // 준비 칸이 안 보일 때
+      renderDom();
+    });
+  }
+  $("start").onclick = () => missionPost("/api/mission/start");
+  $("standby").onclick = () => missionPost("/api/mission/standby");
+  document.querySelectorAll("[data-contain]").forEach((el) => { el.onclick = () => missionPost("/api/mission/contain"); });
 
   // ── 경보 배너 ───────────────────────────────────────────────
   function banner() {
     const b = $("banner");
     let html = "", cls = "";
     if (!S.connected) { cls = "stop"; html = `<span class="ico">■</span>모니터 서버와 연결이 끊겼습니다 · 다시 연결하는 중`; }
-    else if (S.mission === "SUSPECT") { cls = "warn"; html = `<span class="ico">▲</span>정찰견 A가 이상한 물체를 확인하고 있습니다 · 사건 #${S.incident}`; }
+    else if (S.mission === "SUSPECT") { cls = "warn"; html = `<span class="ico">▲</span>사람 발견 · 사건 #${S.incident} · 범인이면 ◎ 포위, 아니면 ⏸ 대기로 (B·C는 teleop 창으로 줄 맞추기)`; }
     else if (S.mission === "CONFIRM") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 침입자 확인 · 경과 ${fmtDur(elapsed())}`; }
-    else if (S.mission === "CONTAIN") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 침입자 확인 · A·B·C 3방향 포위 중 · 경과 ${fmtDur(elapsed())}`; }
+    else if (S.mission === "CONTAIN") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 포위 중 · 확인견 B·C는 키보드로 조종 (teleop) · 경과 ${fmtDur(elapsed())}`; }
     else if (S.mission === "HANDOVER") { cls = "alert"; html = `<span class="ico">●</span>포위 유지 중 · 증거 사진 ${S.evidenceKeys.size}장 · 상황이 끝나면 재정렬하세요 (${fmtDur(elapsed())})`; }
     if (!html) { b.hidden = true; b.dataset.k = ""; return; }
     if (b.dataset.k === html) return;
@@ -277,6 +315,13 @@
     renderReady();
     const idx = MISSIONS.findIndex((m) => m.key === S.mission);
     [...$("steps").children].forEach((li, i) => { li.className = i === idx ? (HOT.has(S.mission) ? "now hot" : "now") : ""; });
+    renderFound();
+    $("standby").hidden = S.mission === "STANDBY";
+    $("standby").disabled = mission.busy;
+    $("standby").textContent = S.mission === "SUSPECT" ? "⏸ 대기로 · 범인 아님" : "⏸ 대기로";
+    // 포위: 사람을 발견했을 때(SUSPECT)만. 대기 중에는 준비 칸, 그 밖에는 상단에 보인다
+    $("containTop").hidden = S.mission === "STANDBY";
+    document.querySelectorAll("[data-contain]").forEach((el) => { el.disabled = mission.busy || !["SUSPECT", "CONFIRM"].includes(S.mission); });
     $("clock").textContent = fmtTime(Date.now());
     $("conn").textContent = S.connected ? "연결됨" : "연결 끊김";
     $("conn").classList.toggle("on", S.connected);

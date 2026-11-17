@@ -20,6 +20,7 @@ button { font: inherit; cursor: pointer; }
 .steps li.now { background: var(--a); color: #fff; }
 .steps li.now.hot { background: var(--alert); animation: pulse 1s infinite alternate; }
 @keyframes pulse { to { filter: brightness(1.25); } }
+.top-act { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .clock { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .btn { border: 1px solid var(--line); background: #17202c; color: var(--text); padding: 8px 14px; border-radius: 8px; font-weight: 600; white-space: nowrap; }
 .btn:hover { background: #1d2836; }
@@ -54,6 +55,14 @@ button { font: inherit; cursor: pointer; }
 .ready-head b { display: block; font-size: 14px; }
 .ready-head small { color: var(--muted); font-size: 12px; }
 .btn.go { margin-left: auto; background: var(--ok); border-color: var(--ok); color: #06140d; font-size: 15px; padding: 9px 18px; }
+.ready-act { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.btn.found { color: var(--muted); cursor: default; background: #17202c; }
+.ready-act .btn.found { font-size: 15px; padding: 9px 14px; }
+.btn.found.on { background: var(--alert); border-color: var(--alert); color: #fff; animation: foundBlink .6s steps(1) infinite; }
+.btn.contain:not(:disabled) { background: var(--alert); border-color: var(--alert); color: #fff; }
+.ready-act .btn.contain { font-size: 15px; padding: 9px 14px; }
+@keyframes foundBlink { 50% { filter: brightness(.65); } }
+@media (prefers-reduced-motion: reduce) { .btn.found.on { animation: none; } }
 .btn:disabled { opacity: .4; cursor: not-allowed; filter: grayscale(.6); }
 .ready-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .rcard { border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 10px; padding: 8px 10px; background: var(--panel2); }
@@ -128,6 +137,10 @@ main { flex: 1; display: grid; gap: 12px; padding: 12px 18px 18px; min-height: 0
 .log .lv { width: 8px; height: 8px; border-radius: 50%; background: var(--a); }
 .log .lv.warn { background: var(--warn); } .log .lv.alert { background: var(--alert); }
 
+@media (max-width: 1600px) {   /* 발견·포위·대기로 버튼까지 한 줄에 안 들어가면 단계 표시를 아랫줄로 */
+  .top:has(.top-act > :not([hidden])) { flex-wrap: wrap; row-gap: 8px; }
+  .top:has(.top-act > :not([hidden])) .steps { order: 3; flex-basis: 100%; }
+}
 @media (max-width: 1100px) {
   main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "map" "cams" "dogs" "log" "ev"; }
   .mapbox { min-height: 0; aspect-ratio: 6.6 / 4.6; flex: none; }
@@ -141,6 +154,8 @@ main { flex: 1; display: grid; gap: 12px; padding: 12px 18px 18px; min-height: 0
   .steps { order: 3; flex-basis: 100%; overflow-x: auto; justify-content: flex-start; }
   .steps li .en { display: none; }
   .clock { display: none; }
+  .top-act { flex-wrap: wrap; }
+  .top-act .btn { padding: 5px 10px; font-size: 12px; }
   main { padding: 12px 16px 70px; }
   .banner { margin: 12px 16px 0; }
   .cams, .dogs { grid-template-columns: 1fr; }

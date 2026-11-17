@@ -72,11 +72,18 @@ async def broadcast(msg: dict) -> None:
 
 # 사이렌 (#6): 서버 한 곳에서 판단해 alarm 메시지를 보낸다. 대시보드를 여러 개 열어도 기록은 한 번만 남고,
 # recorder 가 alarm/event 를 Supabase 에 저장한다 (cloud/supabase/incidents.sql 이 읽는 형식).
-# 울림: 범인 확인(CONFIRM) 이후 단계로 들어갈 때. 멈춤: 확인 버튼(ack) / 줄 다시 서기(regroup) / 대기·탐사로 복귀(false_alarm)
+# 울림: 사람 발견(SUSPECT, 사람 인식 detect 가 만든다) 이후 단계로 들어갈 때. 범인인지는 관제가 보고 포위 버튼으로 정한다.
+# 멈춤: 확인 버튼(ack) / 줄 다시 서기(regroup) / 포위 전 대기·탐사로 복귀(false_alarm) / 포위 뒤 대기로(stop)
 MISSION_ALIAS = {"MAP": "EXPLORE", "PATROL": "EXPLORE", "ALERT": "CONFIRM", "INTERCEPT": "CONTAIN", "RETURN": "REGROUP"}
 INCIDENT_STATES = {"SUSPECT", "CONFIRM", "CONTAIN", "HANDOVER", "REGROUP"}
-RING_STATES = {"CONFIRM", "CONTAIN", "HANDOVER"}
+RING_STATES = {"SUSPECT", "CONFIRM", "CONTAIN", "HANDOVER"}
 siren = {"mission": None, "incident": 0, "on": False, "acked": 0, "since": 0.0}
+mission_ts = [0.0]   # 지금 단계가 시작된 시각 (/api/dogs 로 brain 이 읽는다)
+
+# 탐사 시작 버튼: 확인견 B·C 의 marker_follow.py 가 앞 개 마커를 보고 준비 완료(ready)를 보내고 있어야 한다.
+FOLLOWERS = {"B": 1, "C": 2}   # 확인견 -> 보고 따라가는 앞 개의 마커 ID
+READY_SEC = 2.0                # marker_follow.py 는 0.5초마다 ready 를 보낸다
+DETECT_HOLD = 1.5              # 사람 인식(detect)이 이 시간 동안 없으면 발견 끝 (대시보드 "발견" 불도 같은 시간)
 
 
 def fmt_dur(sec: float) -> str:
@@ -99,19 +106,35 @@ def on_mission(msg: dict) -> None:
         msg["incident"] = siren["incident"]   # 대시보드가 같은 사건 번호를 쓰도록 붙여 보낸다
     if state == prev:
         return
+    mission_ts[0] = msg["ts"]
     # 사이렌 기록은 원인이 된 mission 과 같은 시각으로 남긴다 (incidents 뷰가 사건 시간 범위로 묶기 때문)
     ts = msg["ts"]
     if state in RING_STATES and not siren["on"] and siren["acked"] != siren["incident"]:
         siren["on"], siren["since"] = True, ts
         n, intr = siren["incident"], latest.get("intruder:pi", {})
-        ingest({"type": "alarm", "from": "monitor", "ts": ts, "state": "on", "reason": "confirm", "incident": n,
+        reason, why = ("detect", "사람 발견") if state == "SUSPECT" else ("confirm", "범인 확인 단계 시작")
+        ingest({"type": "alarm", "from": "monitor", "ts": ts, "state": "on", "reason": reason, "incident": n,
                 **{k: intr[k] for k in ("x", "y") if k in intr}})
-        ingest({"type": "event", "from": "monitor", "ts": ts, "level": "alert", "text": f"🚨 사이렌 울림 · 사건 #{n} · 범인 확인 단계 시작"})
+        ingest({"type": "event", "from": "monitor", "ts": ts, "level": "alert", "text": f"🚨 사이렌 울림 · 사건 #{n} · {why}"})
     elif state not in RING_STATES and siren["on"]:
         if state == "REGROUP":
             siren_off("regroup", "⚠ 사이렌 자동 멈춤 · 사건 #{n} · 줄 다시 서기(REGROUP) 시작 · 아무도 확인하지 않음 (울린 시간 {dur})", "warn", ts)
+        elif prev in ("CONTAIN", "HANDOVER"):
+            siren_off("stop", "⚠ 사이렌 자동 멈춤 · 사건 #{n} · 포위 중 대기로 전환 · 아무도 확인하지 않음 (울린 시간 {dur})", "warn", ts)
         else:
-            siren_off("false_alarm", "⚠ 사이렌 자동 멈춤 · 사건 #{n} · 오탐 · 탐사로 복귀 · 아무도 확인하지 않음 (울린 시간 {dur})", "warn", ts)
+            siren_off("false_alarm", "⚠ 사이렌 자동 멈춤 · 사건 #{n} · 오탐 · 대기·탐사로 복귀 · 아무도 확인하지 않음 (울린 시간 {dur})", "warn", ts)
+
+
+def on_detect(msg: dict) -> None:
+    """사람 인식은 감지한 프레임마다 온다. 새로 발견했을 때만 타임라인 이벤트를 남긴다 (recorder 가 기록).
+    탐사 중에 발견하면 SUSPECT 로 바꿔 사이렌을 울린다. 대기 중에는 줄 세우는 팀원이 보이므로 불만 켠다."""
+    prev = latest.get(cache_key(msg))
+    if prev is None or msg["ts"] - prev["ts"] > DETECT_HOLD:
+        conf = f" · 신뢰도 {msg['confidence']:.2f}" if isinstance(msg.get("confidence"), (int, float)) else ""
+        ingest({"type": "event", "from": "monitor", "ts": msg["ts"], "level": "warn",
+                "text": f"👤 Dog {msg.get('from', '-')} 카메라: 사람 발견{conf}"})
+    if siren["mission"] == "EXPLORE":
+        ingest({"type": "mission", "from": "monitor", "ts": msg["ts"], "state": "SUSPECT"})
 
 
 def ingest(msg: dict) -> None:
@@ -121,6 +144,8 @@ def ingest(msg: dict) -> None:
     kind = msg["type"]
     if kind == "mission":
         on_mission(msg)
+    elif kind == "detect":
+        on_detect(msg)
     if kind in HISTORY_TYPES:
         history[kind] = (history[kind] + [msg])[-HISTORY_TYPES[kind]:]
     elif kind == "dog":
@@ -129,6 +154,8 @@ def ingest(msg: dict) -> None:
         latest[key] = {**latest.get(key, {}), **msg}
         if "front_cm" in msg or "rssi" in msg:   # 로봇견 자신(dog_cmd.py)이 보낸 메시지: 살아 있다는 표시
             latest[key]["self_ts"] = msg["ts"]
+        if "ready" in msg:   # marker_follow.py 준비 확인: 따라가기를 시작하면 ready 를 그만 보낸다
+            latest[key]["ready_ts"] = msg["ts"]
         if msg["from"] in offline:
             offline.discard(msg["from"])
             ingest({"type": "event", "from": "monitor", "level": "info", "text": f"Dog {msg['from']} 다시 온라인"})
@@ -318,6 +345,59 @@ async def alarm_ack(request: Request):
     return {"ok": True}
 
 
+def not_ready(now: float) -> list[str]:
+    """탐사 시작 전에 확인견마다 앞 개 마커를 보고 있는지 확인한다. 준비 안 된 이유 목록 (비면 출발 가능)."""
+    reasons = []
+    for name, marker in FOLLOWERS.items():
+        dog = latest.get(f"dog:{name}", {})
+        if now - dog.get("ready_ts", 0) > READY_SEC:
+            reasons.append(f"Dog {name} 따라가기(marker_follow.py) 응답 없음")
+        elif not dog.get("ready"):
+            reasons.append(f"Dog {name} 마커 {marker} 준비 안 됨")
+    return reasons
+
+
+@app.post("/api/mission/start")
+async def mission_start(request: Request):
+    """대시보드의 "탐사 시작" 버튼. B·C 가 모두 준비됐을 때만 EXPLORE 로 바꾸고, marker_follow.py 가 이를 보고 출발한다."""
+    if request.headers.get("cf-connecting-ip"):
+        raise HTTPException(403, "공개 주소에서는 탐사를 시작할 수 없음")
+    if siren["mission"] not in (None, "STANDBY"):
+        raise HTTPException(409, f"대기(STANDBY)가 아님: 지금 {siren['mission']}")
+    if reasons := not_ready(time.time()):
+        raise HTTPException(409, " · ".join(reasons))
+    ingest({"type": "mission", "from": "monitor", "state": "EXPLORE"})
+    ingest({"type": "event", "from": "monitor", "level": "info", "text": "▶ 탐사 시작 · 관제가 시작 버튼을 누름 (B·C 마커 확인됨)"})
+    return {"ok": True}
+
+
+@app.post("/api/mission/contain")
+async def mission_contain(request: Request):
+    """대시보드의 "포위" 버튼: 관제가 발견한 사람을 범인으로 판단. B·C 의 marker_follow.py 가 멈추고 teleop.py 로 넘어간다."""
+    if request.headers.get("cf-connecting-ip"):
+        raise HTTPException(403, "공개 주소에서는 포위를 시작할 수 없음")
+    if siren["mission"] not in ("SUSPECT", "CONFIRM"):
+        raise HTTPException(409, f"사람 발견(SUSPECT) 중이 아님: 지금 {siren['mission'] or 'STANDBY'}")
+    ingest({"type": "mission", "from": "monitor", "state": "CONTAIN"})
+    ingest({"type": "event", "from": "monitor", "level": "alert",
+            "text": f"◎ 포위 시작 · 사건 #{siren['incident']} · 관제가 범인으로 판단 (B·C 사람 조종으로 전환)"})
+    return {"ok": True}
+
+
+@app.post("/api/mission/standby")
+async def mission_standby(request: Request):
+    """대기로 되돌리기. 탐사 중이면 B·C 가 일시정지, 사람 발견 중이면 오탐 처리 (A는 조종하는 사람이 멈춘다)."""
+    if request.headers.get("cf-connecting-ip"):
+        raise HTTPException(403, "공개 주소에서는 바꿀 수 없음")
+    if siren["mission"] in (None, "STANDBY"):
+        raise HTTPException(409, "이미 대기(STANDBY)")
+    prev = siren["mission"]
+    ingest({"type": "mission", "from": "monitor", "state": "STANDBY"})
+    why = "B·C 따라가기 일시정지" if prev == "EXPLORE" else "범인 아님 (오탐)" if prev in ("SUSPECT", "CONFIRM") else f"{prev} 끝"
+    ingest({"type": "event", "from": "monitor", "level": "warn", "text": f"⏸ 대기로 전환 · 관제가 버튼을 누름 ({why})"})
+    return {"ok": True}
+
+
 @app.get("/api/state")
 async def state():
     return {"latest": latest, "events": history["event"], "evidence": history["evidence"]}
@@ -325,8 +405,9 @@ async def state():
 
 @app.get("/api/dogs")
 async def dogs():
-    """로봇견별 최신 상태만 가볍게 (brain/marker_follow.py의 준비 확인이 0.5초마다 읽는다)."""
-    return {"now": time.time(), "dogs": {k[4:]: v for k, v in latest.items() if k.startswith("dog:")}}
+    """로봇견별 최신 상태와 미션 단계만 가볍게 (brain/marker_follow.py가 0.5초마다 읽는다)."""
+    return {"now": time.time(), "mission": siren["mission"] or "STANDBY", "mission_ts": mission_ts[0],
+            "dogs": {k[4:]: v for k, v in latest.items() if k.startswith("dog:")}}
 
 
 @app.get("/api/cameras")
@@ -358,7 +439,10 @@ async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     clients.add(ws)
     # 새로 연 대시보드가 비어 있지 않도록 현재 상태를 다시 보낸다.
+    now = time.time()
     for msg in [*history["event"], *history["evidence"], *latest.values()]:
+        if msg["type"] == "detect" and now - msg["ts"] > DETECT_HOLD:
+            continue   # 끝난 발견을 다시 보내면 새 화면에 "발견" 불이 잠깐 켜진다
         await ws.send_text(json.dumps(msg))
     try:
         while True:
