@@ -15,7 +15,7 @@ EXPLORE로 바꾸고, 이 프로그램은 /api/dogs에서 그 변화를 보고 �
 일시정지(대기·포위) 중에는 로봇견에 명령을 보내지 않고 teleop.py 창을 띄워 사람이 키보드로 줄을 맞춘다
 (--dog가 있을 때, 끄려면 --no-teleop). 출발하면 teleop.py 창을 닫고 따라가기를 시작한다.
 
-거리는 로봇견 초음파(front_cm)를 먼저 쓰고, 없으면 카메라로 잰 마커 거리를 쓴다. 초음파와 로봇견 응답은
+거리는 카메라로 잰 마커 거리를 쓰고, 마커가 안 보일 때만 로봇견 초음파(front_cm)를 표시용으로 쓴다. 초음파와 로봇견 응답은
 모니터 서버(--monitor)의 /api/dogs에서 읽으므로, --monitor가 없으면 카메라만으로 판단한다.
 
 개 없이 연습 (노트북 웹캠, 명령은 화면과 터미널에만 표시):
@@ -43,6 +43,7 @@ CMD_PORT = 9100       # firmware/dog_cmd.py가 명령을 받는 포트
 MONITOR_PORT = 9000   # server/app.py의 UDP 포트
 MONITOR_HTTP = 8000   # server/app.py의 HTTP 포트 (/api/dogs)
 STALE_SEC = 0.5       # 새 프레임이 이 시간 동안 안 오면 영상이 멈춘 것으로 보고 정지
+SONAR_MAX_CM = 300    # 초음파가 이보다 크게 재면(반사 없음, 예: 6142 cm) 믿지 않는다
 
 
 def parse_args() -> argparse.Namespace:
@@ -278,10 +279,11 @@ class ReadyCheck:
         link_ok = use_link and self.link.fresh(a.link_sec)
         if use_link and not link_ok:
             reasons.append("dog not responding (dog_cmd.py?)")
-        if link_ok and self.link.front_cm is not None:
-            self.dist, self.dist_src = self.link.front_cm / 100, "sonar"
-        elif seen is not None:
+        # 마커가 보이면 카메라로 잰 마커 거리. 초음파는 빔이 마커를 비껴 뒤쪽 물체를 재는 일이 있다 (2026-11-17 실측)
+        if seen is not None:
             self.dist, self.dist_src = seen[1], "camera"
+        elif link_ok and self.link.front_cm is not None and 0 < self.link.front_cm <= SONAR_MAX_CM:
+            self.dist, self.dist_src = self.link.front_cm / 100, "sonar"
         else:
             self.dist, self.dist_src = None, ""
         if self.dist is not None and not a.ready_min_m <= self.dist <= a.ready_max_m:

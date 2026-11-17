@@ -321,6 +321,15 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="MechDog Patrol Monitor", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def revalidate_web(request: Request, call_next):
+    """대시보드 파일(app.js 등)은 매번 서버에 바뀌었는지 묻게 한다. 안 그러면 코드를 고쳐도 브라우저가 예전 파일을 쓴다."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 @app.post("/api/ingest")
 async def http_ingest(request: Request):
     """UDP와 같지만, 데이터그램 하나에 들어가지 않는 큰 데이터(예: 카메라 JPEG)용."""

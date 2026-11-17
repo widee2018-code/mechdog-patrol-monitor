@@ -82,7 +82,8 @@
     dog(m) {
       // 부분 업데이트를 합친다: brain은 x/y/heading·따라가기 상태, 로봇견은 front_cm/rssi/battery를 보낸다
       const prev = S.dogs[m.from];
-      S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now() };
+      // ready 는 marker_follow.py 만 보낸다. state 는 dog_cmd.py 도 보내서 덮어쓰므로 ready 받은 시각을 따로 둔다
+      S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now(), readySeen: "ready" in m ? Date.now() : prev?.readySeen };
     },
     lidar(m) { S.lidar = m; S.lidarSeen = Date.now(); },
     detect(m) { S.detect[m.from] = { ...m, seen: Date.now() }; renderFound(); },
@@ -158,8 +159,8 @@
   }
 
   // ── 시작 준비 (STANDBY): 받은 데이터로 항목마다 준비(초록) / 아직(빨강) / 정보 없음(회색) ──
-  // 확인견이 앞 개 마커를 보고 있음: marker_follow.py 가 대기(paused) 중에 ready 를 계속 보낼 때만
-  const markerReady = (n) => fresh(S.dogs[n]) && S.dogs[n].msg.state === "paused" && S.dogs[n].msg.ready === true;
+  // 확인견이 앞 개 마커를 보고 있음: marker_follow.py 가 대기 중에 ready 를 계속 보낼 때만 (서버 READY_SEC 와 같은 2초)
+  const markerReady = (n) => Date.now() - (S.dogs[n]?.readySeen ?? 0) < 2000 && S.dogs[n].msg.ready === true;
   function readyItems(n) {
     const d = S.dogs[n], m = d?.msg || {}, cam = S.cams[n];
     const items = [
