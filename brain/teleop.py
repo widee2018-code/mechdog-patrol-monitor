@@ -5,7 +5,8 @@
 작은 창이 뜨면 그 창을 클릭한 상태에서 키를 누른다.
     w 전진   s 후진   a 왼쪽 회전   d 오른쪽 회전   q/e 전진하며 왼쪽/오른쪽
     스페이스 정지   1~3 속도 단계   x 종료
-마지막 키를 0.3초 넘게 누르지 않으면 멈춘다. 처음에는 a/d로 회전 방향 부호를 확인하고,
+마지막 키를 0.3초 넘게 누르지 않으면 정지 명령을 잠깐 보내고, 그 뒤로는 아무것도 보내지 않는다
+(marker_follow.py가 대기 중에 이 창을 띄워 두므로, 키를 안 누를 때 따라가기 명령을 방해하지 않게). 처음에는 a/d로 회전 방향 부호를 확인하고,
 기본값 -1은 MechDog B 실측값. 반대로 돌면 --turn-sign 1 로 실행한다 (marker_follow.py에도 같은 값을 쓴다).
 """
 import argparse
@@ -21,6 +22,7 @@ CMD_PORT = 9100
 p = argparse.ArgumentParser()
 p.add_argument("--dog", required=True, help="로봇견 IP")
 p.add_argument("--turn-sign", type=int, choices=(1, -1), default=-1)
+p.add_argument("--name", help="로봇견 이름 (창 제목용, marker_follow.py가 포위 때 넘겨줌)")
 a = p.parse_args()
 
 SPEEDS = {ord("1"): 60, ord("2"): 90, ord("3"): 120}
@@ -50,13 +52,14 @@ try:
         fwd, rot = held
         v = speed * fwd if fwd >= 0 else -40   # 후진은 원래 앱처럼 느리게
         t = a.turn_sign * TURN * rot
-        send(v, t)
+        if now - last_key < 0.6:   # 키를 누르는 동안 + 뗀 뒤 0.3초 정지 명령까지만
+            send(v, t)
 
         panel = np.full((120, 360, 3), 245, np.uint8)
         cv2.putText(panel, f"v={v:4d}  turn={t:4d}", (12, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
         cv2.putText(panel, f"speed level {speed}  (1/2/3)", (12, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (90, 90, 90), 1)
         cv2.putText(panel, "w a s d  q e  space=stop  x=quit", (12, 105), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (90, 90, 90), 1)
-        cv2.imshow(f"teleop {a.dog}", panel)
+        cv2.imshow(f"teleop Dog {a.name} ({a.dog})" if a.name else f"teleop {a.dog}", panel)
 finally:
     for _ in range(3):
         send(0, 0)

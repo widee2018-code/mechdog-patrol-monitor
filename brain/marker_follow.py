@@ -8,6 +8,13 @@ STANDBY(일시정지) 상태로 시작한다: 움직이지 않고 준비 확인�
 대시보드 타임라인에 띄운다. 준비가 된 뒤 스페이스(카메라 창) 또는 Enter(터미널)를 누르면 출발, 다시 누르면
 일시정지. 준비 확인 없이 출발하려면 --no-ready-check, 바로 시작하려면 --autostart.
 
+--monitor를 주면 대시보드의 "탐사 시작" 버튼으로도 출발한다: 서버는 B·C가 모두 준비 완료일 때만 미션을
+EXPLORE로 바꾸고, 이 프로그램은 /api/dogs에서 그 변화를 보고 출발한다. 대시보드에서 대기로 되돌리면 일시정지.
+대시보드에서 "포위"(CONTAIN)를 누르면 로봇견을 멈추고 일시정지한다.
+
+일시정지(대기·포위) 중에는 로봇견에 명령을 보내지 않고 teleop.py 창을 띄워 사람이 키보드로 줄을 맞춘다
+(--dog가 있을 때, 끄려면 --no-teleop). 출발하면 teleop.py 창을 닫고 따라가기를 시작한다.
+
 거리는 로봇견 초음파(front_cm)를 먼저 쓰고, 없으면 카메라로 잰 마커 거리를 쓴다. 초음파와 로봇견 응답은
 모니터 서버(--monitor)의 /api/dogs에서 읽으므로, --monitor가 없으면 카메라만으로 판단한다.
 
@@ -21,7 +28,9 @@ STANDBY(일시정지) 상태로 시작한다: 움직이지 않고 준비 확인�
 import argparse
 import json
 import math
+import os
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -68,6 +77,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ready-hold-sec", type=float, default=1.0, help="조건이 이 시간 이상 이어져야 준비 완료 (초)")
     p.add_argument("--link-sec", type=float, default=2.0, help="로봇견이 이 시간 안에 상태를 보냈으면 연결된 것으로 봄 (초)")
     p.add_argument("--no-ready-check", action="store_true", help="준비 확인 없이 시작 키로 바로 출발")
+    p.add_argument("--no-teleop", action="store_true", help="일시정지(대기·포위) 중에 teleop.py 창을 띄우지 않음")
     return p.parse_args()
 
 
@@ -215,7 +225,7 @@ class Follower:
 
 
 class DogLink:
-    """모니터 서버의 /api/dogs를 0.5초마다 읽어 로봇견 초음파 거리와 마지막 응답 시각을 알려 준다."""
+    """모니터 서버의 /api/dogs를 0.5초마다 읽어 로봇견 초음파 거리, 마지막 응답 시각, 미션 단계를 알려 준다."""
 
     def __init__(self, monitor: str | None, name: str):
         self.url = f"http://{monitor}:{MONITOR_HTTP}/api/dogs" if monitor else None
@@ -223,6 +233,7 @@ class DogLink:
         self.front_cm: float | None = None
         self.age: float | None = None   # 로봇견이 마지막으로 보낸 지 몇 초 (모름 = None)
         self.at = 0.0                   # 마지막으로 서버에서 읽은 시각
+        self.mission: tuple[str, float] | None = None   # (단계, 바뀐 시각). 대시보드 시작 버튼 → EXPLORE
         if self.url:
             threading.Thread(target=self._run, daemon=True).start()
 
@@ -234,6 +245,8 @@ class DogLink:
                 dog = body["dogs"].get(self.name, {})
                 self.front_cm = dog.get("front_cm")
                 self.age = body["now"] - dog["self_ts"] if "self_ts" in dog else None
+                if "mission" in body:
+                    self.mission = (body["mission"], body["mission_ts"])
                 self.at = time.time()
             except Exception:
                 pass   # 서버가 아직 안 떴거나 예전 서버(/api/dogs 없음): 카메라만으로 판단
@@ -290,6 +303,32 @@ class ReadyCheck:
         return self.ready
 
 
+class Teleop:
+    """일시정지(대기·포위) 중 사람이 키보드로 조종하도록 teleop.py를 자식 프로세스로 띄우고, 출발하면 닫는다."""
+
+    def __init__(self, a: argparse.Namespace):
+        self.a = a
+        self.proc: subprocess.Popen | None = None
+
+    def open(self) -> None:
+        if not self.a.dog or self.a.no_teleop or (self.proc and self.proc.poll() is None):
+            return
+        cmd = [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "teleop.py"),
+               "--dog", self.a.dog, "--turn-sign", str(self.a.turn_sign), "--name", self.a.name]
+        self.proc = subprocess.Popen(cmd)
+        print(f"\n[{time.strftime('%H:%M:%S')}] teleop.py 창 열림: 'teleop Dog {self.a.name}' 창을 클릭하고 w/a/s/d로 줄 맞추기")
+
+    def close(self) -> None:
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(2)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+            print(f"\n[{time.strftime('%H:%M:%S')}] teleop.py 창 닫음")
+        self.proc = None
+
+
 STATE_TEXT = {"paused": "STANDBY (일렬 대기)", "wait": "마커 기다리는 중", "follow": "따라가는 중", "hold": "잠깐 놓침, 정지",
               "search": "다시 찾는 중", "gave_up": "못 찾음, 정지", "no_video": "영상 끊김, 정지"}
 
@@ -334,6 +373,11 @@ def main() -> None:
 
     dog_err = [None]   # 같은 전송 오류를 매 주기 출력하지 않도록 마지막 오류만 기억
 
+    def stop_dog() -> None:
+        for _ in range(3):   # UDP는 잃어버릴 수 있으니 정지 명령을 여러 번 보낸다
+            to_dog(0, 0)
+            time.sleep(0.05)
+
     def to_dog(speed: int, turn: int) -> None:
         if not a.dog:
             return
@@ -377,10 +421,29 @@ def main() -> None:
     running = a.autostart
     last_seq, last_state, last_print, last_frame_at = -1, None, 0.0, time.time()
     was_ready = None
+    mission_seen = None   # 마지막으로 본 미션 변화. 프로그램을 켜기 전의 변화에는 반응하지 않는다
+    teleop = Teleop(a)
+    teleop_due = not running   # 대기로 시작하면 바로 teleop.py 창을 띄운다
     cmd, corners, seen = (0, 0), None, None
     try:
         while True:
             t0 = time.time()
+            if link.mission != mission_seen:
+                if mission_seen is not None and link.mission and link.mission[0] == "CONTAIN":
+                    print(f"\n[{time.strftime('%H:%M:%S')}] 대시보드: CONTAIN (포위) → 정지, 키보드 조종")
+                    to_monitor({"type": "event", "from": a.name, "level": "info",
+                                "text": f"Dog {a.name} 포위: 따라가기 멈춤, 사람 조종(teleop)"})
+                    if running:
+                        running = False
+                        stop_dog()
+                    teleop_due = True
+                elif mission_seen is not None and link.mission:
+                    # 대시보드 버튼: EXPLORE면 출발, STANDBY면 일시정지 (키를 누른 것과 같게 처리)
+                    want = link.mission[0] == "EXPLORE"
+                    if want != running and link.mission[0] in ("EXPLORE", "STANDBY"):
+                        print(f"\n[{time.strftime('%H:%M:%S')}] 대시보드: {link.mission[0]}")
+                        toggle.set()
+                mission_seen = link.mission
             if toggle.is_set():
                 toggle.clear()
                 running = not running
@@ -389,16 +452,23 @@ def main() -> None:
                     print(f"\n[{time.strftime('%H:%M:%S')}] 아직 준비 안 됨: {ready.reason}. "
                           "준비 확인 없이 출발하려면 --no-ready-check")
                 elif running:
+                    teleop.close()   # 키보드 조종과 따라가기 명령이 섞이지 않게
                     follower = Follower(a)   # 이전에 놓쳤던 기록 없이 새로 시작
                     print(f"\n[{time.strftime('%H:%M:%S')}] 시작" + ("" if seen else " (마커가 아직 안 보임: 보이면 따라감)"))
                 else:
+                    stop_dog()
+                    teleop_due = True
                     print(f"\n[{time.strftime('%H:%M:%S')}] 일시정지")
+            if teleop_due:
+                teleop.open()
+                teleop_due = False
             seq, frame = cam.get()
             if frame is None:
                 if t0 - last_print > 2:
                     print("카메라 영상 기다리는 중...", cam.error or "")
                     last_print = t0
-                to_dog(0, 0)
+                if running:
+                    to_dog(0, 0)
                 time.sleep(period)
                 continue
             if seq != last_seq:
@@ -427,7 +497,8 @@ def main() -> None:
                     was_ready = ready.ready
             elif running:
                 was_ready = None   # 다시 일시정지하면 준비 확인을 처음부터
-            to_dog(*cmd)   # 같은 명령이라도 매 주기 보낸다: 로봇견 워치독(1초)이 멈추지 않게
+            if running:   # 일시정지 중에는 보내지 않는다: teleop.py로 사람이 조종
+                to_dog(*cmd)   # 같은 명령이라도 매 주기 보낸다: 로봇견 워치독(1초)이 멈추지 않게
 
             if follower.state != last_state:
                 print(f"[{time.strftime('%H:%M:%S')}] {STATE_TEXT[follower.state]}")
@@ -455,9 +526,8 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        for _ in range(3):   # UDP는 잃어버릴 수 있으니 정지 명령을 여러 번 보낸다
-            to_dog(0, 0)
-            time.sleep(0.05)
+        teleop.close()
+        stop_dog()
         to_monitor({"type": "event", "from": a.name, "level": "info", "text": f"Dog {a.name} 마커 따라가기 종료"})
         print("\n종료: 정지 명령 전송")
 
