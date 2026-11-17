@@ -228,7 +228,7 @@
     });
   }
   $("start").onclick = () => missionPost("/api/mission/start");
-  $("standby").onclick = () => missionPost("/api/mission/standby");
+  document.querySelectorAll("[data-standby]").forEach((el) => { el.onclick = () => missionPost("/api/mission/standby"); });
   document.querySelectorAll("[data-contain]").forEach((el) => { el.onclick = () => missionPost("/api/mission/contain"); });
 
   // ── 경보 배너 ───────────────────────────────────────────────
@@ -236,7 +236,7 @@
     const b = $("banner");
     let html = "", cls = "";
     if (!S.connected) { cls = "stop"; html = `<span class="ico">■</span>모니터 서버와 연결이 끊겼습니다 · 다시 연결하는 중`; }
-    else if (S.mission === "SUSPECT") { cls = "warn"; html = `<span class="ico">▲</span>사람 발견 · 사건 #${S.incident} · 범인이면 ◎ 포위, 아니면 ⏸ 대기로 (B·C는 teleop 창으로 줄 맞추기)`; }
+    else if (S.mission === "SUSPECT") { cls = "warn"; html = `<span class="ico">▲</span>사람 발견 · 사건 #${S.incident} · 범인이면 ◎ 포위, 아니면 ⏸ 대기 (B·C는 teleop 창으로 줄 맞추기)`; }
     else if (S.mission === "CONFIRM") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 침입자 확인 · 경과 ${fmtDur(elapsed())}`; }
     else if (S.mission === "CONTAIN") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 포위 중 · 확인견 B·C는 키보드로 조종 (teleop) · 경과 ${fmtDur(elapsed())}`; }
     else if (S.mission === "HANDOVER") { cls = "alert"; html = `<span class="ico">●</span>포위 유지 중 · 증거 사진 ${S.evidenceKeys.size}장 · 상황이 끝나면 재정렬하세요 (${fmtDur(elapsed())})`; }
@@ -316,9 +316,12 @@
     const idx = MISSIONS.findIndex((m) => m.key === S.mission);
     [...$("steps").children].forEach((li, i) => { li.className = i === idx ? (HOT.has(S.mission) ? "now hot" : "now") : ""; });
     renderFound();
+    // 대기로: 대기 중에는 준비 칸에 흐리게(누를 수 없음), 그 밖에는 상단에 켜진 채로
     $("standby").hidden = S.mission === "STANDBY";
-    $("standby").disabled = mission.busy;
-    $("standby").textContent = S.mission === "SUSPECT" ? "⏸ 대기로 · 범인 아님" : "⏸ 대기로";
+    document.querySelectorAll("[data-standby]").forEach((el) => {
+      el.disabled = mission.busy || S.mission === "STANDBY";
+      el.textContent = S.mission === "SUSPECT" ? "⏸ 대기 · 범인 아님" : "⏸ 대기";
+    });
     // 포위: 사람을 발견했을 때(SUSPECT)만. 대기 중에는 준비 칸, 그 밖에는 상단에 보인다
     $("containTop").hidden = S.mission === "STANDBY";
     document.querySelectorAll("[data-contain]").forEach((el) => { el.disabled = mission.busy || !["SUSPECT", "CONFIRM"].includes(S.mission); });
