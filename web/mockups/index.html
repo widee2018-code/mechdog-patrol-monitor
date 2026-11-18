@@ -52,6 +52,18 @@ code { background: #eef1f5; padding: 1px 6px; border-radius: 5px; font-size: 13p
   </div>
   <p class="good"><b>2안(카드형) · 3안(사건 중심형)은 정리했습니다.</b> 팀 회의에서 1안으로 정해서 파일을 지웠고, 어떤 시안이었는지는 <code>DESIGN_LOG.md</code> 2절과 7절에 남겨 두었습니다. 예전 파일은 git 기록(커밋 938a5c5)에서 다시 꺼낼 수 있습니다.</p>
 
+  <h2>카메라 추론 대시보드 시안 (2026-11-18 추가)</h2>
+  <p style="margin:0 0 12px;color:var(--muted)">관제실 화면에 더해, 카메라로 <b>얼굴</b>을 보고 등록된 사람인지 판정하는 화면과, <b>몸 점(YOLO11n-pose)</b>으로 위험한 행동을 알아내는 화면입니다. 화면마다 3안씩 만들었어요.
+    위험 행동 9가지와 규칙은 <a href="danger_actions.html">위험 행동 목록</a>에 정리했습니다.</p>
+  <div class="cards">
+    <a class="d" href="face1.html"><span class="no">얼굴 1안</span><b>판정 카드형</b><p>큰 카메라 + 큰 판정 카드. 등록 명단별 일치율과 5장 투표.</p><span class="go">열어 보기 →</span></a>
+    <a class="d" href="face2.html"><span class="no">얼굴 2안</span><b>얼굴 갤러리형</b><p>다녀간 사람마다 카드 한 장. 경고·미등록이 맨 앞.</p><span class="go">열어 보기 →</span></a>
+    <a class="d" href="face3.html"><span class="no">얼굴 3안</span><b>타임라인 · 기준 조절형</b><p>60초 타임라인과 슬라이더로 판정 기준을 바꿔 보며 시험.</p><span class="go">열어 보기 →</span></a>
+    <a class="d" href="pose1.html"><span class="no">행동 1안</span><b>위험도 게이지형</b><p>몸 점 + 위험도 게이지와 판단 근거, 9가지 행동 불빛.</p><span class="go">열어 보기 →</span></a>
+    <a class="d" href="pose2.html"><span class="no">행동 2안</span><b>행동 타임라인형</b><p>9가지 행동이 언제 켜졌는지 60초 줄 그래프.</p><span class="go">열어 보기 →</span></a>
+    <a class="d" href="pose3.html"><span class="no">행동 3안</span><b>카메라 3대 그리드형</b><p>A·B·C 카메라 나란히, 위험한 카메라 강조, 알림 목록.</p><span class="go">열어 보기 →</span></a>
+  </div>
+
   <h2>지금 대시보드 진단</h2>
   <table>
     <thead><tr><th>문제</th><th>지금 화면</th><th>새 시나리오에서 필요한 것</th></tr></thead>

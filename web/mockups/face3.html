@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>얼굴 추론 3안 · 타임라인 · 기준 조절형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 3안: 시간 흐름(타임라인)과 판정 기준 조절. 후처리 숫자를 바꿔 보며 오탐·놓침을 시험하는 화면. */
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; padding: 14px 18px 0; }
+.cam { aspect-ratio: 16 / 9; }
+.now { display: flex; flex-direction: column; gap: 10px; }
+.big { font-size: 22px; font-weight: 800; }
+.tune label { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 13px; margin-bottom: 12px; }
+.tune input { grid-column: 1 / -1; width: 100%; accent-color: var(--info); }
+.tune output { font-weight: 700; font-variant-numeric: tabular-nums; }
+.tune small { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; }
+.tl { padding: 14px 18px 18px; }
+.lanes { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px 10px; align-items: center; }
+.lanes span { font-size: 12.5px; }
+.lanes canvas { width: 100%; height: 22px; border-radius: 6px; background: #0d131b; display: block; }
+.axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; grid-column: 2; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>얼굴 추론 · 3안 타임라인 · 기준 조절형</b><small>판정 기준을 바꿔 보며 시험하기</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+<main class="main">
+  <div class="cam"><canvas id="cv"></canvas><span class="tag" id="camTag">—</span></div>
+  <div class="now">
+    <section class="card">
+      <h3><span>지금</span><span class="num" id="trk">—</span></h3>
+      <div class="big" id="big">사람 없음</div>
+      <div class="muted" id="sub" style="font-size:13px">—</div>
+    </section>
+    <section class="card tune">
+      <h3><span>판정 기준 (후처리)</span><button class="chip hold" id="reset" style="border:0;cursor:pointer">처음 값</button></h3>
+      <label for="th">일치 기준 <output id="thO"></output><input id="th" type="range" min="0.4" max="0.9" step="0.01"><small>높이면 잘못 알아보는 일은 줄고, 팀원을 못 알아보는 일은 늘어요.</small></label>
+      <label for="vo">확정에 필요한 장수 <output id="voO"></output><input id="vo" type="range" min="1" max="5" step="1"><small>최근 5장 중 몇 장이 같아야 확정할지. 낮추면 빠르지만 깜빡여요.</small></label>
+      <label for="mp">최소 얼굴 크기 <output id="mpO"></output><input id="mp" type="range" min="20" max="100" step="5"><small>이보다 작은(먼) 얼굴은 판정을 미뤄요.</small></label>
+    </section>
+  </div>
+</main>
+<section class="tl">
+  <div class="card">
+    <h3><span>최근 60초 타임라인</span><span class="muted">위: 확정 판정 · 아래: 실제 정답(시험용)</span></h3>
+    <div class="lanes">
+      <span>확정 판정</span><canvas id="ln1"></canvas>
+      <span>한 장씩 판정</span><canvas id="ln2"></canvas>
+      <span>실제 정답</span><canvas id="ln3"></canvas>
+      <span></span><div class="axis"><span>60초 전</span><span>30초 전</span><span>지금</span></div>
+    </div>
+    <div class="legend"><span><i style="background:var(--ok)"></i>허용</span><span><i style="background:var(--alert)"></i>경고</span><span><i style="background:var(--warn)"></i>미등록</span><span><i style="background:var(--hold)"></i>보류</span><span id="acc"></span></div>
+  </div>
+</section>
+
+<script src="cam_mock.js"></script>
+<script>
+const M = CamMock; M.nav("face3");
+const DEF = { ...M.FACE_RULE };
+const rule = { ...DEF };
+const sim = M.faceSim({ frameW: 640, rule });
+const $ = (id) => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d");
+const ALL = [...M.REGISTRY.allow.map((r) => ({ ...r, list: "allow" })), ...M.REGISTRY.watch.map((r) => ({ ...r, list: "watch" }))];
+const truthList = (name) => (ALL.find((a) => a.name === name) || { list: "unknown" }).list;
+
+function bind() {
+  $("th").value = rule.match; $("vo").value = rule.votes; $("mp").value = rule.minPx;
+  $("thO").textContent = rule.match.toFixed(2); $("voO").textContent = `${rule.votes}/5장`; $("mpO").textContent = `${rule.minPx}px`;
+}
+$("th").oninput = (e) => { rule.match = +e.target.value; bind(); };
+$("vo").oninput = (e) => { rule.votes = +e.target.value; bind(); };
+$("mp").oninput = (e) => { rule.minPx = +e.target.value; bind(); };
+$("reset").onclick = () => { Object.assign(rule, DEF); bind(); };
+bind();
+
+const hist = [];   // {t, v, fv, truth}
+let acc = 0;
+function lane(c, key) {
+  const { w, h } = M.fitCanvas(c), x = c.getContext("2d"), now = hist.length ? hist[hist.length - 1].t : 0;
+  x.clearRect(0, 0, w, h);
+  for (const e of hist) {
+    const v = e[key]; if (!v) continue;
+    const col = v === "unknown" ? "#f5b942" : M.VERDICT[v].color;
+    x.fillStyle = col; x.fillRect(((e.t - (now - 60)) / 60) * w, 3, Math.max(2, w / 600 + 1), h - 6);
+  }
+}
+M.loop((dt) => {
+  const st = sim.step(dt);
+  const { w, h } = M.fitCanvas(cv);
+  M.drawScene(ctx, w, h, "CAM A · 얼굴", st.t);
+  const f = st.faces[0];
+  if (f) { M.drawFaceAvatar(ctx, f.box, w, h, f.hue); M.drawBox(ctx, f.box, w, h, M.VERDICT[f.verdict].color, `${f.name} ${f.score.toFixed(2)}`, f.verdict === "hold"); }
+  $("camTag").textContent = `${M.clock(st.t)} · 얼굴 ${st.faces.length}`;
+  hist.push({ t: st.t, v: f?.verdict, fv: f?.frameVerdict, truth: f ? truthList(f.truth) : null });
+  while (hist.length && st.t - hist[0].t > 60) hist.shift();
+  acc += dt; if (acc < 0.2) return; acc = 0;
+  $("big").textContent = f ? M.VERDICT[f.verdict].ko : "사람 없음";
+  $("big").style.color = f ? M.VERDICT[f.verdict].color : "var(--muted)";
+  $("sub").textContent = f ? `가장 비슷: ${f.best} ${f.score.toFixed(2)} · 얼굴 ${f.px.toFixed(0)}px · 투표 ${f.votes.filter((v) => v === f.verdict).length}/${f.votes.length}` : "—";
+  $("trk").textContent = f ? `사람 #${f.track}` : "—";
+  lane($("ln1"), "v"); lane($("ln2"), "fv"); lane($("ln3"), "truth");
+  const judged = hist.filter((e) => e.v && e.v !== "hold");
+  const right = judged.filter((e) => e.v === e.truth).length;
+  $("acc").textContent = judged.length ? `· 최근 60초 확정 판정이 정답과 같은 비율 ${Math.round((right / judged.length) * 100)}%` : "";
+});
+</script>
+</body>
+</html>

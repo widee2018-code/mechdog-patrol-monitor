@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>위험 행동 목록 · 행동 추론 규칙</title>
+<style>
+:root { --bg: #f6f7f9; --card: #fff; --line: #e4e7ec; --text: #1a2029; --muted: #667085; --accent: #2f7bf5;
+  --high: #e0453c; --mid: #e07a1f; --low: #b98900;
+  --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.65 var(--font); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 36px 20px 80px; }
+h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -.02em; }
+.lead { color: var(--muted); margin: 0 0 24px; }
+h2 { font-size: 19px; margin: 36px 0 12px; }
+a { color: var(--accent); }
+.levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.lv { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; border-top: 4px solid; }
+.lv.high { border-top-color: var(--high); } .lv.mid { border-top-color: var(--mid); } .lv.low { border-top-color: var(--low); }
+.lv b { font-size: 16px; } .lv p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.act { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; }
+.act canvas { width: 120px; height: 150px; border-radius: 10px; background: #111821; }
+.act h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.act .no { color: var(--muted); font-size: 13px; font-weight: 700; }
+.act dl { margin: 6px 0 0; font-size: 13.5px; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; }
+.act dt { color: var(--muted); white-space: nowrap; } .act dd { margin: 0; }
+.sev { display: inline-block; padding: 1px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; }
+.sev.high { background: #fdecea; color: var(--high); } .sev.mid { background: #fdf0e3; color: var(--mid); } .sev.low { background: #fbf4dc; color: var(--low); }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: #f9fafb; font-size: 13px; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+.tbl { overflow-x: auto; }
+code { background: #eef1f5; padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+pre { background: #111821; color: #e6edf3; padding: 12px 14px; border-radius: 10px; overflow-x: auto; font-size: 13px; }
+.note { background: #fff8e6; border: 1px solid #f3dfa6; border-radius: 12px; padding: 12px 16px; font-size: 14px; }
+.top { display: flex; gap: 12px; flex-wrap: wrap; font-size: 14px; margin-bottom: 18px; }
+@media (max-width: 760px) { .levels { grid-template-columns: 1fr; } .act { grid-template-columns: 1fr; } .act canvas { width: 100%; height: 180px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="index.html">← 시안 목록</a><a href="pose1.html">행동 1안</a><a href="pose2.html">행동 2안</a><a href="pose3.html">행동 3안</a></div>
+  <h1>위험 행동 목록 · 행동 추론 규칙</h1>
+  <p class="lead">YOLO11n-pose가 사람 몸에서 점 17개(코·눈·귀·어깨·팔꿈치·손목·엉덩이·무릎·발목)를 찾으면,
+    아래 규칙으로 "위험한 행동인지" 판단합니다. 규칙은 AI가 아니라 <b>우리가 정한 계산(후처리)</b>이라서 숫자만 바꿔 조절할 수 있어요.
+    그림은 시안에서 쓰는 가짜 몸 움직임입니다.</p>
+
+  <h2>위험도 3단계와 대시보드 반응 (제안)</h2>
+  <div class="levels">
+    <div class="lv high"><span class="sev high">높음</span> <b>4가지</b><p>사람이 다쳤거나 공격하는 상황. <b>🚨 사이렌 + 경보 배너</b>, 관제가 바로 확인.</p></div>
+    <div class="lv mid"><span class="sev mid">중간</span> <b>3가지</b><p>로봇에 다가오거나 숨는 상황. <b>경고 배너 + 기록</b>, 관제가 지켜봄.</p></div>
+    <div class="lv low"><span class="sev low">주의</span> <b>2가지</b><p>당장 위험하진 않지만 알아 둘 행동. <b>기록만</b> 남김.</p></div>
+  </div>
+
+  <h2>9가지 행동</h2>
+  <div class="grid" id="grid"></div>
+
+  <h2>한눈에 보기</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>#</th><th>행동</th><th>위험도</th><th>쓰는 몸 점</th><th>판단 규칙</th><th>유지 시간</th></tr></thead>
+    <tbody id="tbl"></tbody>
+  </table></div>
+
+  <h2>몸 점 17개 (COCO 순서, YOLO11n-pose와 같음)</h2>
+  <p class="muted" id="kps" style="color:var(--muted)"></p>
+
+  <h2>함께 정해야 할 것</h2>
+  <div class="note">
+    <p style="margin:0 0 8px"><b>① 카메라 높이.</b> MechDog 카메라는 바닥에서 약 15 cm라서 가까운 사람은 <b>다리만</b> 보여요. 팔 휘두름·양손 들기는 사람이 2 m 이상 떨어져 몸 전체가 보일 때만 판단할 수 있어요. 다리만 보일 때는 발차기·돌진·웅크림·넘어짐 위주로 판단합니다.</p>
+    <p style="margin:0 0 8px"><b>② 숫자 조정.</b> 기울기 55°, 무릎 110°, 속도 1.2 같은 숫자는 시안용 처음 값이에요. 노트북·Pi에서 실제로 찍어 보며 맞춰야 해요.</p>
+    <p style="margin:0"><b>③ 허브로 보낼 메시지 형식 (제안, 팀장님과 #8·#13에서 확정).</b></p>
+    <pre>{"type": "pose", "from": "A", "action": "fall", "level": "high", "confidence": 0.81, "why": "몸 기울기 72°"}
+{"type": "face", "from": "A", "track": 7, "verdict": "unknown", "name": null, "score": 0.41}</pre>
+  </div>
+</div>
+
+<script src="cam_mock.js"></script>
+<script>
+const M = CamMock;
+const KEYS = { fall: "어깨·엉덩이", still: "어깨·엉덩이 + 전체 관절 움직임", strike: "어깨·손목", kick: "무릎·발목", rush: "어깨·발목 (몸 크기)",
+  reach: "어깨·손목 + 몸 크기", crouch: "엉덩이·무릎·발목", handsup: "코·손목", loiter: "엉덩이 (걷는 방향)" };
+const start = {}; let acc = 0;
+for (const [name, dur] of M.SCRIPT) { start[name] = [acc, dur]; acc += dur; }
+document.getElementById("grid").innerHTML = M.DANGERS.map((d, i) => `<article class="act"><canvas data-a="${d.id}" aria-label="${d.ko} 몸 움직임 그림"></canvas>
+  <div><h3><span class="no">${i + 1}</span>${d.ko}<span class="sev ${d.level}">${M.LEVEL[d.level].ko}</span></h3>
+  <dl><dt>판단 규칙</dt><dd>${d.rule}</dd><dt>유지 시간</dt><dd>${d.hold ? `${d.hold}초 이상 계속될 때` : "바로 (순간 동작은 1.5초 동안 표시)"}</dd>
+  <dt>왜 위험한가</dt><dd>${d.why}</dd><dt>쓰는 몸 점</dt><dd>${KEYS[d.id]}</dd></dl></div></article>`).join("");
+document.getElementById("tbl").innerHTML = M.DANGERS.map((d, i) => `<tr><td>${i + 1}</td><td><b>${d.ko}</b></td><td><span class="sev ${d.level}">${M.LEVEL[d.level].ko}</span></td><td>${KEYS[d.id]}</td><td>${d.rule}</td><td>${d.hold ? `${d.hold}초` : "바로"}</td></tr>`).join("");
+document.getElementById("kps").textContent = M.KP_KO.map((n, i) => `${i} ${n}`).join(" · ");
+const COL = { high: "#ff5a52", mid: "#ff8a3d", low: "#f5b942" };
+const cvs = [...document.querySelectorAll("[data-a]")];
+let T = 0;
+M.loop((dt) => {
+  T += dt;
+  for (const c of cvs) {
+    const id = c.dataset.a, [s, dur] = start[id], d = M.DANGER_BY_ID[id];
+    const { w, h } = M.fitCanvas(c), x = c.getContext("2d");
+    x.fillStyle = "#111821"; x.fillRect(0, 0, w, h);
+    x.fillStyle = "#2a2622"; x.fillRect(0, h * 0.92, w, h * 0.08);
+    const { kps } = M.poseFor(s + (T % (dur + (id === "fall" ? 1 : 0))), { x: 0.38, size: 0.5 });
+    M.drawSkeleton(x, kps, w, h, COL[d.level]);
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>행동 추론 3안 · 카메라 3대 그리드형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 3안: A·B·C 카메라 3대를 나란히. 가장 위험한 카메라가 빨갛게 강조되고, 오른쪽에 알림이 쌓인다. */
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; padding: 14px 18px 18px; }
+.sum { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.sum .card { padding: 8px 14px; display: flex; gap: 10px; align-items: baseline; }
+.sum b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.cell { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 8px; transition: border-color .2s; }
+.cell.high { border-color: var(--alert); } .cell.mid { border-color: var(--mid); } .cell.low { border-color: var(--warn); }
+.cell .cam { aspect-ratio: 4 / 3; }
+.cell .hd { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.cell .hd b { font-size: 14px; }
+.cell .acts { display: flex; gap: 6px; flex-wrap: wrap; min-height: 24px; }
+.feed .log { max-height: 70vh; }
+@media (max-width: 960px) { .wrap { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>행동 추론 · 3안 카메라 3대 그리드형</b><small>Dog A · B · C 카메라를 한 번에</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+<div class="wrap">
+  <div>
+    <div class="sum">
+      <div class="card"><span class="chip high">높음</span><b id="sHigh">0</b></div>
+      <div class="card"><span class="chip mid">중간</span><b id="sMid">0</b></div>
+      <div class="card"><span class="chip low">주의</span><b id="sLow">0</b></div>
+      <div class="card"><span class="muted">카메라</span><b>3</b></div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+  <section class="card feed"><h3><span>위험 행동 알림</span><span class="muted">새로 켜질 때마다</span></h3><ul class="log" id="feed"><li class="muted">아직 알림이 없어요.</li></ul></section>
+</div>
+
+<script src="cam_mock.js"></script>
+<script>
+const M = CamMock; M.nav("pose3");
+const $ = (id) => document.getElementById(id);
+const COL = { none: "#3ecf8e", low: "#f5b942", mid: "#ff8a3d", high: "#ff5a52" };
+const CAMS = [{ n: "A", off: 0, x: 0.48, s: 0.5 }, { n: "B", off: 19, x: 0.52, s: 0.42 }, { n: "C", off: 37, x: 0.45, s: 0.46 }];
+$("grid").innerHTML = CAMS.map((c) => `<article class="cell" id="cell${c.n}"><div class="hd"><b>Dog ${c.n} 카메라</b><span class="chip none" id="lv${c.n}">안전</span></div>
+  <div class="cam"><canvas id="cv${c.n}"></canvas><span class="tag" id="tag${c.n}">—</span></div><div class="acts" id="acts${c.n}"></div></article>`).join("");
+for (const c of CAMS) { c.sim = M.poseSim({ offset: c.off, x: c.x, size: c.s }); c.cv = $(`cv${c.n}`); c.ctx = c.cv.getContext("2d"); c.prev = new Set(); }
+const feed = [];
+let acc = 0;
+M.loop((dt) => {
+  acc += dt;
+  const draw = acc >= 0.15;
+  const tally = { high: 0, mid: 0, low: 0 };
+  for (const c of CAMS) {
+    const st = c.sim.step(dt);
+    const { w, h } = M.fitCanvas(c.cv);
+    M.drawScene(c.ctx, w, h, `CAM ${c.n}`, st.t);
+    M.drawBody(c.ctx, st.kps, w, h);
+    M.drawSkeleton(c.ctx, st.kps, w, h, COL[st.risk]);
+    const on = st.active.filter((a) => a.level !== "pending");
+    for (const a of on) { tally[a.level] += 1; if (!c.prev.has(a.id)) feed.unshift({ t: st.t, cam: c.n, ...a }); }
+    c.prev = new Set(on.map((a) => a.id));
+    if (draw) {
+      $(`tag${c.n}`).textContent = M.clock(st.t);
+      $(`cell${c.n}`).className = `cell ${st.risk}`;
+      $(`lv${c.n}`).className = `chip ${st.risk}`; $(`lv${c.n}`).textContent = M.LEVEL[st.risk].ko;
+      $(`acts${c.n}`).innerHTML = on.map((a) => `<span class="chip ${a.level}" title="${a.why}">${a.ko}</span>`).join("") || '<span class="muted" style="font-size:12px">위험 행동 없음</span>';
+    }
+  }
+  if (feed.length > 40) feed.length = 40;
+  if (!draw) return; acc = 0;
+  $("sHigh").textContent = tally.high; $("sMid").textContent = tally.mid; $("sLow").textContent = tally.low;
+  if (feed.length) $("feed").innerHTML = feed.slice(0, 25).map((e) => `<li><time>${M.clock(e.t)}</time><span class="chip ${e.level}">${M.LEVEL[e.level].ko}</span><span><b>Dog ${e.cam}</b> · ${e.ko}<br><span class="muted" style="font-size:12px">${e.why}</span></span></li>`).join("");
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>행동 추론 1안 · 위험도 게이지형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 1안: 몸 점(17개) 위에 위험도 게이지와 "왜 위험한지" 근거. 한 사람을 크게 본다. */
+.main { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 14px; padding: 14px 18px 18px; }
+.cam { aspect-ratio: 4 / 3; }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.gauge { display: flex; align-items: center; gap: 16px; }
+.gauge svg { width: 150px; height: 90px; flex: none; }
+.gauge .lv { font-size: 30px; font-weight: 800; }
+.gauge .act { font-size: 15px; }
+.why { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.why li { display: flex; gap: 8px; align-items: baseline; }
+.checks { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; font-size: 13px; }
+.checks .led { width: 10px; height: 10px; border-radius: 50%; background: #253041; }
+.checks .led.on.high { background: var(--alert); box-shadow: 0 0 8px var(--alert); }
+.checks .led.on.mid { background: var(--mid); box-shadow: 0 0 8px var(--mid); }
+.checks .led.on.low { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.checks .led.pending { background: #4a5870; }
+.checks .on-row { font-weight: 700; }
+@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>행동 추론 · 1안 위험도 게이지형</b><small>YOLO11n-pose 몸 점 17개 → 위험 행동 규칙</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+<main class="main">
+  <div class="cam"><canvas id="cv"></canvas><span class="tag" id="camTag">—</span></div>
+  <div class="side">
+    <section class="card" aria-live="polite">
+      <h3><span>지금 위험도</span><span class="muted" id="truth">—</span></h3>
+      <div class="gauge">
+        <svg viewBox="0 0 150 90" aria-hidden="true">
+          <path d="M15 80 A60 60 0 0 1 135 80" fill="none" stroke="#1a2330" stroke-width="14" stroke-linecap="round"/>
+          <path id="arc" d="M15 80 A60 60 0 0 1 135 80" fill="none" stroke="var(--ok)" stroke-width="14" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
+          <line id="needle" x1="75" y1="80" x2="75" y2="28" stroke="#e6edf3" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="75" cy="80" r="5" fill="#e6edf3"/>
+        </svg>
+        <div><div class="lv" id="lv">안전</div><div class="act" id="act">위험한 행동이 없어요</div></div>
+      </div>
+      <ul class="why" id="why"></ul>
+    </section>
+    <section class="card">
+      <h3><span>위험 행동 9가지</span><a href="danger_actions.html" style="color:var(--info);font-size:12px">규칙 보기 →</a></h3>
+      <div class="checks" id="checks"></div>
+    </section>
+  </div>
+</main>
+
+<script src="cam_mock.js"></script>
+<script>
+const M = CamMock; M.nav("pose1");
+const sim = M.poseSim({ x: 0.45, size: 0.5 });
+const $ = (id) => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d");
+const COL = { none: "#3ecf8e", low: "#f5b942", mid: "#ff8a3d", high: "#ff5a52" };
+const PCT = { none: 12, low: 40, mid: 68, high: 95 };
+$("checks").innerHTML = M.DANGERS.map((d) => `<span class="led" id="led-${d.id}"></span><span id="row-${d.id}">${d.ko}</span><span class="chip ${d.level}">${M.LEVEL[d.level].ko}</span>`).join("");
+let acc = 0;
+M.loop((dt) => {
+  const st = sim.step(dt);
+  const { w, h } = M.fitCanvas(cv);
+  M.drawScene(ctx, w, h, "CAM A · 행동", st.t);
+  M.drawBody(ctx, st.kps, w, h);
+  M.drawBox(ctx, st.box, w, h, COL[st.risk], st.active.filter((a) => a.level !== "pending").map((a) => a.ko).join(" · ") || "사람", false);
+  M.drawSkeleton(ctx, st.kps, w, h, COL[st.risk]);
+  $("camTag").textContent = `${M.clock(st.t)} · 사람 1 · 신뢰도 ${st.conf.toFixed(2)}`;
+  acc += dt; if (acc < 0.15) return; acc = 0;
+  const on = st.active.filter((a) => a.level !== "pending");
+  $("lv").textContent = M.LEVEL[st.risk].ko; $("lv").style.color = COL[st.risk];
+  $("act").textContent = on.length ? on.map((a) => a.ko).join(", ") : "위험한 행동이 없어요";
+  $("arc").setAttribute("stroke", COL[st.risk]); $("arc").setAttribute("stroke-dasharray", `${PCT[st.risk]} 100`);
+  const ang = (-90 + (PCT[st.risk] / 100) * 180) * Math.PI / 180;
+  $("needle").setAttribute("x2", 75 + 52 * Math.sin(ang)); $("needle").setAttribute("y2", 80 - 52 * Math.cos(ang));
+  $("why").innerHTML = st.active.map((a) => `<li><span class="chip ${a.level}">${a.level === "pending" ? "확인 중" : M.LEVEL[a.level].ko}</span><span><b>${a.ko}</b> · <span class="muted">${a.why}</span></span></li>`).join("")
+    || `<li class="muted">몸 기울기 ${st.f.torso.toFixed(0)}° · 무릎 ${st.f.kneeL.toFixed(0)}°/${st.f.kneeR.toFixed(0)}° · 정상 범위</li>`;
+  $("truth").textContent = `시험용 정답: ${st.truthKo}`;
+  for (const d of M.DANGERS) {
+    const a = st.active.find((x) => x.id === d.id);
+    $(`led-${d.id}`).className = `led${a ? (a.level === "pending" ? " pending" : ` on ${a.level}`) : ""}`;
+    $(`row-${d.id}`).className = a && a.level !== "pending" ? "on-row" : "";
+  }
+});
+</script>
+</body>
+</html>

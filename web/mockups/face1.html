@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>얼굴 추론 1안 · 판정 카드형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 1안: 큰 카메라 + 오른쪽 큰 판정 카드. "지금 보이는 사람이 누구인가"에 한 번에 답한다. */
+.main { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 14px; padding: 14px 18px; }
+.cam { aspect-ratio: 4 / 3; }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.verdict { border-width: 2px; padding: 18px; transition: border-color .2s, background .2s; }
+.verdict .big { font-size: 28px; font-weight: 800; letter-spacing: -.01em; margin: 4px 0 2px; }
+.verdict .who { font-size: 16px; }
+.verdict .row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; gap: 10px; font-size: 13px; }
+.votes { display: flex; gap: 5px; }
+.votes i { width: 14px; height: 14px; border-radius: 4px; background: #1a2330; border: 1px solid var(--line); }
+.verdict.allow { border-color: var(--ok); background: rgba(62,207,142,.06); } .verdict.allow .big { color: var(--ok); }
+.verdict.watch { border-color: var(--alert); background: rgba(255,90,82,.08); } .verdict.watch .big { color: #ff8c86; }
+.verdict.unknown { border-color: var(--mid); background: rgba(255,138,61,.07); } .verdict.unknown .big { color: var(--mid); }
+.verdict.hold .big, .verdict.none .big { color: var(--muted); }
+.reg { display: grid; grid-template-columns: auto minmax(0, 1fr) 42px; gap: 6px 10px; align-items: center; font-size: 13px; }
+.reg .grp { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); font-weight: 700; margin-top: 6px; }
+.reg .dot { width: 9px; height: 9px; border-radius: 50%; }
+.rule { font-size: 12.5px; color: var(--muted); display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+.rule b { color: var(--text); font-weight: 600; }
+.bottom { padding: 0 18px 18px; }
+@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>얼굴 추론 · 1안 판정 카드형</b><small>Dog A 카메라 · 등록된 얼굴과 비교</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+
+<main class="main">
+  <div class="cam"><canvas id="cv"></canvas><span class="tag" id="camTag">—</span></div>
+  <div class="side">
+    <section class="card verdict none" id="vCard" aria-live="polite">
+      <h3><span>지금 판정</span><span class="num" id="vTrack">—</span></h3>
+      <div class="big" id="vBig">사람 없음</div>
+      <div class="who" id="vWho">카메라에 얼굴이 보이면 등록 명단과 비교해요.</div>
+      <div class="row"><span class="muted">가장 비슷한 사람</span><b id="vBest">—</b></div>
+      <div class="bar" style="margin-top:6px"><i id="vBar" style="width:0"></i><span class="th" id="vTh"></span></div>
+      <div class="row"><span class="muted">최근 5장 투표 (3장 같으면 확정)</span><span class="votes" id="vVotes"></span></div>
+    </section>
+    <section class="card">
+      <h3><span>등록 명단 · 일치율</span><span>기준 <b class="num" id="thTxt"></b></span></h3>
+      <div class="reg" id="reg"></div>
+    </section>
+    <section class="card">
+      <h3><span>판정 규칙 (후처리)</span></h3>
+      <div class="rule" id="rule"></div>
+    </section>
+  </div>
+</main>
+<div class="bottom">
+  <section class="card"><h3><span>판정 기록</span><span class="muted">확정될 때마다 한 줄</span></h3><ul class="log" id="log"></ul></section>
+</div>
+
+<script src="cam_mock.js"></script>
+<script>
+const M = CamMock; M.nav("face1");
+const R = M.FACE_RULE, sim = M.faceSim({ frameW: 640 });
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const $ = (id) => document.getElementById(id);
+const ALL = [...M.REGISTRY.allow.map((r) => ({ ...r, list: "allow" })), ...M.REGISTRY.watch.map((r) => ({ ...r, list: "watch" }))];
+$("thTxt").textContent = R.match.toFixed(2);
+$("vTh").style.left = `${R.match * 100}%`;
+$("rule").innerHTML = `<span>일치 기준</span><b>${R.match.toFixed(2)} 이상이면 그 사람</b>
+  <span>깜빡임 방지</span><b>최근 ${R.window}장 중 ${R.votes}장 같아야 확정</b>
+  <span>작은 얼굴</span><b>${R.minPx}px 미만이면 판정 보류</b>
+  <span>순서</span><b>경고 명단 → 미등록 → 허용 순으로 먼저 확정</b>`;
+$("reg").innerHTML = [["allow", "허용 명단 (팀원)"], ["watch", "경고 명단 (범인 역할)"]].map(([g, title]) =>
+  `<span class="grp">${title}</span>` + ALL.filter((a) => a.list === g).map((a) =>
+    `<span class="dot" style="background:${M.VERDICT[g].color}"></span><span>${a.name}<div class="bar"><i data-n="${a.name}" style="width:0;background:${M.VERDICT[g].color}"></i><span class="th" style="left:${R.match * 100}%"></span></div></span><span class="num" data-v="${a.name}">—</span>`).join("")).join("");
+
+let acc = 0, last = null;
+M.loop((dt) => {
+  const st = sim.step(dt);
+  const { w, h } = M.fitCanvas(cv);
+  M.drawScene(ctx, w, h, "CAM A · 얼굴", st.t);
+  for (const f of st.faces) {
+    M.drawFaceAvatar(ctx, f.box, w, h, f.hue);
+    const v = M.VERDICT[f.verdict];
+    M.drawBox(ctx, f.box, w, h, v.color, `${f.name} ${f.verdict === "hold" ? "" : f.score.toFixed(2)}`, f.verdict === "hold");
+  }
+  $("camTag").textContent = `${M.clock(st.t)} · 얼굴 ${st.faces.length}`;
+  acc += dt; if (acc < 0.2) return; acc = 0;
+  const f = st.faces[0];
+  const card = $("vCard");
+  if (!f) { card.className = "card verdict none"; $("vBig").textContent = "사람 없음"; $("vWho").textContent = "카메라에 얼굴이 보이면 등록 명단과 비교해요.";
+    $("vBest").textContent = "—"; $("vBar").style.width = "0"; $("vTrack").textContent = "—"; $("vVotes").innerHTML = "";
+    document.querySelectorAll("[data-n]").forEach((el) => (el.style.width = "0")); document.querySelectorAll("[data-v]").forEach((el) => (el.textContent = "—"));
+  } else {
+    card.className = `card verdict ${f.verdict}`;
+    $("vBig").textContent = M.VERDICT[f.verdict].ko;
+    $("vWho").textContent = f.verdict === "hold" ? (f.px < R.minPx ? `얼굴이 너무 작아요 (${f.px.toFixed(0)}px). 더 가까이 오면 판정해요.` : "몇 장 더 보고 확정해요.")
+      : f.verdict === "unknown" ? "어느 명단과도 기준 미만이에요. 처음 보는 사람이에요." : `${f.best}와(과) 같은 사람이에요.`;
+    $("vBest").textContent = `${f.best} · ${f.score.toFixed(2)}`;
+    $("vBar").style.width = `${f.score * 100}%`; $("vBar").style.background = M.VERDICT[f.verdict].color;
+    $("vTrack").textContent = `사람 #${f.track}`;
+    $("vVotes").innerHTML = f.votes.map((v) => `<i title="${M.VERDICT[v].ko}" style="background:${M.VERDICT[v].color}"></i>`).join("");
+    for (const a of ALL) { const s = f.sims[a.name];
+      document.querySelector(`[data-n="${a.name}"]`).style.width = `${s * 100}%`;
+      document.querySelector(`[data-v="${a.name}"]`).textContent = s.toFixed(2); }
+  }
+  if (st.log[0] !== last) {
+    last = st.log[0];
+    $("log").innerHTML = st.log.slice(0, 20).map((e) => `<li><time>${M.clock(e.t)}</time><span class="chip ${e.verdict}">${M.VERDICT[e.verdict].ko}</span><span>사람 #${e.track} · ${e.name}${e.verdict === "unknown" ? "" : ` (${e.score.toFixed(2)})`}</span></li>`).join("")
+      || '<li class="muted">아직 확정된 판정이 없어요.</li>';
+  }
+});
+</script>
+</body>
+</html>

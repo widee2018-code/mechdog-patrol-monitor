@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>행동 추론 2안 · 행동 타임라인형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 2안: 9가지 행동을 줄(레인)로 놓고 언제 켜졌는지 시간축에 쌓는다. 규칙이 잘 맞는지 확인하기 좋다. */
+.top2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 14px; padding: 14px 18px 0; }
+.cam { aspect-ratio: 16 / 9; }
+.kp { display: grid; grid-template-columns: 70px minmax(0, 1fr) 34px; gap: 3px 8px; align-items: center; font-size: 11.5px; }
+.now { display: flex; gap: 8px; flex-wrap: wrap; min-height: 28px; }
+.tl { padding: 14px 18px 18px; }
+.lanes { display: grid; grid-template-columns: 170px 46px minmax(0, 1fr); gap: 5px 10px; align-items: center; }
+.lanes .nm { font-size: 13px; cursor: help; }
+.lanes canvas { width: 100%; height: 20px; border-radius: 5px; background: #0d131b; display: block; }
+.lanes .sepr { grid-column: 1 / -1; border-top: 1px dashed var(--line); margin: 4px 0; }
+.axis { grid-column: 3; display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+@media (max-width: 860px) { .top2 { grid-template-columns: 1fr; } .lanes { grid-template-columns: 120px 40px minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>행동 추론 · 2안 행동 타임라인형</b><small>9가지 위험 행동이 언제 켜졌는지 시간순으로</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+<div class="top2">
+  <div class="cam"><canvas id="cv"></canvas><span class="tag" id="camTag">—</span></div>
+  <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+    <section class="card" aria-live="polite"><h3><span>지금 감지된 행동</span></h3><div class="now" id="now"></div></section>
+    <section class="card"><h3><span>몸 점 17개 신뢰도</span><span class="muted">0.5 미만은 규칙에서 빼요</span></h3><div class="kp" id="kp"></div></section>
+  </div>
+</div>
+<section class="tl">
+  <div class="card">
+    <h3><span>최근 60초</span><span class="muted">행동 이름에 마우스를 올리면 규칙이 보여요</span></h3>
+    <div class="lanes" id="lanes"></div>
+  </div>
+</section>
+
+<script src="cam_mock.js"></script>
+<script>
+const M = CamMock; M.nav("pose2");
+const sim = M.poseSim({ x: 0.45, size: 0.55 });
+const $ = (id) => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d");
+const COL = { none: "#3ecf8e", low: "#f5b942", mid: "#ff8a3d", high: "#ff5a52", pending: "#4a5870" };
+$("lanes").innerHTML = M.DANGERS.map((d) => `<span class="nm" title="${d.rule}">${d.ko}</span><span class="chip ${d.level}">${M.LEVEL[d.level].ko}</span><canvas data-l="${d.id}"></canvas>`).join("")
+  + `<span class="sepr"></span><span class="nm muted">시험용 정답 (실제 행동)</span><span></span><canvas data-l="truth"></canvas><span></span><span></span><div class="axis"><span>60초 전</span><span>30초 전</span><span>지금</span></div>`;
+$("kp").innerHTML = M.KP_KO.map((n, i) => `<span>${n}</span><div class="bar"><i id="kb${i}"></i><span class="th" style="left:50%"></span></div><span class="num" id="kv${i}">—</span>`).join("");
+const hist = [];
+const TRUTH_COL = { walk: "#2c3a4d", loiter: "#f5b942", crouch: "#ff8a3d", handsup: "#f5b942", rush: "#ff8a3d", reach: "#ff8a3d", strike: "#ff5a52", kick: "#ff5a52", fall: "#ff5a52", still: "#ff5a52", getup: "#2c3a4d" };
+let acc = 0;
+function drawLanes(now) {
+  document.querySelectorAll("[data-l]").forEach((c) => {
+    const { w, h } = M.fitCanvas(c), x = c.getContext("2d"), id = c.dataset.l;
+    x.clearRect(0, 0, w, h);
+    const bw = Math.max(2, w / 400);
+    for (const e of hist) {
+      const px = ((e.t - (now - 60)) / 60) * w;
+      if (id === "truth") { x.fillStyle = TRUTH_COL[e.truth]; x.fillRect(px, 3, bw, h - 6); continue; }
+      const a = e.active.find((q) => q.id === id); if (!a) continue;
+      x.fillStyle = COL[a.level]; x.fillRect(px, a.level === "pending" ? h * 0.35 : 3, bw, a.level === "pending" ? h * 0.3 : h - 6);
+    }
+  });
+}
+M.loop((dt) => {
+  const st = sim.step(dt);
+  const { w, h } = M.fitCanvas(cv);
+  M.drawScene(ctx, w, h, "CAM A · 행동", st.t);
+  M.drawBody(ctx, st.kps, w, h);
+  M.drawSkeleton(ctx, st.kps, w, h, COL[st.risk]);
+  $("camTag").textContent = `${M.clock(st.t)} · ${st.truthKo}`;
+  hist.push({ t: st.t, active: st.active, truth: st.truth });
+  while (hist.length && st.t - hist[0].t > 60) hist.shift();
+  acc += dt; if (acc < 0.2) return; acc = 0;
+  const on = st.active.filter((a) => a.level !== "pending");
+  $("now").innerHTML = st.active.length ? st.active.map((a) => `<span class="chip ${a.level}" title="${a.why}">${a.ko}${a.level === "pending" ? " (확인 중)" : ""}</span>`).join("") : '<span class="chip none">위험 행동 없음</span>';
+  st.kps.forEach((k, i) => { $(`kb${i}`).style.width = `${k[2] * 100}%`; $(`kb${i}`).style.background = k[2] < 0.5 ? "#3a4656" : "var(--info)"; $(`kv${i}`).textContent = k[2].toFixed(2); });
+  drawLanes(st.t);
+});
+</script>
+</body>
+</html>
