@@ -175,3 +175,10 @@ main { flex: 1; display: grid; gap: 12px; padding: 12px 18px 18px; min-height: 0
 .evidence figure { margin: 0; flex: none; width: 200px; }
 .evidence img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; background: #000; }
 .evidence figcaption { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+/* 오른쪽 아래 이동 버튼: 관제실 · 추론 (추론 화면 mockups/combo2.html 과 같은 모양) */
+.pages { position: fixed; right: 14px; bottom: 14px; z-index: 50; display: flex; gap: 4px; padding: 5px; border-radius: 999px;
+  background: rgba(20,24,32,.92); box-shadow: 0 4px 18px rgba(0,0,0,.35); font-weight: 700; font-size: 14px; }
+.pages a { padding: 8px 18px; border-radius: 999px; text-decoration: none; color: #d6dde8; }
+.pages a[aria-current="page"] { color: #0b0f15; background: #fff; }
+.pages a:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
