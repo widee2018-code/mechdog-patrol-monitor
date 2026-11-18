@@ -505,11 +505,7 @@
 
   // 위쪽 이동 메뉴: 시안끼리 바로 넘어가기
   function nav(now) {
-    const links = [["index.html", "시안 목록"], ["design1.html", "관제실 1안"], "|",
-      ["face1.html", "얼굴 1안"], ["face2.html", "얼굴 2안"], ["face3.html", "얼굴 3안"], ["face4.html", "얼굴 4안"], ["face5.html", "얼굴 5안"], "|",
-      ["pose1.html", "행동 1안"], ["pose2.html", "행동 2안"], ["pose3.html", "행동 3안"],
-      ["pose4.html", "행동 4안"], ["pose5.html", "행동 5안"], ["pose6.html", "행동 6안"], "|",
-      ["combo1.html", "반반 1안"], ["combo2.html", "반반 2안"], ["combo3.html", "반반 3안"], ["combo4.html", "반반 4안"], ["combo5.html", "반반 5안"], "|", ["danger_actions.html", "위험 행동 목록"]];
+    const links = [["index.html", "시안 목록"], ["design1.html", "관제실 1안"], ["combo2.html", "얼굴 + 행동 반반 2안"], "|", ["danger_actions.html", "위험 행동 목록"]];
     const el = document.querySelector(".nav");
     if (!el) return;
     el.innerHTML = links.map((l) => (l === "|" ? '<span class="sep"></span>'

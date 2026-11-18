@@ -52,33 +52,16 @@ code { background: #eef1f5; padding: 1px 6px; border-radius: 5px; font-size: 13p
   </div>
   <p class="good"><b>2안(카드형) · 3안(사건 중심형)은 정리했습니다.</b> 팀 회의에서 1안으로 정해서 파일을 지웠고, 어떤 시안이었는지는 <code>DESIGN_LOG.md</code> 2절과 7절에 남겨 두었습니다. 예전 파일은 git 기록(커밋 938a5c5)에서 다시 꺼낼 수 있습니다.</p>
 
-  <h2>얼굴 + 행동 반반 대시보드 시안 (팀 회의 후 추가)</h2>
+  <h2>얼굴 + 행동 반반 대시보드 (팀 회의에서 2안으로 결정)</h2>
   <p style="margin:0 0 12px;color:var(--muted)">한 화면을 반으로 나눠 <b>왼쪽은 얼굴 추론</b>(범인 / 미등록 / 보류), <b>오른쪽은 행동 추론</b>(위험 행동 9가지)을 같은 Dog A 카메라로 보여 줍니다.
     위쪽 띠는 <b>범인 판정</b>: 미등록 + 범인 조건 행동 = 범인 등록, 얼굴을 저장해 다시 오면 바로 범인. 왼쪽은 팀이 고른 얼굴 2안(갤러리) · 4안(칸반)을 바탕으로 했어요.</p>
   <div class="cards">
-    <a class="d" href="combo1.html"><span class="no">반반 1안</span><b>기본 반반형</b><p>지금 판정 + 갤러리 | 위험도 + 위험 행동 9가지 목록.</p><span class="go">열어 보기 →</span></a>
     <a class="d" href="combo2.html"><span class="no">반반 2안</span><b>기록형</b><p>얼굴 칸반 | 행동 기록 + 위험 행동 목록. "누가 와서 무슨 일을 했나".</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="combo3.html"><span class="no">반반 3안</span><b>분석 · 조절형</b><p>얼굴 기준 슬라이더 + 갤러리 | 규칙 숫자 계기판 + 목록.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="combo4.html"><span class="no">반반 4안</span><b>히트맵형</b><p>얼굴 칸반 + 판정 띠 | 위험 행동 9줄 히트맵.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="combo5.html"><span class="no">반반 5안</span><b>관제 요약형</b><p>큰 글씨. 판정 한 단어 + 숫자 4칸 | 위험도 + 행동 9칸 타일.</p><span class="go">열어 보기 →</span></a>
   </div>
 
-  <h2>카메라 추론 대시보드 시안 (2026-11-18 추가)</h2>
-  <p style="margin:0 0 12px;color:var(--muted)">관제실 화면에 더해, 카메라로 <b>얼굴</b>을 보고 등록된 사람인지 판정하는 화면과, <b>몸 점(YOLO11n-pose)</b>으로 위험한 행동을 알아내는 화면입니다. 얼굴 5안 · 행동 6안을 만들었어요 (4안부터는 앞 시안을 참고해 바꾼 것).
-    위험 행동 9가지와 규칙은 <a href="danger_actions.html">위험 행동 목록</a>에 정리했습니다.</p>
-  <div class="cards">
-    <a class="d" href="face1.html"><span class="no">얼굴 1안</span><b>판정 카드형</b><p>큰 카메라 + 큰 판정 카드. 등록 명단별 일치율과 5장 투표.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="face2.html"><span class="no">얼굴 2안</span><b>얼굴 갤러리형</b><p>다녀간 사람마다 카드 한 장. 경고·미등록이 맨 앞.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="face3.html"><span class="no">얼굴 3안</span><b>타임라인 · 기준 조절형</b><p>60초 타임라인과 슬라이더로 판정 기준을 바꿔 보며 시험.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="face4.html"><span class="no">얼굴 4안 · 2안 참고</span><b>명단 칸반형</b><p>카드를 경고 · 미등록 · 보류 · 허용 칸에 나눠 쌓기.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="face5.html"><span class="no">얼굴 5안 · 2안 참고</span><b>필름 + 상세형</b><p>아래 필름 띠에서 한 사람을 눌러 위에 크게 상세 보기.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="pose1.html"><span class="no">행동 1안</span><b>위험도 게이지형</b><p>몸 점 + 위험도 게이지와 판단 근거, 9가지 행동 불빛.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="pose2.html"><span class="no">행동 2안</span><b>행동 타임라인형</b><p>9가지 행동이 언제 켜졌는지 60초 줄 그래프.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="pose3.html"><span class="no">행동 3안</span><b>카메라 3대 그리드형</b><p>A·B·C 카메라 나란히, 위험한 카메라 강조, 알림 목록.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="pose4.html"><span class="no">행동 4안 · 2안 참고</span><b>사건 묶음형</b><p>이어진 감지를 사건 하나로 묶은 목록. 누르면 타임라인에 표시.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="pose5.html"><span class="no">행동 5안 · 2안 참고</span><b>행동 히트맵 · 분석형</b><p>카메라는 작게, 행동 9줄 히트맵과 횟수·시간·정답 비율, 몸 점 신뢰도 히트맵.</p><span class="go">열어 보기 →</span></a>
-    <a class="d" href="pose6.html"><span class="no">행동 6안 · 1안 참고</span><b>게이지 + 규칙 계산형</b><p>규칙 숫자 계기판과 기준선, 판단에 쓴 몸 점 강조.</p><span class="go">열어 보기 →</span></a>
-  </div>
+  <p class="good"><b>남긴 시안: 관제실 1안 · 얼굴 + 행동 반반 2안.</b> 팀 회의에서 나머지(얼굴 1~5안, 행동 1~6안, 반반 1 · 3 · 4 · 5안)는 쓰지 않기로 해서 파일을 지웠습니다.
+    어떤 시안이었는지는 <code>DESIGN_LOG.md</code> 10 · 11 · 12절에 남겨 두었고, 파일은 git 기록(커밋 239e4d5)에서 다시 꺼낼 수 있습니다.
+    위험 행동 9가지와 범인 규칙은 <a href="danger_actions.html">위험 행동 목록</a>에 있습니다.</p>
 
   <h2>지금 대시보드 진단</h2>
   <table>
