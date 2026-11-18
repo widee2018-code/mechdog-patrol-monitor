@@ -20,6 +20,7 @@ hub와 독립된 프로세스라서 recorder가 죽어도 대시보드는 영향
 | `sound` | `alert`가 참일 때만 | |
 | `dog` | 로봇견별 **1초에 1건** | 나머지는 솎아냄 |
 | `camera` | `evidence`가 참일 때만 | 사진은 Storage에, 행에는 경로(`storage_path`)만 |
+| `face`, `pose` | **`inference_log` 테이블 하나**에 클래스만 (`kind` = `face` / `pose`) | 대시보드 [추론] 탭용. `telemetry_log`와 별도 테이블. 아래 "추론 기록" 참고 |
 | 그 외 | 저장 안 함 | |
 
 - 사진은 `evidence` 버킷의 `<from>/<밀리초>.jpg`에 저장된다. 버킷은 **비공개**다.
@@ -27,10 +28,28 @@ hub와 독립된 프로세스라서 recorder가 죽어도 대시보드는 영향
 - Supabase에 연결이 안 되면 메모리에 최대 5000행까지 쌓아 두고 재시도한다. 넘으면 오래된 것부터 버린다.
 - hub 연결이 끊기면 1초부터 최대 30초까지 늘려 가며 재접속한다.
 
+## 추론 기록 (`inference_log`)
+
+대시보드 [추론] 탭의 얼굴 판정과 행동 클래스를 **클래스 이름만** 한 테이블에 적는다. **얼굴 이미지와 특징값은 저장하지 않는다**(개인정보). 테이블은 `cloud/supabase/inference.sql`.
+
+| `kind` | 메시지 `type` | `label`(클래스) |
+|---|---|---|
+| `face` | `face` | `culprit`(범인) · `unknown`(미등록) · `hold`(보류) |
+| `pose` | `pose` | `fall` `still` `strike` `kick` `rush` `reach` `crouch` `handsup` `loiter` |
+
+컬럼: `ts`, `kind`, `source`(카메라 A/B/C), `label`, `track`(추적 번호), `confidence`, `incident`(숫자일 때만).
+
+- 클래스는 메시지의 `label` → `verdict` → `action` → `class` 필드 순서로 찾는다. 하나도 없으면 저장하지 않는다.
+- 프레임마다 오므로 **(종류, 카메라, `track`)별로 클래스가 바뀔 때만** 한 행을 쓴다.
+- **메시지 `type` 이름(`face`, `pose`)과 필드 이름은 아직 확정 전이다.** 대시보드가 실제로 보내는 이름에 맞춰 `recorder.py`의 `INFER_KINDS`, `INFER_LABEL_KEYS`만 고친다.
+- 클래스별로 세어 보기: `select kind, label, count(*) from inference_log group by 1, 2 order by 3 desc;`
+- 얼굴 기록만 지우기: `delete from inference_log where kind = 'face';`
+- 쓰기는 recorder(service_role)만 한다. anon은 읽기도 쓰기도 안 된다.
+
 ## 처음 한 번: Supabase 준비
 
 1. Supabase에서 프로젝트를 만든다(현재: `mechdog_patrol_monitor`, 도쿄 리전).
-2. SQL Editor에서 `cloud/supabase/schema.sql`을 실행한다. `telemetry_log` 테이블, RLS, `evidence` 버킷이 만들어진다.
+2. SQL Editor에서 `cloud/supabase/schema.sql`을 실행한다. `telemetry_log` 테이블, RLS, `evidence` 버킷이 만들어진다. 추론 기록이 필요하면 `inference.sql`도 실행한다.
 3. `cloud/supabase/.env` 파일을 만든다(`.gitignore`로 제외돼 있어 커밋되지 않는다).
    ```
    SUPABASE_URL=https://<프로젝트 ref>.supabase.co
