@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>얼굴 + 행동 4안 · 히트맵형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 4안 히트맵형: 왼쪽 얼굴 4안 칸반 + 사람별 시간 띠, 오른쪽 위험 행동 9가지를 그대로 히트맵 줄로(행동 5안). 패턴을 본다. */
+.cam { aspect-ratio: 16 / 9; }
+.hm { display: grid; grid-template-columns: 150px minmax(0, 1fr) 44px 30px; gap: 4px 8px; align-items: center; font-size: 12px; }
+.hm canvas { width: 100%; height: 18px; display: block; border-radius: 4px; background: #0d131b; }
+.hm .nm { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.hm .nm span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.hm .cr { font-size: 10px; color: var(--alert); font-weight: 700; }
+.axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+.pl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 4px 8px; align-items: center; font-size: 12px; }
+.pl canvas { width: 100%; height: 14px; display: block; border-radius: 4px; background: #0d131b; }
+@media (max-width: 700px) { .hm { grid-template-columns: 100px minmax(0, 1fr) 40px 26px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>얼굴 + 행동 · 4안 히트맵형</b><small>왼쪽 얼굴 칸반 + 판정 띠 · 오른쪽 위험 행동 히트맵</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+<div class="band" id="band" aria-live="polite"></div>
+<div class="halves">
+  <section class="half" aria-label="얼굴 추론">
+    <div class="hh"><b>👤 얼굴 추론</b><small>최근 2분 판정 띠</small></div>
+    <div class="cam"><canvas id="cvF"></canvas><span class="tag" id="tagF">—</span></div>
+    <div class="card"><h3><span>얼굴 판정 (최근 2분)</span><span class="muted">초록 등록 · 주황 미등록 · 빨강 범인 · 회색 보류</span></h3>
+      <div class="pl"><span>확정 판정</span><canvas id="fl1"></canvas><span>한 장씩</span><canvas id="fl2"></canvas></div></div>
+    <div id="kb"></div>
+  </section>
+  <section class="half" aria-label="행동 추론">
+    <div class="hh"><b>🏃 행동 추론</b><small>위험 행동 9가지 · 2초 칸</small></div>
+    <div class="cam"><canvas id="cvP"></canvas><span class="tag" id="tagP">—</span></div>
+    <div class="card"><h3><span>위험 행동 히트맵 (최근 2분)</span><a href="danger_actions.html" style="color:var(--info);font-size:12px">규칙 →</a></h3>
+      <div class="hm" id="hm"></div></div>
+  </section>
+</div>
+
+<script src="cam_mock.js"></script>
+<script src="combo_ui.js"></script>
+<script>
+const M = CamMock, U = ComboUI; M.nav("combo4");
+const SPAN = 120, BIN = 2, NB = SPAN / BIN;
+const sim = M.comboSim({ frameW: 640, offset: +(new URLSearchParams(location.search).get("t") || 0) });
+const $ = (id) => document.getElementById(id);
+const RGB = { low: [245, 185, 66], mid: [255, 138, 61], high: [255, 90, 82] };
+$("hm").innerHTML = `<span></span><div class="axis"><span>2분 전</span><span>지금</span></div><span class="muted">횟수</span><span></span>`
+  + M.DANGERS.map((d) => `<span class="nm" title="${d.rule}"><i class="dot" style="background:${U.RISK_COL[d.level]}"></i><span>${d.ko}</span></span><canvas data-h="${d.id}"></canvas><span class="num" id="n-${d.id}">0</span><span class="cr">${M.CULPRIT_LEVELS.includes(d.level) ? "범인" : ""}</span>`).join("");
+const hist = [], cnt = Object.fromEntries(M.DANGERS.map((d) => [d.id, 0])), prev = new Set();
+function lane(c, pick) {
+  const { w, h } = M.fitCanvas(c), x = c.getContext("2d"), now = hist.length ? hist[hist.length - 1].t : 0;
+  x.clearRect(0, 0, w, h);
+  for (const e of hist) { const col = pick(e); if (!col) continue; x.fillStyle = col; x.fillRect(((e.t - (now - SPAN)) / SPAN) * w, 2, Math.max(2, w / 700), h - 4); }
+}
+let acc = 0;
+M.loop((dt) => {
+  const st = sim.step(dt);
+  U.drawFaceView($("cvF"), st); U.drawPoseView($("cvP"), st);
+  $("tagF").textContent = $("tagP").textContent = M.clock(st.t);
+  const on = st.person ? st.active.filter((a) => a.level !== "pending").map((a) => a.id) : [];
+  for (const id of on) if (!prev.has(id)) cnt[id] += 1;
+  prev.clear(); on.forEach((id) => prev.add(id));
+  hist.push({ t: st.t, on, s: st.person?.state, fv: st.person ? st.frameVerdict : null });
+  while (hist.length && st.t - hist[0].t > SPAN) hist.shift();
+  acc += dt; if (acc < 0.3) return; acc = 0;
+  U.band($("band"), st); U.kanban($("kb"), st);
+  lane($("fl1"), (e) => e.s && U.V[e.s].color); lane($("fl2"), (e) => e.fv && U.V[e.fv].color);
+  document.querySelectorAll("[data-h]").forEach((c) => {
+    const id = c.dataset.h, [r, g, b] = RGB[M.DANGER_BY_ID[id].level], { w, h } = M.fitCanvas(c), x = c.getContext("2d"), bw = w / NB, now = st.t;
+    const onN = new Array(NB).fill(0), all = new Array(NB).fill(0);
+    for (const e of hist) { const k = Math.floor((e.t - (now - SPAN)) / BIN); if (k < 0 || k >= NB) continue; all[k] += 1; if (e.on.includes(id)) onN[k] += 1; }
+    x.clearRect(0, 0, w, h);
+    onN.forEach((v, i) => { if (!v) return; x.fillStyle = `rgba(${r},${g},${b},${0.25 + 0.75 * (v / all[i])})`; x.fillRect(i * bw + 1, 2, bw - 2, h - 4); });
+    $(`n-${id}`).textContent = cnt[id];
+  });
+});
+</script>
+</body>
+</html>

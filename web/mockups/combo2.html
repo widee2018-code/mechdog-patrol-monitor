@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>얼굴 + 행동 2안 · 기록형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 2안 기록형: 왼쪽 얼굴 4안 칸반(범인 · 미등록 · 보류 · 등록), 오른쪽 행동 사건 목록 + 위험 행동 9가지. "누가 와서 무슨 일을 했나". */
+.cam { aspect-ratio: 16 / 9; }
+.two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.ev { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 330px; overflow: auto; }
+.ev li { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; }
+.ev li.cul { border-color: var(--alert); background: rgba(255,90,82,.08); }
+.ev time { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+@media (max-width: 1200px) { .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>얼굴 + 행동 · 2안 기록형</b><small>왼쪽 얼굴 칸반 · 오른쪽 행동 사건 기록</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+<div class="band" id="band" aria-live="polite"></div>
+<div class="halves">
+  <section class="half" aria-label="얼굴 추론">
+    <div class="hh"><b>👤 얼굴 추론</b><small>사람 카드가 판정에 따라 칸을 옮겨요</small></div>
+    <div class="cam"><canvas id="cvF"></canvas><span class="tag" id="tagF">—</span></div>
+    <div id="kb"></div>
+  </section>
+  <section class="half" aria-label="행동 추론">
+    <div class="hh"><b>🏃 행동 추론</b><small>위험 행동이 켜질 때마다 한 줄</small></div>
+    <div class="cam"><canvas id="cvP"></canvas><span class="tag" id="tagP">—</span></div>
+    <div class="two">
+      <div class="card"><h3><span>행동 기록</span><span class="muted" id="evN">0건</span></h3><ul class="ev" id="ev"></ul></div>
+      <div class="card"><h3><span>위험 행동 9가지</span><a href="danger_actions.html" style="color:var(--info);font-size:12px">규칙 →</a></h3><div id="dl"></div></div>
+    </div>
+  </section>
+</div>
+
+<script src="cam_mock.js"></script>
+<script src="combo_ui.js"></script>
+<script>
+const M = CamMock, U = ComboUI; M.nav("combo2");
+const sim = M.comboSim({ frameW: 640, offset: +(new URLSearchParams(location.search).get("t") || 0) });
+const $ = (id) => document.getElementById(id);
+let acc = 0;
+M.loop((dt) => {
+  const st = sim.step(dt);
+  U.drawFaceView($("cvF"), st); U.drawPoseView($("cvP"), st);
+  $("tagF").textContent = $("tagP").textContent = M.clock(st.t);
+  acc += dt; if (acc < 0.3) return; acc = 0;
+  U.band($("band"), st);
+  U.kanban($("kb"), st);
+  U.dangerList($("dl"), st.person ? st : { active: [] });
+  const ev = st.log.filter((e) => e.kind !== "face");
+  $("evN").textContent = `${ev.length}건`;
+  $("ev").innerHTML = ev.slice(0, 25).map((e) => `<li class="${e.kind === "culprit" ? "cul" : ""}"><time>${M.clock(e.t)}</time>${e.kind === "culprit" ? '<span class="chip culprit">범인</span>' : `<span class="chip ${e.level}">${M.LEVEL[e.level].ko}</span>`}<span>${e.text}</span></li>`).join("")
+    || '<li class="muted">아직 위험 행동이 없어요.</li>';
+});
+</script>
+</body>
+</html>

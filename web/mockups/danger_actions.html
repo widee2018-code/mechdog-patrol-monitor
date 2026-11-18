@@ -42,7 +42,7 @@ pre { background: #111821; color: #e6edf3; padding: 12px 14px; border-radius: 10
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><a href="index.html">← 시안 목록</a><a href="pose1.html">행동 1안</a><a href="pose2.html">행동 2안</a><a href="pose3.html">행동 3안</a></div>
+  <div class="top"><a href="index.html">← 시안 목록</a><a href="pose1.html">행동 1안</a><a href="pose2.html">행동 2안</a><a href="pose3.html">행동 3안</a><a href="combo1.html">얼굴 + 행동 반반 1안</a></div>
   <h1>위험 행동 목록 · 행동 추론 규칙</h1>
   <p class="lead">YOLO11n-pose가 사람 몸에서 점 17개(코·눈·귀·어깨·팔꿈치·손목·엉덩이·무릎·발목)를 찾으면,
     아래 규칙으로 "위험한 행동인지" 판단합니다. 규칙은 AI가 아니라 <b>우리가 정한 계산(후처리)</b>이라서 숫자만 바꿔 조절할 수 있어요.
@@ -53,6 +53,14 @@ pre { background: #111821; color: #e6edf3; padding: 12px 14px; border-radius: 10
     <div class="lv high"><span class="sev high">높음</span> <b>4가지</b><p>사람이 다쳤거나 공격하는 상황. <b>🚨 사이렌 + 경보 배너</b>, 관제가 바로 확인.</p></div>
     <div class="lv mid"><span class="sev mid">중간</span> <b>3가지</b><p>로봇에 다가오거나 숨는 상황. <b>경고 배너 + 기록</b>, 관제가 지켜봄.</p></div>
     <div class="lv low"><span class="sev low">주의</span> <b>2가지</b><p>당장 위험하진 않지만 알아 둘 행동. <b>기록만</b> 남김.</p></div>
+  </div>
+
+  <h2>범인 판정 규칙 (팀 결정 2026-11-18)</h2>
+  <div class="note" style="background:#fdecea;border-color:#f3b8b3">
+    <p style="margin:0 0 6px"><b>얼굴이 "미등록"인 사람</b>이 <b>위험 행동(중간 이상)</b>을 하면 그 사람을 <b>범인으로 등록</b>합니다.</p>
+    <p style="margin:0;font-size:14px;color:var(--muted)">범인 조건이 되는 행동: 넘어짐 · 쓰러진 채 움직임 없음 · 팔 휘두름 · 발차기 (높음), 돌진 · 손 뻗음 · 웅크림 (중간).
+      양손 들기 · 배회(주의)는 기록만 하고 범인 조건에서 뺍니다. 등록된 팀원은 위험 행동을 해도 범인이 아니에요 (넘어지면 구조가 필요할 수 있어요).
+      얼굴이 작거나 안 보여 "보류"인 동안은 범인으로 정하지 않습니다.</p>
   </div>
 
   <h2>9가지 행동</h2>

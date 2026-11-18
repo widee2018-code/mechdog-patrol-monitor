@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>얼굴 + 행동 5안 · 관제 요약형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 5안 관제 요약형: 큰 글씨. 프로젝터 · 발표용. 왼쪽 판정 한 단어 + 숫자 4칸 + 작은 갤러리, 오른쪽 위험도 한 단어 + 위험 행동 9칸 타일. */
+body { font-size: 15px; }
+.band { padding: 14px 22px; } .band .st { font-size: 22px; }
+.cam { aspect-ratio: 16 / 9; }
+.hero { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.hero .w { font-size: 44px; font-weight: 900; letter-spacing: -.02em; line-height: 1.1; }
+.hero .d { font-size: 16px; color: var(--muted); }
+.tiles4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tiles4 div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; border-top: 4px solid; }
+.tiles4 b { display: block; font-size: 30px; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.tiles4 span { font-size: 13px; color: var(--muted); }
+.tiles9 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.t9 { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; min-height: 74px; display: flex; flex-direction: column; justify-content: space-between; transition: background .15s, border-color .15s; }
+.t9 b { font-size: 15px; } .t9 small { font-size: 12px; color: var(--muted); }
+.t9.on.high { background: rgba(255,90,82,.2); border-color: var(--alert); } .t9.on.mid { background: rgba(255,138,61,.18); border-color: var(--mid); }
+.t9.on.low { background: rgba(245,185,66,.16); border-color: var(--warn); } .t9.pending { border-style: dashed; border-color: #4a5870; }
+@media (max-width: 700px) { .tiles9 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tiles4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hero .w { font-size: 34px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>얼굴 + 행동 · 5안 관제 요약형</b><small>큰 글씨 · 프로젝터 발표용</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+<div class="band" id="band" aria-live="polite"></div>
+<div class="halves">
+  <section class="half" aria-label="얼굴 추론">
+    <div class="hero"><span class="w" id="fW">—</span><span class="d" id="fD">—</span></div>
+    <div class="cam"><canvas id="cvF"></canvas><span class="tag" id="tagF">—</span></div>
+    <div class="tiles4">
+      <div style="border-top-color:var(--alert)"><b id="c-culprit">0</b><span>범인</span></div>
+      <div style="border-top-color:var(--mid)"><b id="c-unknown">0</b><span>미등록</span></div>
+      <div style="border-top-color:var(--hold)"><b id="c-hold">0</b><span>보류</span></div>
+      <div style="border-top-color:var(--ok)"><b id="c-allow">0</b><span>등록</span></div>
+    </div>
+    <div class="gal" id="gal"></div>
+  </section>
+  <section class="half" aria-label="행동 추론">
+    <div class="hero"><span class="w" id="pW">—</span><span class="d" id="pD">—</span></div>
+    <div class="cam"><canvas id="cvP"></canvas><span class="tag" id="tagP">—</span></div>
+    <div class="tiles9" id="t9"></div>
+  </section>
+</div>
+
+<script src="cam_mock.js"></script>
+<script src="combo_ui.js"></script>
+<script>
+const M = CamMock, U = ComboUI; M.nav("combo5");
+const sim = M.comboSim({ frameW: 640, offset: +(new URLSearchParams(location.search).get("t") || 0) });
+const $ = (id) => document.getElementById(id);
+$("t9").innerHTML = M.DANGERS.map((d) => `<div class="t9" id="t-${d.id}" title="${d.rule}"><b>${d.ko}</b><small>${M.LEVEL[d.level].ko}${M.CULPRIT_LEVELS.includes(d.level) ? " · 범인 조건" : ""}</small></div>`).join("");
+let acc = 0;
+M.loop((dt) => {
+  const st = sim.step(dt);
+  U.drawFaceView($("cvF"), st); U.drawPoseView($("cvP"), st, null, { box: false });
+  $("tagF").textContent = $("tagP").textContent = M.clock(st.t);
+  acc += dt; if (acc < 0.25) return; acc = 0;
+  U.band($("band"), st);
+  const p = st.person;
+  $("fW").textContent = p ? U.V[p.state].short : "없음"; $("fW").style.color = p ? U.V[p.state].color : "var(--muted)";
+  $("fD").textContent = p ? (p.state === "allow" ? p.best : `사람 #${p.track}`) : "카메라에 사람이 없어요";
+  const risk = p ? st.risk : "none", on = p ? st.active.filter((a) => a.level !== "pending") : [];
+  $("pW").textContent = M.LEVEL[risk].ko; $("pW").style.color = U.RISK_COL[risk];
+  $("pD").textContent = on.map((a) => a.ko).join(" · ") || "위험 행동 없음";
+  const c = U.counts(st.people); for (const k of Object.keys(c)) $(`c-${k}`).textContent = c[k];
+  U.gallery($("gal"), st, { max: 4 });
+  for (const d of M.DANGERS) { const a = p && st.active.find((x) => x.id === d.id);
+    $(`t-${d.id}`).className = `t9${a ? (a.level === "pending" ? " pending" : ` on ${a.level}`) : ""}`; }
+});
+</script>
+</body>
+</html>
