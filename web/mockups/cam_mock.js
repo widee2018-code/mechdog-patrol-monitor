@@ -503,13 +503,17 @@
   }
   const clock = (t) => `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 
-  // 위쪽 이동 메뉴: 시안끼리 바로 넘어가기
+  // 오른쪽 아래 이동 버튼: 관제실 · 추론 (관제실 화면의 mock.js 버튼과 같은 모양)
   function nav(now) {
-    const links = [["index.html", "시안 목록"], ["design1.html", "관제실"], ["combo2.html", "추론"], "|", ["danger_actions.html", "위험 행동 목록"]];
-    const el = document.querySelector(".nav");
-    if (!el) return;
-    el.innerHTML = links.map((l) => (l === "|" ? '<span class="sep"></span>'
-      : `<a href="${l[0]}"${l[0].startsWith(now) ? ' class="now" aria-current="page"' : ""}>${l[1]}</a>`)).join("");
+    const el = document.createElement("nav");
+    el.setAttribute("aria-label", "화면 이동");
+    el.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:50;display:flex;gap:4px;padding:5px;border-radius:999px;" +
+      "background:rgba(20,24,32,.92);box-shadow:0 4px 18px rgba(0,0,0,.35);font:700 14px var(--font, system-ui, sans-serif)";
+    const items = [["design1.html", "관제실"], ["combo2.html", "추론"]];
+    el.innerHTML = items.map(([href, label]) => { const on = href.startsWith(now);
+      return `<a href="${href}"${on ? ' aria-current="page"' : ""} style="padding:8px 18px;border-radius:999px;text-decoration:none;` +
+        `color:${on ? "#0b0f15" : "#d6dde8"};background:${on ? "#ffffff" : "transparent"}">${label}</a>`; }).join("");
+    document.body.appendChild(el);
   }
 
   window.CamMock = { nav, DANGER_KPS, COMBO_VERDICT, CULPRIT_IDS, RESCUE_IDS, comboSim, poseOf, LEVEL, DANGERS, DANGER_BY_ID, EDGES, KP_KO, REGISTRY, FACE_RULE, VERDICT, TRUTH_KO, SCRIPT,
