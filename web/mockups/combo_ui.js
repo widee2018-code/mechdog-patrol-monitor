@@ -22,15 +22,35 @@
   }
 
   // 카메라: 왼쪽은 얼굴 박스, 오른쪽은 몸 점. 같은 영상(같은 사람)을 쓴다.
+  // 얼굴 화면: 카메라에서 얼굴 부분만 잘라 크게 보여 준다 (몸 · 배경 없음).
+  // 얼굴이 작으면(먼 사람) 실제처럼 픽셀이 깨져 보이고, 쓰러져 얼굴이 옆으로 누우면 기울어진 채 흐리게 보인다.
+  const crop = document.createElement("canvas");
   function drawFaceView(cv, st, label) {
     const { w, h } = M.fitCanvas(cv), ctx = cv.getContext("2d");
-    M.drawScene(ctx, w, h, label || "CAM A · 얼굴", st.t);
-    if (!st.person) return;
-    M.drawBody(ctx, st.kps, w, h);
-    M.drawFaceAvatar(ctx, st.faceBox, w, h, st.person.hue, true);
-    const p = st.person, v = V[p.state];
-    const tag = p.state === "hold" ? (p.facing ? `#${p.track} 얼굴 작음` : `#${p.track} 얼굴 안 보임`) : p.state === "culprit" ? p.name : `#${p.track} 미등록`;
-    M.drawBox(ctx, st.faceBox, w, h, v.color, tag, p.state === "hold");
+    ctx.fillStyle = "#0b1017"; ctx.fillRect(0, 0, w, h);
+    const lab = label || "CAM A · 얼굴만";
+    ctx.font = `600 ${Math.round(h * 0.045)}px system-ui, sans-serif`;
+    ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(8, 8, ctx.measureText(lab).width + 16, h * 0.07);
+    ctx.fillStyle = "#e6edf3"; ctx.fillText(lab, 16, 8 + h * 0.052);
+    const p = st.person;
+    if (!p) {
+      ctx.fillStyle = "#4a5870"; ctx.textAlign = "center"; ctx.font = `600 ${Math.round(h * 0.06)}px system-ui, sans-serif`;
+      ctx.fillText("얼굴 없음", w / 2, h / 2); ctx.textAlign = "start"; return;
+    }
+    const v = V[p.state], side = Math.min(w, h) * 0.78, x0 = (w - side) / 2, y0 = (h - side) / 2 + h * 0.03;
+    // 실제 얼굴 크기(px)만큼의 작은 그림을 만들어 키운다 → 작은 얼굴은 픽셀이 깨져 보임
+    const res = Math.max(8, Math.min(160, Math.round(p.px)));
+    crop.width = crop.height = res;
+    const cx = crop.getContext("2d");
+    cx.fillStyle = "#1b2433"; cx.fillRect(0, 0, res, res);
+    M.drawFaceAvatar(cx, [0.12, 0.08, 0.88, 0.92], res, res, p.hue, true);
+    ctx.save();
+    ctx.imageSmoothingEnabled = res >= 60;
+    if (!p.facing) { ctx.globalAlpha = 0.45; ctx.translate(w / 2, h / 2); ctx.rotate(1.3); ctx.translate(-w / 2, -h / 2); }
+    ctx.drawImage(crop, x0, y0, side, side);
+    ctx.restore();
+    const tag = p.state === "hold" ? (p.facing ? `#${p.track} 얼굴 작음 (${Math.round(p.px)}px)` : `#${p.track} 얼굴 안 보임`) : p.state === "culprit" ? p.name : `#${p.track} 미등록`;
+    M.drawBox(ctx, [x0 / w, y0 / h, (x0 + side) / w, (y0 + side) / h], w, h, v.color, tag, p.state === "hold");
   }
   function drawPoseView(cv, st, label, opts = {}) {
     const { w, h } = M.fitCanvas(cv), ctx = cv.getContext("2d");
