@@ -31,7 +31,7 @@
   <section class="half" aria-label="얼굴 추론">
     <div class="hh"><b>👤 얼굴 추론</b><small>최근 2분 판정 띠</small></div>
     <div class="cam"><canvas id="cvF"></canvas><span class="tag" id="tagF">—</span></div>
-    <div class="card"><h3><span>얼굴 판정 (최근 2분)</span><span class="muted">초록 등록 · 주황 미등록 · 빨강 범인 · 회색 보류</span></h3>
+    <div class="card"><h3><span>얼굴 판정 (최근 2분)</span><span class="muted">주황 미등록 · 빨강 범인 · 회색 보류</span></h3>
       <div class="pl"><span>확정 판정</span><canvas id="fl1"></canvas><span>한 장씩</span><canvas id="fl2"></canvas></div></div>
     <div id="kb"></div>
   </section>
@@ -52,7 +52,7 @@ const sim = M.comboSim({ frameW: 640, offset: +(new URLSearchParams(location.sea
 const $ = (id) => document.getElementById(id);
 const RGB = { low: [245, 185, 66], mid: [255, 138, 61], high: [255, 90, 82] };
 $("hm").innerHTML = `<span></span><div class="axis"><span>2분 전</span><span>지금</span></div><span class="muted">횟수</span><span></span>`
-  + M.DANGERS.map((d) => `<span class="nm" title="${d.rule}"><i class="dot" style="background:${U.RISK_COL[d.level]}"></i><span>${d.ko}</span></span><canvas data-h="${d.id}"></canvas><span class="num" id="n-${d.id}">0</span><span class="cr">${M.CULPRIT_LEVELS.includes(d.level) ? "범인" : ""}</span>`).join("");
+  + M.DANGERS.map((d) => `<span class="nm" title="${d.rule}"><i class="dot" style="background:${U.RISK_COL[d.level]}"></i><span>${d.ko}</span></span><canvas data-h="${d.id}"></canvas><span class="num" id="n-${d.id}">0</span><span class="cr">${M.CULPRIT_IDS.includes(d.id) ? "범인" : M.RESCUE_IDS.includes(d.id) ? '<span style="color:var(--info)">구조</span>' : ""}</span>`).join("");
 const hist = [], cnt = Object.fromEntries(M.DANGERS.map((d) => [d.id, 0])), prev = new Set();
 function lane(c, pick) {
   const { w, h } = M.fitCanvas(c), x = c.getContext("2d"), now = hist.length ? hist[hist.length - 1].t : 0;

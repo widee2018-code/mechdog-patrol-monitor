@@ -322,21 +322,26 @@
 
   // ---------------- 얼굴 + 행동 함께 (같은 카메라, 같은 사람) ----------------
   // 사람이 한 명씩 와서 몇 가지 행동을 하고 간다. 얼굴 박스는 몸 점(코·귀)에서 만든다.
-  // 범인 규칙(팀 결정 2026-11-18): 얼굴이 "미등록"인 사람이 위험 행동(중간 이상)을 하면 그 사람을 범인으로 등록한다.
+  // 팀 결정 (2026-11-18):
+  //  - 얼굴 판정은 범인 / 미등록 / 보류 세 가지뿐 (팀원 등록 없음).
+  //  - 미등록인 사람이 범인 조건 행동(돌진 · 손 뻗음 · 웅크림 · 팔 휘두름 · 발차기)을 하면 범인으로 등록하고 얼굴을 기억한다.
+  //  - 넘어짐 · 쓰러짐은 다친 사람일 수 있어 범인 조건에서 빼고 "구조 필요"로만 표시한다.
+  //  - 범인 얼굴과 일치하면(0.60 이상) 다시 와도 바로 범인으로 표시한다.
   const COMBO_VERDICT = {
-    allow: { ko: "등록 (팀원)", short: "등록", color: "#3ecf8e" }, unknown: { ko: "미등록", short: "미등록", color: "#ff8a3d" },
+    unknown: { ko: "미등록", short: "미등록", color: "#ff8a3d" },
     hold: { ko: "판정 보류", short: "보류", color: "#7d8ba1" }, culprit: { ko: "범인", short: "범인", color: "#ff5a52" },
   };
-  const CULPRIT_LEVELS = ["mid", "high"];
+  const CULPRIT_IDS = ["rush", "reach", "crouch", "strike", "kick"];
+  const RESCUE_IDS = ["fall", "still"];
+  // id: 같은 사람인지 (가짜 얼굴 정체). 마지막은 범인이 다시 오는 장면.
   const VISITS = [
-    { who: "팀원 1", acts: [["walk", 5], ["handsup", 3], ["walk", 4]] },
-    { who: null, acts: [["walk", 4], ["loiter", 9], ["crouch", 5], ["walk", 3]] },
-    { who: "팀원 2", acts: [["walk", 4], ["fall", 1.5], ["still", 4], ["getup", 2.5], ["walk", 2]] },
-    { who: null, far: true, acts: [["walk", 7]] },
-    { who: null, acts: [["walk", 4], ["rush", 3.5], ["strike", 4], ["kick", 3.5], ["walk", 2]] },
-    { who: "팀원 3", acts: [["walk", 6], ["crouch", 4], ["walk", 3]] },
+    { id: "P1", hue: 205, acts: [["walk", 5], ["handsup", 3], ["walk", 4]] },
+    { id: "P2", hue: 25, acts: [["walk", 4], ["loiter", 9], ["crouch", 5], ["walk", 3]] },
+    { id: "P3", hue: 150, acts: [["walk", 4], ["fall", 1.5], ["still", 4], ["getup", 2.5], ["walk", 2]] },
+    { id: "P4", hue: 40, far: true, acts: [["walk", 7]] },
+    { id: "P5", hue: 290, acts: [["walk", 4], ["rush", 3.5], ["strike", 4], ["kick", 3.5], ["walk", 2]] },
+    { id: "P2", hue: 25, acts: [["walk", 7]] },
   ];
-  const REG = REGISTRY.allow;
 
   function comboSim(opts = {}) {
     const rule = opts.rule || { ...FACE_RULE };
@@ -346,6 +351,7 @@
     const total = plan.reduce((s, v) => s + v.dur + GAP, 0);
     let t = opts.offset || 0, cur = -1, track = 0, person = null, classify = null;
     const log = [], culprits = [], people = new Map();
+    const faceBook = [];   // 범인 얼굴 명단 { id(정체), no(범인 번호), hue }
     function at(tt) {
       let u = ((tt % total) + total) % total;
       for (let i = 0; i < plan.length; i++) {
@@ -357,59 +363,65 @@
     }
     function note(kind, text, extra) { log.unshift({ t, kind, text, ...extra }); if (log.length > 60) log.pop(); }
     return {
-      rule, log, culprits, people,
+      rule, log, culprits, people, faceBook,
       step(dt) {
         t += dt;
         const s = at(t);
         if (!s) { if (person) { person.gone = t; person = null; } cur = -1; return { t, person: null, log, culprits, people }; }
         if (s.i !== cur || !person) {
           cur = s.i; track += 1; classify = Classifier();
-          const who = REG.find((r) => r.name === s.v.who);
-          person = { track, who: who ? who.name : null, hue: who ? who.hue : 20 + ((track * 53) % 50), first: t, last: t, frames: 0,
-            votes: [], verdict: "hold", culprit: false, culpritWhy: "", acts: new Map(), far: !!s.v.far };
+          person = { track, id: s.v.id, hue: s.v.hue, first: t, last: t, frames: 0, votes: [], verdict: "hold",
+            culprit: false, culpritWhy: "", culpritNo: 0, acts: new Map(), far: !!s.v.far, rescue: false };
           people.set(track, person);
           if (people.size > 14) { const old = [...people.values()].filter((p) => p !== person).sort((a, b) => a.last - b.last)[0]; if (old) people.delete(old.track); }
         }
         const base = { x: 0.5, size: s.v.far ? 0.3 : 0.5 };
-        const { kps } = { kps: poseOf(s.b, s.u, s.d, base).kps };
+        const kps = poseOf(s.b, s.u, s.d, base).kps;
         const r = classify(t, kps);
-        // 얼굴 박스: 귀 사이 폭 기준
         const head = kps[0], ew = Math.max(0.025, Math.abs(kps[3][0] - kps[4][0]) * 1.6);
         const fb = [head[0] - ew / 2, head[1] - ew * 0.75, head[0] + ew / 2, head[1] + ew * 0.55];
         const px = ew * frameW;
         const facing = r.f.torso < 45;   // 쓰러지면 얼굴이 정면이 아니다
-        const sims = {};
-        for (const a of REG) {
-          const base2 = person.who === a.name ? 0.79 : 0.2 + 0.18 * Math.abs(Math.sin(a.hue + person.track));
-          sims[a.name] = Math.max(0, Math.min(0.99, base2 + 0.06 * Math.sin(t * 3.1 + a.hue)));
+        // 범인 얼굴 명단과 비교 (가짜 임베딩)
+        let best = null, score = 0;
+        for (const c of faceBook) {
+          const sim = Math.max(0, Math.min(0.99, (c.id === person.id ? 0.8 : 0.22 + 0.15 * Math.abs(Math.sin(c.hue + track))) + 0.05 * Math.sin(t * 3.1 + c.hue)));
+          if (sim > score) { score = sim; best = c; }
         }
-        const best = Object.entries(sims).sort((x, y) => y[1] - x[1])[0];
-        const fv = px < rule.minPx || !facing ? "hold" : best[1] >= rule.match ? "allow" : "unknown";
+        const fv = px < rule.minPx || !facing ? "hold" : best && score >= rule.match ? "culprit" : "unknown";
         person.votes.push(fv); if (person.votes.length > rule.window) person.votes.shift();
         const cnt = (v) => person.votes.filter((x) => x === v).length;
-        let verdict = person.verdict === "hold" ? "hold" : person.verdict;   // 한 번 확정되면 보류로 돌아가지 않는다
-        for (const v of ["unknown", "allow"]) if (cnt(v) >= rule.votes) { verdict = v; break; }
-        if (verdict !== person.verdict && verdict !== "hold") note("face", `사람 #${person.track} ${COMBO_VERDICT[verdict].ko}${verdict === "allow" ? ` (${best[0]} ${best[1].toFixed(2)})` : ""}`, { verdict, track: person.track });
+        let verdict = person.verdict;   // 한 번 확정되면 보류로 돌아가지 않는다
+        for (const v of ["culprit", "unknown"]) if (cnt(v) >= rule.votes) { verdict = v; break; }
+        // 얼굴로 범인을 알아봄 (다시 온 범인)
+        if (verdict === "culprit" && !person.culprit) {
+          person.culprit = true; person.culpritNo = best.no; person.culpritWhy = `범인 #${best.no} 얼굴과 일치 (${score.toFixed(2)})`; person.culpritAt = t;
+          culprits.unshift({ t, track: person.track, no: best.no, why: person.culpritWhy, again: true });
+          note("culprit", `🚨 사람 #${person.track} = 범인 #${best.no} 다시 나타남 · 얼굴 ${score.toFixed(2)}`, { track: person.track });
+        } else if (verdict !== person.verdict && verdict === "unknown") note("face", `사람 #${person.track} 미등록 (범인 명단에 없음)`, { verdict, track: person.track });
         person.verdict = verdict;
         const real = r.active.filter((a) => a.level !== "pending");
         for (const a of real) {
           const rec = person.acts.get(a.id) || { n: 0, on: false };
-          if (!rec.on) { rec.n += 1; note("act", `사람 #${person.track} ${a.ko}`, { level: a.level, id: a.id, track: person.track }); }
+          if (!rec.on) { rec.n += 1; note("act", `사람 #${person.track} ${a.ko}${RESCUE_IDS.includes(a.id) ? " · 구조 필요할 수 있음" : ""}`, { level: a.level, id: a.id, track: person.track }); }
           rec.on = true; person.acts.set(a.id, rec);
         }
         for (const [id, rec] of person.acts) if (!real.some((a) => a.id === id)) rec.on = false;
-        // 범인 규칙
-        const bad = real.find((a) => CULPRIT_LEVELS.includes(a.level));
+        person.rescue = real.some((a) => RESCUE_IDS.includes(a.id));
+        // 범인 규칙: 미등록 + 범인 조건 행동 → 범인 등록, 얼굴을 명단에 저장
+        const bad = real.find((a) => CULPRIT_IDS.includes(a.id));
         if (!person.culprit && verdict === "unknown" && bad) {
-          person.culprit = true; person.culpritWhy = `미등록 + ${bad.ko}`; person.culpritAt = t;
-          culprits.unshift({ t, track: person.track, why: person.culpritWhy, hue: person.hue });
-          note("culprit", `🚨 사람 #${person.track} 범인 등록 · ${person.culpritWhy}`, { track: person.track });
+          const no = faceBook.length + 1;
+          faceBook.push({ id: person.id, no, hue: person.hue });
+          person.culprit = true; person.culpritNo = no; person.culpritWhy = `미등록 + ${bad.ko}`; person.culpritAt = t;
+          culprits.unshift({ t, track: person.track, no, why: person.culpritWhy });
+          note("culprit", `🚨 사람 #${person.track} 범인 #${no} 등록 · ${person.culpritWhy} · 얼굴 저장`, { track: person.track });
         }
         person.last = t; person.frames += 1;
-        person.name = person.culprit ? `범인 #${person.track}` : verdict === "allow" ? best[0] : verdict === "unknown" ? `모르는 사람 #${person.track}` : `확인 중 #${person.track}`;
         person.state = person.culprit ? "culprit" : verdict;
-        person.score = best[1]; person.best = best[0]; person.sims = sims; person.px = px; person.facing = facing;
-        return { t, person, kps, box: r.f.box, faceBox: fb, active: r.active, risk: r.risk, f: r.f, m: r.m, frameVerdict: fv, truth: s.b, truthKo: TRUTH_KO[s.b], log, culprits, people };
+        person.name = person.culprit ? `범인 #${person.culpritNo}` : verdict === "unknown" ? `미등록 #${person.track}` : `확인 중 #${person.track}`;
+        person.score = score; person.best = best ? `범인 #${best.no}` : "없음"; person.px = px; person.facing = facing;
+        return { t, person, kps, box: r.f.box, faceBox: fb, active: r.active, risk: r.risk, f: r.f, m: r.m, frameVerdict: fv, truth: s.b, truthKo: TRUTH_KO[s.b], log, culprits, people, faceBook };
       },
     };
   }
@@ -504,6 +516,6 @@
       : `<a href="${l[0]}"${l[0].startsWith(now) ? ' class="now" aria-current="page"' : ""}>${l[1]}</a>`)).join("");
   }
 
-  window.CamMock = { nav, DANGER_KPS, COMBO_VERDICT, CULPRIT_LEVELS, comboSim, poseOf, LEVEL, DANGERS, DANGER_BY_ID, EDGES, KP_KO, REGISTRY, FACE_RULE, VERDICT, TRUTH_KO, SCRIPT,
+  window.CamMock = { nav, DANGER_KPS, COMBO_VERDICT, CULPRIT_IDS, RESCUE_IDS, comboSim, poseOf, LEVEL, DANGERS, DANGER_BY_ID, EDGES, KP_KO, REGISTRY, FACE_RULE, VERDICT, TRUTH_KO, SCRIPT,
     poseSim, faceSim, buildPose, poseFor, fitCanvas, drawScene, drawSkeleton, drawBody, drawBox, drawFaceAvatar, loop, clock };
 })();

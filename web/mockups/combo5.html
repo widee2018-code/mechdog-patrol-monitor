@@ -13,7 +13,7 @@ body { font-size: 15px; }
 .hero { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .hero .w { font-size: 44px; font-weight: 900; letter-spacing: -.02em; line-height: 1.1; }
 .hero .d { font-size: 16px; color: var(--muted); }
-.tiles4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tiles4 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tiles4 div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; border-top: 4px solid; }
 .tiles4 b { display: block; font-size: 30px; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .tiles4 span { font-size: 13px; color: var(--muted); }
@@ -40,7 +40,6 @@ body { font-size: 15px; }
       <div style="border-top-color:var(--alert)"><b id="c-culprit">0</b><span>범인</span></div>
       <div style="border-top-color:var(--mid)"><b id="c-unknown">0</b><span>미등록</span></div>
       <div style="border-top-color:var(--hold)"><b id="c-hold">0</b><span>보류</span></div>
-      <div style="border-top-color:var(--ok)"><b id="c-allow">0</b><span>등록</span></div>
     </div>
     <div class="gal" id="gal"></div>
   </section>
@@ -57,7 +56,7 @@ body { font-size: 15px; }
 const M = CamMock, U = ComboUI; M.nav("combo5");
 const sim = M.comboSim({ frameW: 640, offset: +(new URLSearchParams(location.search).get("t") || 0) });
 const $ = (id) => document.getElementById(id);
-$("t9").innerHTML = M.DANGERS.map((d) => `<div class="t9" id="t-${d.id}" title="${d.rule}"><b>${d.ko}</b><small>${M.LEVEL[d.level].ko}${M.CULPRIT_LEVELS.includes(d.level) ? " · 범인 조건" : ""}</small></div>`).join("");
+$("t9").innerHTML = M.DANGERS.map((d) => `<div class="t9" id="t-${d.id}" title="${d.rule}"><b>${d.ko}</b><small>${M.LEVEL[d.level].ko}${M.CULPRIT_IDS.includes(d.id) ? " · 범인 조건" : M.RESCUE_IDS.includes(d.id) ? " · 구조 필요" : ""}</small></div>`).join("");
 let acc = 0;
 M.loop((dt) => {
   const st = sim.step(dt);
@@ -67,7 +66,7 @@ M.loop((dt) => {
   U.band($("band"), st);
   const p = st.person;
   $("fW").textContent = p ? U.V[p.state].short : "없음"; $("fW").style.color = p ? U.V[p.state].color : "var(--muted)";
-  $("fD").textContent = p ? (p.state === "allow" ? p.best : `사람 #${p.track}`) : "카메라에 사람이 없어요";
+  $("fD").textContent = p ? `사람 #${p.track}${p.culprit ? ` · ${p.culpritWhy}` : ""}` : "카메라에 사람이 없어요";
   const risk = p ? st.risk : "none", on = p ? st.active.filter((a) => a.level !== "pending") : [];
   $("pW").textContent = M.LEVEL[risk].ko; $("pW").style.color = U.RISK_COL[risk];
   $("pD").textContent = on.map((a) => a.ko).join(" · ") || "위험 행동 없음";

@@ -76,7 +76,7 @@ M.loop((dt) => {
   acc += dt; if (acc < 0.15) return; acc = 0;
   U.band($("band"), st);
   const p = st.person;
-  $("fNow").textContent = p ? `${U.V[p.state].ko} · ${p.best} ${p.score.toFixed(2)} · ${p.px.toFixed(0)}px` : "사람 없음";
+  $("fNow").textContent = p ? `${U.V[p.state].ko} · 범인 명단 최고 ${p.best} ${p.score.toFixed(2)} · ${p.px.toFixed(0)}px` : "사람 없음";
   U.dangerList($("dl"), p ? st : { active: [] });
   U.gallery($("gal"), st, { max: 5 });
   for (const [k, , lo, hi, th, dir, u] of METERS) {

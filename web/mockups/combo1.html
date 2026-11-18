@@ -22,11 +22,11 @@
 <div class="band" id="band" aria-live="polite"></div>
 <div class="halves">
   <section class="half" aria-label="얼굴 추론">
-    <div class="hh"><b>👤 얼굴 추론</b><small>등록된 팀원인지만 봐요</small></div>
+    <div class="hh"><b>👤 얼굴 추론</b><small>범인 명단 얼굴과 같은지 봐요</small></div>
     <div class="cam"><canvas id="cvF"></canvas><span class="tag" id="tagF">—</span></div>
     <div class="card now2"><div><div class="muted" style="font-size:12px">지금 판정</div><div class="big" id="fBig">—</div><div class="muted" id="fSub" style="font-size:12.5px">—</div></div>
       <div><div class="muted" style="font-size:11.5px;margin-bottom:4px">최근 5장 (3장 같으면 확정)</div><div class="votes" id="fVotes"></div></div></div>
-    <div class="card"><h3><span>다녀간 사람</span><span class="muted">범인 → 미등록 → 보류 → 등록</span></h3><div class="gal" id="gal"></div></div>
+    <div class="card"><h3><span>다녀간 사람</span><span class="muted">범인 → 미등록 → 보류</span></h3><div class="gal" id="gal"></div></div>
   </section>
   <section class="half" aria-label="행동 추론">
     <div class="hh"><b>🏃 행동 추론</b><small>YOLO11n-pose 몸 점 17개</small></div>
@@ -51,7 +51,7 @@ M.loop((dt) => {
   U.band($("band"), st);
   const p = st.person;
   $("fBig").textContent = p ? U.V[p.state].ko : "사람 없음"; $("fBig").style.color = p ? U.V[p.state].color : "var(--muted)";
-  $("fSub").textContent = p ? `가장 비슷: ${p.best} ${p.score.toFixed(2)} (기준 0.60) · 얼굴 ${p.px.toFixed(0)}px` : "—";
+  $("fSub").textContent = p ? (st.faceBook.length ? `범인 명단과 가장 비슷: ${p.best} ${p.score.toFixed(2)} (기준 0.60)` : "범인 명단이 비어 있어요") + ` · 얼굴 ${p.px.toFixed(0)}px` : "—";
   $("fVotes").innerHTML = p ? p.votes.map((v) => `<i style="background:${U.V[v].color}"></i>`).join("") : "";
   const on = st.person ? st.active.filter((a) => a.level !== "pending") : [];
   const risk = st.person ? st.risk : "none";

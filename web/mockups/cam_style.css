@@ -74,7 +74,7 @@ button, input { font: inherit; }
 .pc canvas { width: 48px; height: 48px; border-radius: 8px; }
 .pc .n { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pc .s { font-size: 11px; color: var(--muted); }
-.kb { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: start; }
+.kb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: start; }
 .kb .col { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 120px; min-width: 0; }
 .kb .col > header { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; padding-bottom: 5px; border-bottom: 2px solid var(--line); }
 .kb .col.culprit > header { color: #ff8c86; border-color: var(--alert); } .kb .col.unknown > header { color: var(--mid); border-color: var(--mid); }
