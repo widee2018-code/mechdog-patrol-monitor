@@ -509,7 +509,7 @@
     el.setAttribute("aria-label", "화면 이동");
     el.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:50;display:flex;gap:4px;padding:5px;border-radius:999px;" +
       "background:rgba(20,24,32,.92);box-shadow:0 4px 18px rgba(0,0,0,.35);font:700 14px var(--font, system-ui, sans-serif)";
-    const items = [["design1.html", "관제실"], ["combo2.html", "추론"]];
+    const items = [["../index.html", "관제실"], ["combo2.html", "추론"]];   // 관제실 = 실제 대시보드 web/index.html
     el.innerHTML = items.map(([href, label]) => { const on = href.startsWith(now);
       return `<a href="${href}"${on ? ' aria-current="page"' : ""} style="padding:8px 18px;border-radius:999px;text-decoration:none;` +
         `color:${on ? "#0b0f15" : "#d6dde8"};background:${on ? "#ffffff" : "transparent"}">${label}</a>`; }).join("");
