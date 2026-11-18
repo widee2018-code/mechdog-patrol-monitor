@@ -38,6 +38,8 @@
       why: "목적 없이 오가며 살피는 행동이에요. 침입 전 단계일 수 있어요." },
   ];
   const DANGER_BY_ID = Object.fromEntries(DANGERS.map((d) => [d.id, d]));
+  const DANGER_KPS = { fall: [5, 6, 11, 12], still: [5, 6, 11, 12], strike: [5, 6, 9, 10], kick: [13, 14, 15, 16], rush: [5, 6, 15, 16],
+    reach: [5, 6, 9, 10], crouch: [11, 12, 13, 14, 15, 16], handsup: [0, 9, 10], loiter: [11, 12] };
 
   // ---------------- 몸 만들기 (키포인트 17개) ----------------
   // 0 코, 1·2 눈, 3·4 귀, 5·6 어깨, 7·8 팔꿈치, 9·10 손목, 11·12 엉덩이, 13·14 무릎, 15·16 발목 (왼쪽, 오른쪽)
@@ -204,7 +206,10 @@
       const real = active.filter((a) => a.level !== "pending");
       if (real.some((a) => a.id === "still")) { const i = active.findIndex((a) => a.id === "fall"); if (i >= 0) active.splice(i, 1); }
       const risk = real.reduce((m, a) => (LEVEL[a.level].rank > LEVEL[m].rank ? a.level : m), "none");
-      return { f, active, risk, motion };
+      // 규칙에 쓴 숫자들 (행동 4·6안에서 기준선과 함께 보여 준다)
+      const m = { torso: f.torso, knee: Math.min(f.kneeL, f.kneeR), wrist: Math.max(speed(9), speed(10)), ankle: Math.max(speed(15), speed(16)),
+        grow: grow * 100, size: f.h * 100, arm: Math.max(armOut(5, 9), armOut(6, 10)), motion, turns: dirChanges.length };
+      return { f, active, risk, motion, m };
     };
   }
 
@@ -219,7 +224,7 @@
         t += dt;
         const { truth, kps } = poseFor(t + off, base);
         const r = classify(t, kps);
-        return { t, truth, truthKo: TRUTH_KO[truth], kps, box: r.f.box, f: r.f, active: r.active, risk: r.risk,
+        return { t, truth, truthKo: TRUTH_KO[truth], kps, box: r.f.box, f: r.f, m: r.m, active: r.active, risk: r.risk,
           conf: 0.78 + 0.15 * Math.sin(t * 1.3 + off) };
       },
     };
@@ -390,14 +395,15 @@
   // 위쪽 이동 메뉴: 시안끼리 바로 넘어가기
   function nav(now) {
     const links = [["index.html", "시안 목록"], ["design1.html", "관제실 1안"], "|",
-      ["face1.html", "얼굴 1안"], ["face2.html", "얼굴 2안"], ["face3.html", "얼굴 3안"], "|",
-      ["pose1.html", "행동 1안"], ["pose2.html", "행동 2안"], ["pose3.html", "행동 3안"], "|", ["danger_actions.html", "위험 행동 목록"]];
+      ["face1.html", "얼굴 1안"], ["face2.html", "얼굴 2안"], ["face3.html", "얼굴 3안"], ["face4.html", "얼굴 4안"], ["face5.html", "얼굴 5안"], "|",
+      ["pose1.html", "행동 1안"], ["pose2.html", "행동 2안"], ["pose3.html", "행동 3안"],
+      ["pose4.html", "행동 4안"], ["pose5.html", "행동 5안"], ["pose6.html", "행동 6안"], "|", ["danger_actions.html", "위험 행동 목록"]];
     const el = document.querySelector(".nav");
     if (!el) return;
     el.innerHTML = links.map((l) => (l === "|" ? '<span class="sep"></span>'
       : `<a href="${l[0]}"${l[0].startsWith(now) ? ' class="now" aria-current="page"' : ""}>${l[1]}</a>`)).join("");
   }
 
-  window.CamMock = { nav, LEVEL, DANGERS, DANGER_BY_ID, EDGES, KP_KO, REGISTRY, FACE_RULE, VERDICT, TRUTH_KO, SCRIPT,
+  window.CamMock = { nav, DANGER_KPS, LEVEL, DANGERS, DANGER_BY_ID, EDGES, KP_KO, REGISTRY, FACE_RULE, VERDICT, TRUTH_KO, SCRIPT,
     poseSim, faceSim, buildPose, poseFor, fitCanvas, drawScene, drawSkeleton, drawBody, drawBox, drawFaceAvatar, loop, clock };
 })();

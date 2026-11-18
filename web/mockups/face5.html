@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>얼굴 추론 5안 · 필름 + 상세형</title>
+<link rel="stylesheet" href="cam_style.css">
+<style>
+/* 5안 (2안 갤러리 참고): 아래쪽 필름 띠에 다녀간 얼굴, 누르면 위쪽에 크게 상세. 한 사람을 자세히 따져 볼 때. */
+.wrap { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.top2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); gap: 14px; }
+.cam { aspect-ratio: 16 / 9; }
+.detail { display: flex; flex-direction: column; gap: 12px; border-width: 2px; }
+.detail.watch { border-color: var(--alert); } .detail.unknown { border-color: var(--mid); } .detail.allow { border-color: var(--ok); }
+.dhead { display: flex; gap: 14px; align-items: center; }
+.dhead canvas { width: 96px; height: 96px; border-radius: 12px; flex: none; }
+.dhead .nm { font-size: 20px; font-weight: 800; }
+.dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.dl dt { color: var(--muted); } .dl dd { margin: 0; }
+.sims { display: grid; grid-template-columns: 90px minmax(0, 1fr) 36px; gap: 5px 8px; align-items: center; font-size: 12.5px; }
+.vh { display: flex; gap: 3px; flex-wrap: wrap; }
+.vh i { width: 10px; height: 16px; border-radius: 3px; }
+.film { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 10px; }
+.fr { flex: none; width: 112px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; cursor: pointer; text-align: center; border-bottom: 4px solid var(--hold); color: var(--text); }
+.fr:focus-visible { outline: 2px solid var(--info); }
+.fr.watch { border-bottom-color: var(--alert); } .fr.unknown { border-bottom-color: var(--mid); } .fr.allow { border-bottom-color: var(--ok); }
+.fr.sel { box-shadow: 0 0 0 2px var(--info); }
+.fr canvas { width: 100px; height: 100px; border-radius: 8px; display: block; }
+.fr .n { font-size: 12px; font-weight: 700; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fr .s { font-size: 11px; color: var(--muted); }
+@media (max-width: 900px) { .top2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>얼굴 추론 · 5안 필름 + 상세형</b><small>얼굴 2안(갤러리) 참고 · 한 사람 자세히 보기</small></div>
+  <span class="mock">가짜 데이터</span>
+  <nav class="nav" aria-label="시안 이동"></nav>
+</header>
+<div class="wrap">
+  <div class="top2">
+    <div class="cam"><canvas id="cv"></canvas><span class="tag" id="camTag">—</span></div>
+    <section class="card detail" id="det" aria-live="polite">
+      <h3><span id="dTitle">상세</span><button class="chip hold" id="follow" style="border:0;cursor:pointer">지금 사람 따라가기</button></h3>
+      <div class="dhead"><span id="dImg"></span><div><div class="nm" id="dName">아직 없음</div><span class="chip hold" id="dChip">—</span></div></div>
+      <dl class="dl" id="dInfo"></dl>
+      <div><div class="muted" style="font-size:12px;margin-bottom:6px">등록된 5명과 일치율 (선 = 기준 0.60)</div><div class="sims" id="dSims"></div></div>
+      <div><div class="muted" style="font-size:12px;margin-bottom:6px">한 장씩 판정 기록 (최근 40장)</div><div class="vh" id="dVotes"></div></div>
+    </section>
+  </div>
+  <section class="card"><h3><span>다녀간 사람</span><span class="muted">카드를 누르면 위에 크게 보여요</span></h3><div class="film" id="film"></div></section>
+</div>
+
+<script src="cam_mock.js"></script>
+<script>
+const M = CamMock; M.nav("face5");
+const sim = M.faceSim({ frameW: 640 });
+const $ = (id) => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d");
+const ALL = [...M.REGISTRY.allow, ...M.REGISTRY.watch].map((a) => a.name);
+const people = new Map();
+let sel = null, follow = true, acc = 0;
+function thumb(hue, n) { const c = document.createElement("canvas"); c.width = n; c.height = n; const x = c.getContext("2d");
+  x.fillStyle = "#1b2433"; x.fillRect(0, 0, n, n); M.drawFaceAvatar(x, [0.28, 0.18, 0.72, 0.7], n, n, hue); return c; }
+$("follow").onclick = () => { follow = true; };
+function renderDetail() {
+  const p = people.get(sel); if (!p) return;
+  $("det").className = `card detail ${p.verdict}`;
+  $("dTitle").textContent = `사람 #${p.track} 상세${follow ? " · 따라가는 중" : ""}`;
+  $("dImg").replaceChildren(p.big);
+  $("dName").textContent = p.name;
+  $("dChip").className = `chip ${p.verdict}`; $("dChip").textContent = M.VERDICT[p.verdict].ko;
+  $("dInfo").innerHTML = `<dt>처음 본 시각</dt><dd class="num">${M.clock(p.first)}</dd><dt>마지막 본 시각</dt><dd class="num">${M.clock(p.last)}</dd>
+    <dt>본 장수</dt><dd class="num">${p.frames}장</dd><dt>가장 비슷</dt><dd>${p.best} · ${p.score.toFixed(2)}</dd><dt>카메라</dt><dd>Dog A</dd>`;
+  $("dSims").innerHTML = ALL.map((n) => { const s = p.sims[n] || 0, watch = M.REGISTRY.watch.some((w) => w.name === n);
+    return `<span>${n}</span><div class="bar"><i style="width:${s * 100}%;background:${s >= M.FACE_RULE.match ? (watch ? "var(--alert)" : "var(--ok)") : "#3a4656"}"></i><span class="th" style="left:${M.FACE_RULE.match * 100}%"></span></div><span class="num">${s.toFixed(2)}</span>`; }).join("");
+  $("dVotes").innerHTML = p.hist.map((v) => `<i title="${M.VERDICT[v].ko}" style="background:${v === "unknown" ? "var(--mid)" : M.VERDICT[v].color}"></i>`).join("");
+}
+function renderFilm(nowTrack) {
+  const list = [...people.values()].sort((a, b) => b.first - a.first);
+  $("film").replaceChildren(...list.map((p) => { const b = document.createElement("button");
+    b.className = `fr ${p.verdict}${p.track === sel ? " sel" : ""}`; b.type = "button";
+    b.innerHTML = `<span class="ph"></span><div class="n">${p.name}</div><div class="s">#${p.track} · ${M.clock(p.first)}${p.track === nowTrack ? " · 지금" : ""}</div>`;
+    b.querySelector(".ph").replaceWith(p.small); b.onclick = () => { sel = p.track; follow = false; renderDetail(); renderFilm(nowTrack); }; return b; }));
+}
+M.loop((dt) => {
+  const st = sim.step(dt);
+  const { w, h } = M.fitCanvas(cv);
+  M.drawScene(ctx, w, h, "CAM A · 얼굴", st.t);
+  const f = st.faces[0];
+  if (f) {
+    M.drawFaceAvatar(ctx, f.box, w, h, f.hue);
+    M.drawBox(ctx, f.box, w, h, M.VERDICT[f.verdict].color, `#${f.track} ${f.name}`, f.verdict === "hold");
+    let p = people.get(f.track);
+    if (!p) { p = { track: f.track, first: st.t, frames: 0, hist: [], small: thumb(f.hue, 100), big: thumb(f.hue, 96) }; people.set(f.track, p); }
+    Object.assign(p, { verdict: f.verdict, name: f.name, score: f.score, best: f.best, sims: f.sims, last: st.t }); p.frames += 1;
+    p.hist.push(f.frameVerdict); if (p.hist.length > 40) p.hist.shift();
+    if (follow) sel = f.track;
+  }
+  if (people.size > 12) { const old = [...people.values()].sort((a, b) => a.last - b.last)[0]; if (old.track !== sel) people.delete(old.track); }
+  $("camTag").textContent = `${M.clock(st.t)} · 얼굴 ${st.faces.length}`;
+  acc += dt; if (acc < 0.3) return; acc = 0;
+  renderDetail(); renderFilm(f?.track);
+});
+</script>
+</body>
+</html>
