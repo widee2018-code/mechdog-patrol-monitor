@@ -279,6 +279,7 @@ STANDBY 일렬 대기 → 준비 확인 표가 모두 초록 → [▶ 탐사 시
 - 남긴 파일: `design1.html` · `design1.js` · `mock.js`(관제실), `combo2.html` · `combo_ui.js` · `cam_mock.js` · `cam_style.css`(반반 2안), `danger_actions.html`(위험 행동 목록 · 범인 규칙), `index.html`, 이 기록.
 - 위쪽 메뉴는 시안 목록 · 관제실 1안 · 반반 2안 · 위험 행동 목록만.
 - 다음 단계: 관제실 1안과 반반 2안을 탭으로 오가는 최종 대시보드.
+- **이름 바꿈:** 관제실 1안 → **관제실**, 얼굴 + 행동 반반 2안 → **추론**. 화면 제목 · 위쪽 메뉴 · 시안 목록에 반영 (파일 이름 `design1.html`, `combo2.html`은 그대로).
 
 ## 시안 보는 방법
 ```bash
