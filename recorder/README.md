@@ -40,7 +40,7 @@ hub와 독립된 프로세스라서 recorder가 죽어도 대시보드는 영향
 컬럼: `ts`, `kind`, `source`(카메라 A/B/C), `label`, `track`(추적 번호), `confidence`, `incident`(숫자일 때만).
 
 - 클래스는 메시지의 `label` → `verdict` → `action` → `class` 필드 순서로 찾는다. 하나도 없으면 저장하지 않는다.
-- 프레임마다 오므로 **(종류, 카메라, `track`)별로 클래스가 바뀔 때만** 한 행을 쓴다.
+- 프레임마다 오므로 **(종류, 카메라, `track`)별로 클래스가 바뀔 때만** 한 행을 쓴다. 클래스가 없는 메시지(위험 행동이 없는 `pose`)는 저장하지 않지만, 마지막 클래스를 지워서 같은 행동이 다시 나오면 새 행으로 남는다 (넘어짐 → 정상 → 넘어짐 = 2행).
 - **메시지 `type` 이름(`face`, `pose`)과 필드 이름은 아직 확정 전이다.** 대시보드가 실제로 보내는 이름에 맞춰 `recorder.py`의 `INFER_KINDS`, `INFER_LABEL_KEYS`만 고친다.
 - 클래스별로 세어 보기: `select kind, label, count(*) from inference_log group by 1, 2 order by 3 desc;`
 - 얼굴 기록만 지우기: `delete from inference_log where kind = 'face';`

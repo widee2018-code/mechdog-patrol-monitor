@@ -110,10 +110,12 @@ def to_inference(msg):
     if kind not in INFER_KINDS:
         return None
     label = next((msg[k].strip() for k in INFER_LABEL_KEYS if isinstance(msg.get(k), str) and msg[k].strip()), None)
-    if not label:
-        return None
     source = str(msg.get("from") or "unknown")
     key = (kind, source, msg.get("track"))
+    if not label:
+        # 위험 행동이 없는 pose(정상)는 적지 않지만, 마지막 클래스를 지워서 같은 행동이 다시 나오면 새로 기록한다
+        _last_infer.pop(key, None)
+        return None
     if _last_infer.get(key) == label:
         return None
     if len(_last_infer) > 1000:  # 추적 번호가 계속 늘어도 메모리가 커지지 않게
