@@ -20,7 +20,7 @@
   const ALIAS = { MAP: "EXPLORE", PATROL: "EXPLORE", ALERT: "CONFIRM", INTERCEPT: "CONTAIN", RETURN: "REGROUP" };
   const HOT = new Set(["SUSPECT", "CONFIRM", "CONTAIN", "HANDOVER"]);
   const STATE_KO = {
-    idle: "대기", moving: "움직이는 중", stopped: "멈춤", blocked: "앞이 막힘", tower: "관제탑",
+    idle: "대기", moving: "움직이는 중", stopped: "멈춤", blocked: "앞이 막힘", fallen: "넘어짐", tower: "관제탑",
     wait: "마커 기다림", follow: "따라가는 중", hold: "잠깐 놓침", search: "마커 찾는 중", gave_up: "따라가기 포기",
     no_video: "영상 없음",
   };
@@ -136,7 +136,7 @@
     if (!d) return `<span class="chip off">데이터 없음</span>`;
     if (!fresh(d)) return `<span class="chip stop">연결 끊김</span>`;
     const st = d.msg.state;
-    const cls = ["moving", "follow"].includes(st) ? "walk" : ["blocked", "search", "gave_up", "hold"].includes(st) ? "watch" : "";
+    const cls = ["moving", "follow"].includes(st) ? "walk" : ["blocked", "fallen", "search", "gave_up", "hold"].includes(st) ? "watch" : "";
     return `<span class="chip ${cls}">${esc(STATE_KO[st] || st || "—")}</span>`;
   }
 
@@ -153,7 +153,7 @@
       <div class="batt ${lv}"><i style="width:${typeof v === "number" ? battPct(v) : 0}%"></i></div>
       <div class="kv"><span>앞 장애물</span><b class="${m.front_cm != null && m.front_cm < 15 ? "warn" : ""}">${m.front_cm ?? "—"} cm</b></div>
       <div class="kv"><span>위치 · 방향</span><b>(${num(m.x, 2)}, ${num(m.y, 2)}) · ${num(m.heading_deg, 0)}°</b></div>
-      <div class="kv"><span>기울기 · Wi-Fi</span><b>${esc(m.tilt ?? "—")} · ${m.rssi ?? "—"} dBm</b></div>
+      <div class="kv"><span>기울기 · Wi-Fi</span><b class="${m.tilt === "fallen" ? "warn" : ""}">${m.tilt === "fallen" ? "넘어짐" : m.tilt === "ok" ? "정상" : esc(m.tilt ?? "—")}${typeof m.tilt_deg === "number" ? ` ${m.tilt_deg}°` : ""} · ${m.rssi ?? "—"} dBm</b></div>
       ${extra}
     </article>`;
   }

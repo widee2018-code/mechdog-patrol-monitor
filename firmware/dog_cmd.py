@@ -1,7 +1,7 @@
 # MechDog(ESP32-S3)용 MicroPython: Pi/노트북이 보내는 move 명령을 Wi-Fi(UDP)로 받아 걷는다.
 # brain/marker_follow.py 같은 행동 알고리즘이 이 로봇견을 조종할 때 쓴다.
-# 안전 반사는 로봇견 안에서 돈다: 1초간 명령이 없으면 정지, 앞이 막혔으면 전진 금지.
-# 상태(초음파 거리, Wi-Fi 세기)는 dog_status.py처럼 모니터로 보낸다.
+# 안전 반사는 로봇견 안에서 돈다: 1초간 명령이 없으면 정지, 앞이 막혔으면 전진 금지, 넘어지면 정지.
+# 상태(초음파 거리, Wi-Fi 세기, 기울기, 배터리)는 dog_status.py처럼 모니터로 보낸다.
 #
 # 로봇견 안에 secrets.py(Wi-Fi 정보, 모니터 IP, 이 개의 이름)를 저장해 두고, Thonny에서 Run을 누른다. 원래 main.py를 백업해 두기 전에는
 # 이 파일을 main.py로 덮어쓰지 말 것.
@@ -10,7 +10,7 @@
 #   v    : 전진(+)/후진(-) 속도. 원래 앱 코드는 전진 80~120, 후진 -40을 쓴다.
 #   turn : 회전. 원래 앱 코드는 -50~50을 쓴다. 어느 부호가 왼쪽인지는 처음에 확인할 것.
 import network, socket, json, time, gc
-import Hiwonder_IIC
+import Hiwonder, Hiwonder_IIC, HW_MechDog
 from HW_MechDog import MechDog
 
 try:
@@ -28,12 +28,22 @@ except ImportError:
 CMD_PORT = 9100
 
 WATCHDOG_MS = 1000   # 이 시간 동안 명령이 없으면 정지
-STOP_CM = 15         # 앞 장애물이 이보다 가까우면 전진 명령을 무시 (후진과 회전은 허용)
+STOP_CM = 20         # 앞 장애물이 이보다 가까우면 전진 명령을 무시 (후진과 회전은 허용). 15 는 실측 17 cm 에서 안 멈춰 20 으로 (2026-11-19)
+CLEAR_CM = 30        # 막힌 뒤에는 이보다 멀어진 상태가 CLEAR_MS 동안 이어져야 다시 전진 (초음파 값이 한 번 튀어서 풀리지 않게. 반사가 없으면 6142 cm 처럼 큰 값이 나온다)
+CLEAR_MS = 500
 MAX_SPEED = 120
 MAX_TURN = 50
+FALL_DEG = 60        # 몸이 이보다 많이 기울면 넘어진 것으로 본다 (실측 2026-11-19: 세움 0°, 옆으로 누움 76°, 뒤집힘 167°)
+FALL_MS = 500        # 이 시간 이상 기울어 있어야 넘어짐 (걷다가 잠깐 흔들리는 것과 구분)
+RECOVER_DEG = 30     # 다시 세워서 이보다 덜 기울면 넘어짐 해제
 
 dog = MechDog()
 sonar = Hiwonder_IIC.I2CSonar(Hiwonder_IIC.IIC(1))
+try:
+    # IMU 는 HW_MechDog 안에 숨겨진 __mpu() 로 얻는다. read_angle() = [좌우 기울기, 앞뒤 기울기] (도)
+    imu = getattr(HW_MechDog, "__mpu")()
+except Exception:
+    imu = None       # 펌웨어가 달라 IMU 를 못 찾으면 넘어짐 감지 없이 동작
 
 
 def connect():
@@ -92,7 +102,14 @@ current = None         # 실제로 dog.move에 넘긴 값
 last_cmd = time.ticks_ms() - WATCHDOG_MS
 last_report = 0
 front_cm = None
+blocked = False
+clear_since = None     # 막힌 뒤 CLEAR_CM 보다 멀어지기 시작한 시각
 led_state = None
+tilt_deg = None        # 가장 많이 기운 축의 각도
+fallen = False
+tilt_since = None      # FALL_DEG 넘게 기울기 시작한 시각
+battery_v = None
+last_battery = time.ticks_ms() - 1000
 
 try:
     while True:
@@ -116,11 +133,47 @@ try:
                 front_cm = sonar.getDistance()
             except Exception:
                 front_cm = None
+            # 앞 막힘: STOP_CM 안으로 한 번만 들어와도 막고, CLEAR_CM 밖이 CLEAR_MS 이어져야 푼다.
+            # 그 사이 거리나 읽기 실패(None)면 막힌 상태를 유지한다.
+            if front_cm is not None and front_cm < STOP_CM:
+                blocked, clear_since = True, None
+            elif blocked and front_cm is not None and front_cm >= CLEAR_CM:
+                if clear_since is None:
+                    clear_since = now
+                elif time.ticks_diff(now, clear_since) >= CLEAR_MS:
+                    blocked, clear_since = False, None
+            else:
+                clear_since = None
+            try:
+                tilt_deg = max(abs(a) for a in imu.read_angle()[:2])
+            except Exception:
+                tilt_deg = None
+            # 넘어짐: FALL_DEG 넘게 FALL_MS 이상. 해제는 RECOVER_DEG 아래로 다시 세웠을 때 (경계에서 깜빡이지 않게)
+            if tilt_deg is not None and tilt_deg > FALL_DEG:
+                if tilt_since is None:
+                    tilt_since = now
+                if not fallen and time.ticks_diff(now, tilt_since) >= FALL_MS:
+                    fallen = True
+                    send({"type": "event", "from": NAME, "level": "alert",
+                          "text": "Dog %s 넘어짐 감지 (기울기 %d°) · 정지" % (NAME, tilt_deg)})
+            else:
+                tilt_since = None
+                if fallen and tilt_deg is not None and tilt_deg < RECOVER_DEG:
+                    fallen = False
+                    send({"type": "event", "from": NAME, "level": "info", "text": "Dog %s 다시 섬" % NAME})
+        if time.ticks_diff(now, last_battery) >= 1000:
+            last_battery = now
+            try:
+                battery_v = Hiwonder.Battery_power() / 1000   # mV → V (실측 7532 = 7.5 V)
+            except Exception:
+                battery_v = None
 
         v, turn = want
-        if time.ticks_diff(now, last_cmd) > WATCHDOG_MS:
+        if fallen:
+            v, turn, state = 0, 0, "fallen"   # 넘어져 있는 동안은 어떤 move 명령도 따르지 않는다
+        elif time.ticks_diff(now, last_cmd) > WATCHDOG_MS:
             v, turn, state = 0, 0, "idle"
-        elif v > 0 and front_cm is not None and front_cm < STOP_CM:
+        elif v > 0 and blocked:
             v, state = 0, "blocked"
         else:
             state = "moving" if (v, turn) != (0, 0) else "stopped"
@@ -128,14 +181,18 @@ try:
         if (v, turn) != current:
             dog.move(v, turn)
             current = (v, turn)
-        colors = {"idle": (0, 0, 0x40), "blocked": (0xff, 0, 0), "moving": (0, 0xff, 0), "stopped": (0xff, 0xcc, 0)}
+        colors = {"idle": (0, 0, 0x40), "blocked": (0xff, 0, 0), "moving": (0, 0xff, 0), "stopped": (0xff, 0xcc, 0),
+                  "fallen": (0xff, 0, 0xff)}
         if state != led_state:
             led(*colors[state])
             led_state = state
 
         if time.ticks_diff(now, last_report) >= 100:
             last_report = now
-            msg = {"type": "dog", "from": NAME, "state": state, "front_cm": front_cm}
+            msg = {"type": "dog", "from": NAME, "state": state, "front_cm": front_cm,
+                   "tilt": None if tilt_deg is None else ("fallen" if fallen else "ok"),
+                   "tilt_deg": None if tilt_deg is None else round(tilt_deg),
+                   "battery_v": None if battery_v is None else round(battery_v, 2)}
             try:
                 msg["rssi"] = wlan.status("rssi")
             except Exception:

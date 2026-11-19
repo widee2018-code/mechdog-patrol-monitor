@@ -6,7 +6,7 @@
 
 | type | 보내는 쪽 | 주기 | 필드 |
 |---|---|---|---|
-| `dog` | Pi(위치) **와** 각 로봇견(자체 센서) | 10 Hz | `from`(A/B/C), `x`, `y`, `heading_deg`, `state`, `battery_v`, `front_cm`, `tilt`, `rssi`. 일부만 보내도 됩니다. 서버가 로봇견별로 부분 업데이트를 합칩니다. |
+| `dog` | Pi(위치) **와** 각 로봇견(자체 센서) | 10 Hz | `from`(A/B/C), `x`, `y`, `heading_deg`, `state`, `battery_v`, `front_cm`, `tilt`(`ok`/`fallen`), `tilt_deg`(가장 많이 기운 축, 도), `rssi`. 로봇견 `state` 는 `idle`/`moving`/`stopped`/`blocked`/`fallen`. 일부만 보내도 됩니다. 서버가 로봇견별로 부분 업데이트를 합칩니다. |
 | `lidar` | Pi | 5 Hz | `from:"pi"`, `origin:[x,y]`, `points:[[angle_deg, dist_m], ...]` |
 | `intruder` | Pi | 추적 중 5 Hz | `x`, `y`, `confidence`(0–1) |
 | `detect` | 사람 인식 (YOLO11n, Pi) | 사람이 보이는 동안 프레임마다 (2–10 Hz) | `from`(어느 개 카메라: A/B/C), `label`(`person`), `confidence`(0–1, 가장 높은 값), `count`(사람 수), `boxes`(`[[x1, y1, x2, y2, 신뢰도], ...]`, 화면 비율 0–1, 대시보드 영상 위에 박스로 그림). 대시보드 "👤 발견" 불은 마지막 메시지 뒤 1.5초 동안 켜짐. 새로 발견할 때만 서버가 `event`를 남김. **탐사(EXPLORE) 중이면 서버가 `mission` SUSPECT로 바꿔 사이렌을 울림** (대기 중에는 불만) |
