@@ -27,3 +27,6 @@ firmware/secrets.py
 # Office files (WBS, requirements, activity logs): keep local only
 *.xlsx
 *.doc
+
+# Local archive of old documents
+archive/
