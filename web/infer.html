@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MechDog 추론</title>
+<link rel="stylesheet" href="mockups/cam_style.css">
+<style>
+/* mockups/combo2.html(기록형 시안)과 같은 화면을 실제 데이터로. 왼쪽 얼굴, 오른쪽 행동, 같은 카메라 */
+.cam { aspect-ratio: 4 / 3; }
+.cam img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cam img:not([src]) { display: none; }
+.cam canvas { position: absolute; inset: 0; }
+.cam .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+.cam .empty[hidden] { display: none; }
+.two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.ev { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 330px; overflow: auto; }
+.ev li { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; }
+.ev li.cul { border-color: var(--alert); background: rgba(255,90,82,.08); }
+.ev time { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.live { font-size: 11px; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.live.on { color: var(--ok); border-color: rgba(62,207,142,.4); }
+.hint { margin: 0; font-size: 12px; color: var(--muted); }
+.pages { position: fixed; right: 14px; bottom: 14px; z-index: 50; display: flex; gap: 4px; padding: 5px; border-radius: 999px;
+  background: rgba(20,24,32,.92); box-shadow: 0 4px 18px rgba(0,0,0,.35); font: 700 14px var(--font, system-ui, sans-serif); }
+.pages a { padding: 8px 18px; border-radius: 999px; text-decoration: none; color: #d6dde8; }
+.pages a[aria-current] { color: #0b0f15; background: #fff; }
+@media (max-width: 1200px) { .two { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .halves { grid-template-columns: 1fr; } .half + .half { border-left: 0; border-top: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>추론</b><small>왼쪽 얼굴 추론 · 오른쪽 행동 추론 · 같은 Dog <span id="camName">A</span> 카메라</small></div>
+  <span class="live" id="conn">연결 끊김</span><span class="live" id="camLive">영상 —</span>
+  <a href="mockups/danger_actions.html" style="margin-left:auto;color:var(--info);font-size:12.5px">위험 행동 목록 →</a>
+  <a href="mockups/combo2.html" style="color:var(--muted);font-size:12.5px">가짜 데이터 시안</a>
+</header>
+<div class="band" id="band" aria-live="polite"></div>
+<div class="halves">
+  <section class="half" aria-label="얼굴 추론">
+    <div class="hh"><b>👤 얼굴 추론</b><small>머리 몸 점으로 얼굴 부분을 잘라 크게 보여 줘요</small></div>
+    <div class="cam"><canvas id="cvF"></canvas><span class="tag" id="tagF">—</span></div>
+    <div id="kb"></div>
+    <p class="hint" id="faceHint">얼굴 판정(face 메시지)이 아직 없어요. 얼굴 등록과 판정(3·4단계)을 하면 칸반이 채워져요. 지금은 얼굴이 몇 px로 잡히는지만 보여 줘요 (40px 미만이면 판정 보류).</p>
+  </section>
+  <section class="half" aria-label="행동 추론">
+    <div class="hh"><b>🏃 행동 추론</b><small>위험 행동이 켜질 때마다 한 줄</small></div>
+    <div class="cam"><img id="vid" alt="카메라 영상"><canvas id="ovP"></canvas><span class="empty" id="vidEmpty">영상 없음</span><span class="tag" id="tagP">—</span></div>
+    <div class="two">
+      <div class="card"><h3><span>행동 기록</span><span class="muted" id="evN">0건</span></h3><ul class="ev" id="ev"></ul></div>
+      <div class="card"><h3><span>위험 행동 9가지</span><a href="mockups/danger_actions.html" style="color:var(--info);font-size:12px">규칙 →</a></h3><div id="dl"></div></div>
+    </div>
+  </section>
+</div>
+<nav class="pages" aria-label="화면 이동"><a href="./">관제실</a><a href="infer.html" aria-current="page">추론</a></nav>
+
+<script src="mockups/cam_mock.js"></script>
+<script src="infer.js"></script>
+</body>
+</html>
