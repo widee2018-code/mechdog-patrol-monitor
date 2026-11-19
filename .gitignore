@@ -23,3 +23,7 @@ docs/devlog/
 
 # MechDog MicroPython Wi-Fi credentials
 firmware/secrets.py
+
+# Office files (WBS, requirements, activity logs): keep local only
+*.xlsx
+*.doc
