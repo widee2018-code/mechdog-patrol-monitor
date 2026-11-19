@@ -9,7 +9,7 @@
 | `dog` | Pi(위치) **와** 각 로봇견(자체 센서) | 10 Hz | `from`(A/B/C), `x`, `y`, `heading_deg`, `state`, `battery_v`, `front_cm`, `tilt`, `rssi`. 일부만 보내도 됩니다. 서버가 로봇견별로 부분 업데이트를 합칩니다. |
 | `lidar` | Pi | 5 Hz | `from:"pi"`, `origin:[x,y]`, `points:[[angle_deg, dist_m], ...]` |
 | `intruder` | Pi | 추적 중 5 Hz | `x`, `y`, `confidence`(0–1) |
-| `detect` | 사람 인식 (YOLO11n, Pi) | 사람이 보이는 동안 프레임마다 (2–10 Hz) | `from`(어느 개 카메라: A/B/C), `label`(`person`), `confidence`(0–1). 대시보드 "👤 발견" 불은 마지막 메시지 뒤 1.5초 동안 켜짐. 새로 발견할 때만 서버가 `event`를 남김. **탐사(EXPLORE) 중이면 서버가 `mission` SUSPECT로 바꿔 사이렌을 울림** (대기 중에는 불만) |
+| `detect` | 사람 인식 (YOLO11n, Pi) | 사람이 보이는 동안 프레임마다 (2–10 Hz) | `from`(어느 개 카메라: A/B/C), `label`(`person`), `confidence`(0–1, 가장 높은 값), `count`(사람 수), `boxes`(`[[x1, y1, x2, y2, 신뢰도], ...]`, 화면 비율 0–1, 대시보드 영상 위에 박스로 그림). 대시보드 "👤 발견" 불은 마지막 메시지 뒤 1.5초 동안 켜짐. 새로 발견할 때만 서버가 `event`를 남김. **탐사(EXPLORE) 중이면 서버가 `mission` SUSPECT로 바꿔 사이렌을 울림** (대기 중에는 불만) |
 | `sound` | Pi (ReSpeaker) | 1 Hz + 경보 시 | `label`(예: `glass_break`, `door`, `ambient`), `doa_deg`, `level_db`, `confidence`, `alert`(bool) |
 | `camera` | Dog A (또는 대신 보내는 Pi) | 약 1 Hz | `from`, `image`(data URL: `data:image/jpeg;base64,...`), `evidence`(bool: 증거 갤러리에 추가), `note` |
 | `mission` | Pi 상태 머신 | 변경 시 | `state`: STANDBY / EXPLORE / SUSPECT / CONFIRM / CONTAIN / HANDOVER / REGROUP (옛 이름 PATROL / ALERT / INTERCEPT / RETURN도 받음). 사건 중이면 서버가 `incident`(사건 번호)를 붙여 대시보드로 보낸다 |
@@ -22,7 +22,7 @@
 {"type": "dog", "from": "B", "battery_v": 7.5, "front_cm": 41, "tilt": "ok", "state": "blocking"}
 {"type": "dog", "from": "B", "x": 1.20, "y": 0.35, "heading_deg": 90}
 {"type": "lidar", "from": "pi", "origin": [3.0, 0.15], "points": [[0, 2.93], [1, 2.94]]}
-{"type": "detect", "from": "A", "label": "person", "confidence": 0.82}
+{"type": "detect", "from": "A", "label": "person", "confidence": 0.82, "count": 1, "boxes": [[0.31, 0.12, 0.58, 0.97, 0.82]]}
 {"type": "intruder", "from": "pi", "x": 2.41, "y": 1.98, "confidence": 0.95}
 {"type": "sound", "from": "pi", "label": "glass_break", "doa_deg": 147.8, "level_db": 78, "confidence": 0.88, "alert": true}
 {"type": "camera", "from": "A", "image": "data:image/jpeg;base64,/9j/4AAQ...", "evidence": true, "note": "intercept"}

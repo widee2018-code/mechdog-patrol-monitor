@@ -58,7 +58,7 @@
 
   $("steps").innerHTML = MISSIONS.map((m) => `<li data-k="${m.key}"><span class="en">${m.key}</span>${m.ko}</li>`).join("");
   $("cams").innerHTML = DOGS.map((n) => `
-    <figure class="cam" id="cam${n}"><img alt="Dog ${n} 카메라"><span class="empty">영상 없음</span>
+    <figure class="cam" id="cam${n}"><img alt="Dog ${n} 카메라"><div class="boxes"></div><span class="empty">영상 없음</span>
       <figcaption><span class="badge" style="background:${COLOR[n]}">${n}</span>${ROLE[n]}<span class="live">—</span></figcaption>
       <span class="note"></span>
     </figure>`).join("");
@@ -86,7 +86,7 @@
       S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now(), readySeen: "ready" in m ? Date.now() : prev?.readySeen };
     },
     lidar(m) { S.lidar = m; S.lidarSeen = Date.now(); },
-    detect(m) { S.detect[m.from] = { ...m, seen: Date.now() }; renderFound(); },
+    detect(m) { S.detect[m.from] = { ...m, seen: Date.now() }; renderFound(); renderBoxes(); },
     intruder(m) {
       S.intruder = { ...m, seen: Date.now() };
       S.trail.push([m.x, m.y]);
@@ -214,6 +214,22 @@
     $("foundTop").hidden = S.mission === "STANDBY";   // 대기 중에는 준비 칸의 탐사 시작 버튼 옆에 보인다
   }
 
+  // ── 사람 박스: detect 의 boxes(화면 비율 0~1)를 영상 위에 그린다. 발견 표시와 같이 1.5초 뒤 사라진다 ──
+  function renderBoxes() {
+    for (const n of DOGS) {
+      const fig = $(`cam${n}`), img = fig.querySelector("img"), layer = fig.querySelector(".boxes");
+      const d = S.detect[n], show = d && Date.now() - d.seen < DETECT_MS && img.hasAttribute("src") && img.naturalWidth;
+      layer.hidden = !show;
+      if (!show) continue;
+      // 영상은 object-fit: contain 이라 위아래나 양옆에 빈 띠가 생긴다. 박스 층을 실제 영상 영역에 맞춘다
+      const s = Math.min(fig.clientWidth / img.naturalWidth, fig.clientHeight / img.naturalHeight);
+      const w = img.naturalWidth * s, h = img.naturalHeight * s;
+      Object.assign(layer.style, { left: `${(fig.clientWidth - w) / 2}px`, top: `${(fig.clientHeight - h) / 2}px`, width: `${w}px`, height: `${h}px` });
+      layer.innerHTML = (d.boxes || []).map(([x1, y1, x2, y2, c]) =>
+        `<i${y1 < 0.06 ? ' class="in"' : ""} style="left:${x1 * 100}%;top:${y1 * 100}%;width:${(x2 - x1) * 100}%;height:${(y2 - y1) * 100}%"><b>사람 ${Number(c).toFixed(2)}</b></i>`).join("");
+    }
+  }
+
   // ── 탐사 시작 / 대기로: 서버가 mission 을 바꾸면 B·C 의 marker_follow.py 가 출발·일시정지한다 ──
   const mission = { busy: false, error: "" };
   function missionPost(path) {
@@ -317,6 +333,7 @@
     const idx = MISSIONS.findIndex((m) => m.key === S.mission);
     [...$("steps").children].forEach((li, i) => { li.className = i === idx ? (HOT.has(S.mission) ? "now hot" : "now") : ""; });
     renderFound();
+    renderBoxes();
     // 대기로: 대기 중에는 준비 칸에 흐리게(누를 수 없음), 그 밖에는 상단에 켜진 채로
     $("standby").hidden = S.mission === "STANDBY";
     document.querySelectorAll("[data-standby]").forEach((el) => {
