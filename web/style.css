@@ -58,6 +58,7 @@ button { font: inherit; cursor: pointer; }
 .ready-act { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .btn.found { color: var(--muted); cursor: default; background: #17202c; }
 .ready-act .btn.found { font-size: 15px; padding: 9px 14px; }
+.ready-act .btn.shot { font-size: 15px; padding: 9px 14px; }
 .btn.found.on { background: var(--alert); border-color: var(--alert); color: #fff; animation: foundBlink .6s steps(1) infinite; }
 .btn.contain:not(:disabled) { background: var(--alert); border-color: var(--alert); color: #fff; }
 .ready-act .btn.contain, .ready-act .btn.hold { font-size: 15px; padding: 9px 14px; }

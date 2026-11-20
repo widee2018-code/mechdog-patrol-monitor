@@ -14,6 +14,7 @@ Pi 관제탑과 로봇견들이 보내는 JSON 메시지(UDP 또는 HTTP POST)�
 """
 
 import asyncio
+import base64
 import json
 import math
 import os
@@ -405,6 +406,25 @@ async def mission_standby(request: Request):
     why = "B·C 따라가기 일시정지" if prev == "EXPLORE" else "범인 아님 (오탐)" if prev in ("SUSPECT", "CONFIRM") else f"{prev} 끝"
     ingest({"type": "event", "from": "monitor", "level": "warn", "text": f"⏸ 대기로 전환 · 관제가 버튼을 누름 ({why})"})
     return {"ok": True}
+
+
+@app.post("/api/snapshot")
+async def snapshot(request: Request):
+    """대시보드의 "촬영" 버튼. 실시간 영상이 연결된 로봇견마다 지금 프레임(마커 표시 없는 원본)을 증거 사진으로 남긴다.
+    evidence 가 참인 camera 메시지라 대시보드 증거 사진 칸에 뜨고, recorder 가 Supabase Storage evidence 버킷에 올린다."""
+    if request.headers.get("cf-connecting-ip"):
+        raise HTTPException(403, "공개 주소에서는 촬영할 수 없음")
+    live = {name: feed.frame for name, feed in feeds.items() if feed.online and feed.frame}
+    if not live:
+        raise HTTPException(409, "실시간 영상이 연결된 카메라가 없음")
+    ts = time.time()
+    note = f"촬영 · 사건 #{siren['incident']}" if siren["mission"] in INCIDENT_STATES else "촬영"
+    for name, jpg in live.items():
+        ingest({"type": "camera", "from": name, "ts": ts, "evidence": True, "note": note,
+                "image": "data:image/jpeg;base64," + base64.b64encode(jpg).decode()})
+    ingest({"type": "event", "from": "monitor", "ts": ts, "level": "info",
+            "text": f"📷 촬영 · Dog {', '.join(live)} 증거 사진 {len(live)}장"})
+    return {"ok": True, "dogs": list(live)}
 
 
 @app.get("/api/state")

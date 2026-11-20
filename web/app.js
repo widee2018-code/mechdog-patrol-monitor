@@ -248,6 +248,18 @@
   document.querySelectorAll("[data-standby]").forEach((el) => { el.onclick = () => missionPost("/api/mission/standby"); });
   document.querySelectorAll("[data-contain]").forEach((el) => { el.onclick = () => missionPost("/api/mission/contain"); });
 
+  // ── 촬영: 서버가 실시간 영상의 지금 프레임을 증거 사진(camera, evidence)으로 보내고 recorder 가 Supabase 에 올린다 ──
+  const shot = { busy: false };
+  function takeShot() {
+    shot.busy = true; renderDom();
+    fetch("/api/snapshot", { method: "POST" }).then(async (r) => {
+      if (r.ok) return;
+      const detail = (await r.json().catch(() => ({}))).detail;
+      addEvent(Date.now(), "warn", r.status === 403 ? "공개 주소에서는 촬영할 수 없어요" : `촬영 실패: ${detail || r.status}`);
+    }).catch(() => addEvent(Date.now(), "warn", "촬영 실패: 서버에 연결할 수 없어요")).finally(() => { shot.busy = false; renderDom(); });
+  }
+  document.querySelectorAll("[data-shot]").forEach((el) => { el.onclick = takeShot; });
+
   // ── 경보 배너 ───────────────────────────────────────────────
   function banner() {
     const b = $("banner");
@@ -342,6 +354,10 @@
     });
     // 포위: 사람을 발견했을 때(SUSPECT)만. 대기 중에는 준비 칸, 그 밖에는 상단에 보인다
     $("containTop").hidden = S.mission === "STANDBY";
+    // 촬영: 실시간 영상이 하나라도 있을 때. 대기 중에는 준비 칸, 그 밖에는 상단 발견 옆에 보인다
+    $("shotTop").hidden = S.mission === "STANDBY";
+    const anyLive = DOGS.some((n) => S.cams[n]?.online);
+    document.querySelectorAll("[data-shot]").forEach((el) => { el.disabled = shot.busy || !anyLive; });
     document.querySelectorAll("[data-contain]").forEach((el) => { el.disabled = mission.busy || !["SUSPECT", "CONFIRM"].includes(S.mission); });
     $("clock").textContent = fmtTime(Date.now());
     $("conn").textContent = S.connected ? "연결됨" : "연결 끊김";

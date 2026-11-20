@@ -43,7 +43,8 @@
 - `POST /api/mission/start`: 미션이 STANDBY이고 B·C의 `marker_follow.py`가 최근 2초 안에 `ready: true`를 보냈을 때만 `mission` EXPLORE를 만듭니다. 아니면 `409`와 이유(`detail`).
 - `POST /api/mission/contain`: "◎ 포위" 버튼. SUSPECT(사람 발견) 중일 때만 `mission` CONTAIN. 범인인지는 관제가 판단합니다. B·C의 `marker_follow.py`가 로봇견을 멈추고 일시정지하며 `teleop.py` 창을 띄웁니다.
 - `POST /api/mission/standby`: "⏸ 대기" 버튼. 대기가 아니면 언제든 `mission` STANDBY. 탐사 중이면 B·C 일시정지, 사람 발견 중이면 오탐(사이렌 `false_alarm`).
-- 둘 다 공개 주소(Cloudflare 터널)로 온 요청은 `403`.
+- `POST /api/snapshot`: "📷 촬영" 버튼. 실시간 영상이 연결된 로봇견마다 지금 프레임(마커 표시 없는 원본)으로 `camera` 메시지(`evidence: true`, `note: "촬영"` 또는 `"촬영 · 사건 #N"`)를 만듭니다. 대시보드 증거 사진 칸에 뜨고 recorder가 Supabase Storage `evidence` 버킷에 올립니다. 연결된 카메라가 없으면 `409`.
+- 모두 공개 주소(Cloudflare 터널)로 온 요청은 `403`.
 - `GET /api/dogs`는 `mission`(지금 단계)과 `mission_ts`(바뀐 시각)도 돌려줍니다. `marker_follow.py`가 0.5초마다 읽고, 프로그램을 켠 뒤 EXPLORE로 바뀌면 출발(teleop 창 닫음), STANDBY·CONTAIN으로 바뀌면 일시정지(teleop 창 열림)합니다.
 
 ## HTTP 수신 인증

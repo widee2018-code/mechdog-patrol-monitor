@@ -23,6 +23,7 @@
   <ol class="steps" id="steps"></ol>
   <div class="top-act">
   <span class="btn found" data-found id="foundTop" role="status" hidden title="카메라 사람 인식(YOLO)이 사람을 찾으면 불이 들어와요">👤 발견</span>
+  <button class="btn shot" data-shot id="shotTop" hidden title="실시간 영상이 연결된 로봇견마다 지금 화면을 증거 사진으로 남겨요 (Supabase에도 저장)">📷 촬영</button>
   <button class="btn hold" data-standby id="standby" hidden title="탐사 중: B·C 일시정지 · 사람 발견 중: 범인 아님(오탐) · B·C는 teleop 창으로 줄 맞추기 · A는 조종하는 사람이 멈추세요">⏸ 대기</button>
   <button class="btn contain" data-contain id="containTop" hidden disabled title="사람을 발견(SUSPECT)했을 때 범인이면 누르세요. B·C가 사람 조종으로 바뀌어요">◎ 포위</button>
   </div>
@@ -36,6 +37,7 @@
     <div><b>시작 준비 확인 · STANDBY</b><small id="readySub">세 마리를 일렬로 세우고 모든 항목이 초록이 되면 탐사를 시작하세요</small></div>
     <div class="ready-act">
       <span class="btn found" data-found role="status" title="카메라 사람 인식(YOLO)이 사람을 찾으면 불이 들어와요">👤 발견</span>
+      <button class="btn shot" data-shot title="실시간 영상이 연결된 로봇견마다 지금 화면을 증거 사진으로 남겨요 (Supabase에도 저장)">📷 촬영</button>
       <button class="btn hold" data-standby disabled title="이미 대기 중이에요. 탐사를 시작하면 누를 수 있어요">⏸ 대기</button>
       <button class="btn contain" data-contain disabled title="사람을 발견(SUSPECT)했을 때 범인이면 누르세요. B·C가 사람 조종으로 바뀌어요">◎ 포위</button>
       <button class="btn go" id="start" disabled title="B·C가 앞 개 마커를 인식하면 누를 수 있어요">▶ 탐사 시작</button>
