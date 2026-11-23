@@ -39,6 +39,7 @@
     incident: 0, incidentStart: 0,
     dogs: {},          // name -> {msg, seen}
     lidar: null, lidarSeen: 0,
+    map: null, mapImg: null, mapSeen: 0,   // SLAM 지도 (brain/lidar_slam.py 의 map 메시지)
     detect: {},        // name -> 마지막 사람 인식 메시지 (+seen)
     intruder: null, trail: [],
     cams: {},          // name -> {online, configured}
@@ -86,6 +87,12 @@
       S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now(), readySeen: "ready" in m ? Date.now() : prev?.readySeen };
     },
     lidar(m) { S.lidar = m; S.lidarSeen = Date.now(); },
+    map(m) {
+      // PNG 를 다 읽은 뒤에 바꿔야 그리는 중에 지도가 깜빡이지 않는다
+      const img = new Image();
+      img.onload = () => { S.map = m; S.mapImg = img; S.mapSeen = Date.now(); };
+      img.src = m.png;
+    },
     detect(m) { S.detect[m.from] = { ...m, seen: Date.now() }; renderFound(); renderBoxes(); },
     intruder(m) {
       S.intruder = { ...m, seen: Date.now() };
@@ -365,7 +372,8 @@
     const lidar = S.lidar && Date.now() - S.lidarSeen < STALE_MS ? `LiDAR 점 ${S.lidar.points.length}개` : "LiDAR 스캔 없음";
     const intr = S.intruder && Date.now() - S.intruder.seen < STALE_MS
       ? ` · 침입자 (${S.intruder.x.toFixed(2)}, ${S.intruder.y.toFixed(2)}) m · 신뢰도 ${num(S.intruder.confidence, 2)}` : "";
-    $("mapmeta").textContent = lidar + intr;
+    const slam = S.map ? ` · SLAM 지도 ${Date.now() - S.mapSeen < 3000 ? "갱신 중" : "멈춤"} (${S.map.updates}회)` : "";
+    $("mapmeta").textContent = lidar + slam + intr;
     $("dogs").innerHTML = DOGS.map(dogCard).join("");
     banner();
   }
@@ -385,6 +393,25 @@
     return segs;
   }
 
+  // 화면에 보일 범위 [x0, y0, x1, y1] m.
+  // 아레나 틀을 그릴 때(show_walls 가 false 가 아닐 때)나 SLAM 지도가 없을 때는 아레나 + 여백 0.3 m.
+  // 틀을 안 그리고 SLAM 지도가 있으면 지도·C1·로봇견이 모두 들어오게 자동으로 맞춘다.
+  function viewTarget(a) {
+    const arenaBox = [-0.3, -0.3, a.width + 0.3, a.height + 0.3];
+    if (a.show_walls !== false || !S.map) return arenaBox;
+    const m = S.map, r = (m.rot * Math.PI) / 180, cs = Math.cos(r), sn = Math.sin(r);
+    const mw = m.w * m.res, mh = m.h * m.res;
+    const pts = [[0, 0], [mw, 0], [0, mh], [mw, mh]].map(([u, v]) => [m.origin[0] + cs * u - sn * v, m.origin[1] + sn * u + cs * v]);
+    if (m.pose) pts.push(m.pose);
+    for (const n of DOGS) { const d = S.dogs[n]?.msg; if (d && typeof d.x === "number") pts.push([d.x, d.y]); }
+    let x0 = Math.min(...pts.map((p) => p[0])) - 0.4, x1 = Math.max(...pts.map((p) => p[0])) + 0.4;
+    let y0 = Math.min(...pts.map((p) => p[1])) - 0.4, y1 = Math.max(...pts.map((p) => p[1])) + 0.4;
+    const MIN = 2;   // 너무 작은 지도는 최소 2 m 범위로 (확대가 지나치지 않게)
+    if (x1 - x0 < MIN) { const c = (x0 + x1) / 2; x0 = c - MIN / 2; x1 = c + MIN / 2; }
+    if (y1 - y0 < MIN) { const c = (y0 + y1) / 2; y0 = c - MIN / 2; y1 = c + MIN / 2; }
+    return [x0, y0, x1, y1];
+  }
+
   function drawMap() {
     const c = $("map"), a = S.arena;
     const px = devicePixelRatio || 1;
@@ -392,29 +419,52 @@
     if (!a || !w || !h) return;
     if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
     const g = c.getContext("2d"), W = w, H = h;
-    const vx = -0.3, vy = -0.3, vw = a.width + 0.6, vh = a.height + 0.6;
+    const walls = a.show_walls !== false;
+    // 지도가 자라면서 화면 범위가 툭툭 바뀌지 않게 목표 범위로 부드럽게 따라간다
+    const tgt = viewTarget(a);
+    S.view = S.view ? S.view.map((v, i) => v + (tgt[i] - v) * 0.12) : tgt;
+    const [vx, vy, vx1, vy1] = S.view, vw = vx1 - vx, vh = vy1 - vy;
     const sc = Math.min(W / vw, H / vh);
     const left = (W - vw * sc) / 2, bottom = (H - vh * sc) / 2;
     const P = (x, y) => [left + (x - vx) * sc, H - bottom - (y - vy) * sc];
     g.lineCap = "round";
     g.fillStyle = T.bg; g.fillRect(0, 0, W, H);
-    const [fx, fy] = P(0, a.height);
-    g.fillStyle = T.floor; g.fillRect(fx, fy, a.width * sc, a.height * sc);
 
     g.strokeStyle = T.grid; g.lineWidth = 1;
-    for (let x = 0; x <= a.width + 1e-6; x += 0.5) line(g, P(x, 0), P(x, a.height));
-    for (let y = 0; y <= a.height + 1e-6; y += 0.5) line(g, P(0, y), P(a.width, y));
+    if (walls) {
+      const [fx, fy] = P(0, a.height);
+      g.fillStyle = T.floor; g.fillRect(fx, fy, a.width * sc, a.height * sc);
+      for (let x = 0; x <= a.width + 1e-6; x += 0.5) line(g, P(x, 0), P(x, a.height));
+      for (let y = 0; y <= a.height + 1e-6; y += 0.5) line(g, P(0, y), P(a.width, y));
+    } else {
+      // 틀 없이: 0.5 m 격자를 화면 전체에 (좌표 0 에 맞춰)
+      const gx0 = vx - left / sc, gx1 = vx + (W - left) / sc, gy0 = vy - bottom / sc, gy1 = vy + (H - bottom) / sc;
+      for (let x = Math.ceil(gx0 / 0.5) * 0.5; x <= gx1; x += 0.5) line(g, P(x, gy0), P(x, gy1));
+      for (let y = Math.ceil(gy0 / 0.5) * 0.5; y <= gy1; y += 0.5) line(g, P(gx0, y), P(gx1, y));
+    }
+
+    // SLAM 지도: origin(이미지 왼쪽 아래 모서리)에서 rot 만큼 돌려 붙인다. 아레나 밖으로 나가도 그대로 그림
+    if (S.map && S.mapImg) {
+      const m = S.map, [X0, Y0] = P(m.origin[0], m.origin[1]);
+      g.save();
+      g.translate(X0, Y0);
+      g.rotate((-m.rot * Math.PI) / 180);   // 캔버스는 y 가 아래로 → 반시계 각도는 음수 회전
+      g.imageSmoothingEnabled = false;
+      g.globalAlpha = Date.now() - S.mapSeen < 3000 ? 1 : 0.6;
+      g.drawImage(S.mapImg, 0, -m.h * m.res * sc, m.w * m.res * sc, m.h * m.res * sc);
+      g.restore();
+    }
 
     g.fillStyle = T.obstacle;
     for (const o of a.obstacles) { const [x0, y0] = P(o.x, o.y + o.h); g.fillRect(x0, y0, o.w * sc, o.h * sc); }
 
     g.strokeStyle = T.wall; g.lineWidth = 3 * px;
-    for (const [p, q] of wallSegments(a)) line(g, P(...p), P(...q));
+    if (walls) for (const [p, q] of wallSegments(a)) line(g, P(...p), P(...q));
     g.strokeStyle = T.exit; g.lineWidth = 2 * px; g.setLineDash([3 * px, 4 * px]);
-    for (const e of a.exits) line(g, P(...e.a), P(...e.b));
+    for (const e of walls ? a.exits : []) line(g, P(...e.a), P(...e.b));
     g.setLineDash([]);
     g.fillStyle = T.exit; g.font = `${10 * px}px ${FONT}`;
-    for (const e of a.exits) {
+    for (const e of walls ? a.exits : []) {
       const [tx, ty] = P(e.a[0], e.b[1] + 0.12);
       g.textAlign = e.a[0] === 0 ? "left" : "right";
       g.fillText(e.id, tx + (e.a[0] === 0 ? 6 : -6) * px, ty);
@@ -430,6 +480,17 @@
         const [X, Y] = P(lx + d * Math.cos(r), ly + d * Math.sin(r));
         g.fillRect(X - 1.5 * px, Y - 1.5 * px, 3 * px, 3 * px);
       }
+    }
+
+    // SLAM 이 구한 C1 위치·방향: 하늘색 삼각형
+    if (S.map?.pose) {
+      const [x, y, hd] = S.map.pose, [X, Y] = P(x, y), t = (hd * Math.PI) / 180, R = 9 * px;
+      const tip = (ang, r) => [X + Math.cos(t + ang) * r, Y - Math.sin(t + ang) * r];
+      g.globalAlpha = Date.now() - S.mapSeen < 3000 ? 1 : 0.4;
+      g.fillStyle = T.lidar; g.beginPath();
+      g.moveTo(...tip(0, R * 1.6)); g.lineTo(...tip(2.5, R)); g.lineTo(...tip(-2.5, R)); g.closePath(); g.fill();
+      g.font = `700 ${10 * px}px ${FONT}`; g.fillText("C1", X + 10 * px, Y + 14 * px);
+      g.globalAlpha = 1;
     }
 
     const pos = {};
@@ -488,8 +549,8 @@
       g.textAlign = "left"; g.textBaseline = "alphabetic"; g.globalAlpha = 1;
     }
 
-    // 축척 막대
-    const [sx, sy] = P(0, 0);
+    // 축척 막대: 틀이 있으면 아레나 왼쪽 아래, 없으면 화면 왼쪽 아래 (자동 맞춤 때 (0,0) 이 화면 밖일 수 있음)
+    const [sx, sy] = walls ? P(0, 0) : [14 * px, H - 26 * px];
     g.strokeStyle = T.muted; g.lineWidth = 2 * px;
     line(g, [sx, sy + 12 * px], [sx + sc, sy + 12 * px]);
     g.fillStyle = T.muted; g.font = `${10 * px}px ${FONT}`;

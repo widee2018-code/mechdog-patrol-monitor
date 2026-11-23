@@ -8,6 +8,7 @@ Pi 또는 노트북에서 돌며 로봇견을 조종하는 코드입니다. 로�
 | `teleop.py` | 키보드로 로봇견 조종 (회전 방향 확인, 행렬 연습 때 A 조종) |
 | `contain_demo.py` | 포위·재정렬 연습 (추측 항법): B는 오른쪽 0.2 m → 앞 0.2 m, C는 왼쪽으로 크게 이동 → 확인 후 Enter → 같은 길로 복귀. `calibrate`로 개마다 회전·직진 속도를 먼저 잼 (`calibration.json`) |
 | `make_markers.py` | 출력용 마커 A4 시트 만들기 |
+| `lidar_slam.py` | RPLIDAR C1 + BreezySLAM 손에 들고 매핑 (오도메트리 없이 스캔 매칭). 지도 창에서 `s` 저장, 끝내면 `maps/`에 PNG·NPY 저장. 설치는 파일 맨 위 참고 |
 | `../firmware/dog_cmd.py` | 로봇견 쪽: 명령 받기 + 안전 반사(1초 무명령 정지, 15 cm 이내 전진 금지) |
 
 ## 설치

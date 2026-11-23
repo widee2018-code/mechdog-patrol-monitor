@@ -33,3 +33,6 @@ archive/
 
 # Raspberry Pi 5 handling notes (local only)
 PI5_HANDLING.md
+
+# SLAM maps saved by brain/lidar_slam.py (local only)
+maps/
