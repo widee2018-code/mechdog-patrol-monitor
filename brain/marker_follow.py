@@ -173,6 +173,11 @@ def measure(corners: np.ndarray, width_px: int, hfov_deg: float, marker_m: float
     return float(dx), float(focal_px * marker_m / side_px)
 
 
+def marker_bearing(dx: float, hfov_deg: float) -> float:
+    """화면 좌우 위치 dx(-1 ~ +1) → 카메라 정면 기준 마커 방향(도). 지도와 같은 반시계 기준이라 왼쪽이 +."""
+    return -math.degrees(math.atan(dx * math.tan(math.radians(hfov_deg) / 2)))
+
+
 def clamp(v: float, lim: float) -> float:
     return max(-lim, min(lim, v))
 
@@ -422,6 +427,7 @@ def main() -> None:
     period = 1 / a.rate
     running = a.autostart
     last_seq, last_state, last_print, last_frame_at = -1, None, 0.0, time.time()
+    last_marker = 0.0   # 마커 측정(거리·방향)을 허브로 보낸 시각: 허브가 앞 개 위치와 합쳐 이 개의 지도 위치를 계산
     was_ready = None
     mission_seen = None   # 마지막으로 본 미션 변화. 프로그램을 켜기 전의 변화에는 반응하지 않는다
     teleop = Teleop(a)
@@ -477,6 +483,10 @@ def main() -> None:
                 last_seq, last_frame_at = seq, t0
                 corners = find_marker(detector, frame, a.marker_id)
                 seen = measure(corners, frame.shape[1], a.hfov, a.marker_cm / 100) if corners is not None else None
+                if t0 - last_marker >= 0.2:   # 5 Hz. 못 찾으면 null → 허브는 위치를 갱신하지 않고 대시보드는 흐리게
+                    to_monitor({"type": "dog", "from": a.name,
+                                "marker": [round(seen[1], 3), round(marker_bearing(seen[0], a.hfov), 1)] if seen else None})
+                    last_marker = t0
                 if running:
                     cmd = follower.step(seen, t0)
                 else:

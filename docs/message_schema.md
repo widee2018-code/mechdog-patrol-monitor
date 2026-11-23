@@ -6,7 +6,7 @@
 
 | type | 보내는 쪽 | 주기 | 필드 |
 |---|---|---|---|
-| `dog` | Pi(위치) **와** 각 로봇견(자체 센서) | 10 Hz | `from`(A/B/C), `x`, `y`, `heading_deg`, `state`, `battery_v`, `front_cm`, `tilt`(`ok`/`fallen`), `tilt_deg`(가장 많이 기운 축, 도), `rssi`. 로봇견 `state` 는 `idle`/`moving`/`stopped`/`blocked`/`fallen`. 일부만 보내도 됩니다. 서버가 로봇견별로 부분 업데이트를 합칩니다. |
+| `dog` | Pi(위치) **와** 각 로봇견(자체 센서) | 10 Hz | `from`(A/B/C), `x`, `y`, `heading_deg`, `state`, `battery_v`, `front_cm`, `tilt`(`ok`/`fallen`), `tilt_deg`(가장 많이 기운 축, 도), `rssi`. 로봇견 `state` 는 `idle`/`moving`/`stopped`/`blocked`/`fallen`. 일부만 보내도 됩니다. 서버가 로봇견별로 부분 업데이트를 합칩니다. **위치 출처:** A는 `brain/lidar_slam.py --dog A`(SLAM). B·C는 `marker_follow.py`가 5 Hz로 `marker`(`[거리 m, 방향 °]`, 카메라 정면 기준 반시계라 왼쪽 +, 못 찾으면 `null`)를 보내고, **서버가** 앞 개 위치(1초 이내)와 합쳐 `x`, `y`, `heading_deg`(앞 개와 같다고 가정), `pos_src: "marker"`를 계산해 다시 `dog` 메시지로 보냄 (B는 A 기준, C는 방금 계산한 B 기준). 몸 치수 `MARKER_BACK_M`·`CAM_FWD_M`(각 0.10 m, 실측 전)은 `server/app.py`. 로봇견 연결 여부는 `front_cm`·`rssi`가 있는 메시지(로봇견 자신)로만 판단 |
 | `lidar` | Pi | 5 Hz | `from:"pi"`, `origin:[x,y]`, `points:[[angle_deg, dist_m], ...]`. SLAM 중(`brain/lidar_slam.py`)에는 `origin`이 C1 현재 위치를 따라 움직이고 `heading_deg`도 붙음 |
 | `map` | Pi (`brain/lidar_slam.py`) | 1 Hz, **HTTP** (UDP에 안 들어감) | SLAM 격자 지도. `from:"pi"`, `png`(`data:image/png;base64,...` RGBA: 투명 = 아직 안 봄, 옅은 하늘색 = 빈 공간, 밝은 회백색 = 벽·물체), `res`(칸 한 변 m), `w`·`h`(칸 수), `origin:[x,y]`(이미지 왼쪽 아래 모서리의 아레나 좌표), `rot`(이미지를 origin 기준 반시계로 돌릴 각도), `pose:[x,y,heading_deg]`(C1 현재 위치), `updates`(SLAM 갱신 횟수). 대시보드가 지도 레이어와 하늘색 삼각형(C1)으로 그림. recorder 는 저장하지 않음 |
 | `intruder` | Pi | 추적 중 5 Hz | `x`, `y`, `confidence`(0–1) |

@@ -86,6 +86,29 @@ FOLLOWERS = {"B": 1, "C": 2}   # 확인견 -> 보고 따라가는 앞 개의 마
 READY_SEC = 2.0                # marker_follow.py 는 0.5초마다 ready 를 보낸다
 DETECT_HOLD = 1.5              # 사람 인식(detect)이 이 시간 동안 없으면 발견 끝 (대시보드 "발견" 불도 같은 시간)
 
+# 마커 체인으로 확인견 위치 구하기: B 는 A 의, C 는 B 의 등 마커를 보고 거리·방향(marker)을 보낸다.
+# 앞 개 위치(A 는 SLAM) + 그 측정값 → 뒤 개 위치. 몸 치수는 아직 실측 전 기본값.
+LEADER = {"B": "A", "C": "B"}
+MARKER_BACK_M = 0.10   # 앞 개 중심 → 등 뒤 마커 (뒤쪽으로)
+CAM_FWD_M = 0.10       # 뒤 개 중심 → 카메라 (앞쪽으로)
+POSE_MAX_AGE = 1.0     # 앞 개 위치가 이보다 오래되면 계산하지 않음 (초)
+
+
+def follower_pose(name: str, marker, ts: float) -> dict | None:
+    """뒤 개의 마커 측정 [거리 m, 방향 °(반시계, 왼쪽 +)] 과 앞 개 위치로 뒤 개 위치를 계산한다.
+    뒤 개의 방향은 아직 재지 않으므로 앞 개와 같은 방향을 본다고 가정한다 (직진 때 잘 맞고, 돌 때 오차)."""
+    lead = latest.get(f"dog:{LEADER[name]}", {})
+    if not marker or "x" not in lead or ts - lead.get("pos_ts", 0) > POSE_MAX_AGE:
+        return None
+    dist, bearing = marker
+    h = math.radians(lead.get("heading_deg", 0.0))
+    mx, my = lead["x"] - MARKER_BACK_M * math.cos(h), lead["y"] - MARKER_BACK_M * math.sin(h)   # 마커
+    ray = h + math.radians(bearing)                                                              # 카메라 → 마커
+    cx, cy = mx - dist * math.cos(ray), my - dist * math.sin(ray)                                # 카메라
+    return {"type": "dog", "from": name, "ts": ts, "pos_src": "marker",
+            "x": round(cx - CAM_FWD_M * math.cos(h), 3), "y": round(cy - CAM_FWD_M * math.sin(h), 3),
+            "heading_deg": round(lead.get("heading_deg", 0.0), 1)}
+
 
 def fmt_dur(sec: float) -> str:
     return f"{int(sec // 60):02d}:{int(sec % 60):02d}"
@@ -157,6 +180,8 @@ def ingest(msg: dict) -> None:
             latest[key]["self_ts"] = msg["ts"]
         if "ready" in msg:   # marker_follow.py 준비 확인: 따라가기를 시작하면 ready 를 그만 보낸다
             latest[key]["ready_ts"] = msg["ts"]
+        if "x" in msg:       # 위치가 마지막으로 온 시각 (마커 체인이 앞 개 위치가 최신인지 본다)
+            latest[key]["pos_ts"] = msg["ts"]
         # 로봇견이 직접 보낸 적이 있으면, 다시 온라인도 로봇견 자신의 메시지로만 판단한다
         # (SLAM·brain 위치 메시지가 계속 오면 오프라인 ↔ 온라인 알림이 반복되므로)
         if msg["from"] in offline and ("self_ts" not in latest[key] or latest[key]["self_ts"] == msg["ts"]):
@@ -167,6 +192,11 @@ def ingest(msg: dict) -> None:
     if kind == "camera" and msg.get("evidence"):
         history["evidence"] = (history["evidence"] + [msg])[-MAX_EVIDENCE:]
     asyncio.get_running_loop().create_task(broadcast(msg))
+    # 확인견의 마커 측정 → 위치 계산. 계산한 위치도 dog 메시지라 C 는 방금 계산한 B 위치를 바로 쓸 수 있다
+    if kind == "dog" and msg.get("from") in LEADER and msg.get("marker"):
+        pose = follower_pose(msg["from"], msg["marker"], msg["ts"])
+        if pose:
+            ingest(pose)
 
 
 async def watch_dogs() -> None:

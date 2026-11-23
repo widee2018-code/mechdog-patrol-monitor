@@ -57,6 +57,8 @@
   const fresh = (d) => d && Date.now() - d.seen < STALE_MS;
   // 로봇견 자신(dog_cmd.py)이 보낸 메시지 기준. brain·SLAM 이 보내는 위치 메시지로는 "연결됨"이 되지 않는다
   const selfFresh = (d) => d && Date.now() - (d.selfSeen ?? 0) < STALE_MS;
+  // 위치 기준: 확인견이 마커를 놓치면 위치가 더 오지 않으므로 지도에서 흐리게
+  const posFresh = (d) => d && Date.now() - (d.posSeen ?? 0) < STALE_MS;
   const elapsed = () => (S.incidentStart ? (Date.now() - S.incidentStart) / 1000 : 0);
 
   $("steps").innerHTML = MISSIONS.map((m) => `<li data-k="${m.key}"><span class="en">${m.key}</span>${m.ko}</li>`).join("");
@@ -87,8 +89,11 @@
       const prev = S.dogs[m.from];
       // ready 는 marker_follow.py 만 보낸다. state 는 dog_cmd.py 도 보내서 덮어쓰므로 ready 받은 시각을 따로 둔다
       // 로봇견 자신이 보낸 메시지(front_cm·rssi 가 있음)는 따로 시각을 둔다 (서버 self_ts 와 같은 기준)
-      S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now(), readySeen: "ready" in m ? Date.now() : prev?.readySeen,
-        selfSeen: "front_cm" in m || "rssi" in m ? Date.now() : prev?.selfSeen };
+      const msg = { ...prev?.msg, ...m };
+      if ("x" in m) msg.pos_src = m.pos_src;   // 위치 출처(marker = 허브가 마커 체인으로 계산)는 위치와 같이 바뀐다
+      S.dogs[m.from] = { msg, seen: Date.now(), readySeen: "ready" in m ? Date.now() : prev?.readySeen,
+        selfSeen: "front_cm" in m || "rssi" in m ? Date.now() : prev?.selfSeen,
+        posSeen: "x" in m ? Date.now() : prev?.posSeen };
     },
     lidar(m) { S.lidar = m; S.lidarSeen = Date.now(); },
     map(m) {
@@ -163,7 +168,7 @@
       <div class="kv"><span>배터리</span><b class="${lv}">${num(v, 2)} V</b></div>
       <div class="batt ${lv}"><i style="width:${typeof v === "number" ? battPct(v) : 0}%"></i></div>
       <div class="kv"><span>앞 장애물</span><b class="${m.front_cm != null && m.front_cm < 15 ? "warn" : ""}">${m.front_cm ?? "—"} cm</b></div>
-      <div class="kv"><span>위치 · 방향</span><b>(${num(m.x, 2)}, ${num(m.y, 2)}) · ${num(m.heading_deg, 0)}°</b></div>
+      <div class="kv"><span>위치 · 방향${m.pos_src === "marker" ? " (마커 추정)" : ""}</span><b class="${typeof m.x === "number" && !posFresh(d) ? "warn" : ""}">(${num(m.x, 2)}, ${num(m.y, 2)}) · ${num(m.heading_deg, 0)}°</b></div>
       <div class="kv"><span>기울기 · Wi-Fi</span><b class="${m.tilt === "fallen" ? "warn" : ""}">${m.tilt === "fallen" ? "넘어짐" : m.tilt === "ok" ? "정상" : esc(m.tilt ?? "—")}${typeof m.tilt_deg === "number" ? ` ${m.tilt_deg}°` : ""} · ${m.rssi ?? "—"} dBm</b></div>
       ${extra}
     </article>`;
@@ -543,7 +548,7 @@
     for (const n of [...DOGS].reverse()) {
       if (!pos[n]) continue;
       const d = S.dogs[n], [X, Y] = pos[n], hd = ((d.msg.heading_deg ?? 0) * Math.PI) / 180;
-      g.globalAlpha = fresh(d) ? 1 : 0.35;
+      g.globalAlpha = posFresh(d) ? 1 : 0.35;
       g.strokeStyle = COLOR[n]; g.lineWidth = 2.5 * px;
       line(g, [X, Y], [X + Math.cos(hd) * r * 2, Y - Math.sin(hd) * r * 2]);
       if (n === "A") { g.lineWidth = 1.5 * px; circ(g, X, Y, r + 4 * px); g.stroke(); }
