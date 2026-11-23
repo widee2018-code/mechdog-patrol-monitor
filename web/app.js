@@ -40,6 +40,7 @@
     dogs: {},          // name -> {msg, seen}
     lidar: null, lidarSeen: 0,
     map: null, mapImg: null, mapSeen: 0,   // SLAM 지도 (brain/lidar_slam.py 의 map 메시지)
+    sample: null, sampleImg: null,         // 실제 데이터가 없을 때만 보이는 샘플 (arena.json 의 sample 파일)
     detect: {},        // name -> 마지막 사람 인식 메시지 (+seen)
     intruder: null, trail: [],
     cams: {},          // name -> {online, configured}
@@ -382,7 +383,9 @@
     const intr = S.intruder && Date.now() - S.intruder.seen < STALE_MS
       ? ` · 침입자 (${S.intruder.x.toFixed(2)}, ${S.intruder.y.toFixed(2)}) m · 신뢰도 ${num(S.intruder.confidence, 2)}` : "";
     const slam = S.map ? ` · SLAM 지도 ${Date.now() - S.mapSeen < 3000 ? "갱신 중" : "멈춤"} (${S.map.updates}회)` : "";
-    $("mapmeta").textContent = lidar + slam + intr;
+    $("mapmeta").textContent = sampleOn()
+      ? "샘플 화면 (11-23 C1 SLAM 지도 + 예시 위치) · 로봇견·LiDAR가 연결되면 실제 데이터로 바뀜"
+      : lidar + slam + intr;
     $("dogs").innerHTML = DOGS.map(dogCard).join("");
     banner();
   }
@@ -402,17 +405,28 @@
     return segs;
   }
 
+  // 샘플 화면: 실제 SLAM 지도·LiDAR 스캔·로봇견 위치가 하나도 들어온 적 없을 때만. 하나라도 오면 바로 실제 화면
+  const sampleOn = () => !!(S.sample && S.sampleImg && !S.map && !S.lidar && !DOGS.some((n) => S.dogs[n]?.posSeen));
+  // 지금 그릴 지도: 실제 SLAM 지도, 없으면 샘플
+  function curMap() {
+    if (sampleOn()) return { m: S.sample.map, img: S.sampleImg, live: true };
+    if (S.map && S.mapImg) return { m: S.map, img: S.mapImg, live: Date.now() - S.mapSeen < 3000 };
+    return null;
+  }
+
   // 화면에 보일 범위 [x0, y0, x1, y1] m.
   // 아레나 틀을 그릴 때(show_walls 가 false 가 아닐 때)나 SLAM 지도가 없을 때는 아레나 + 여백 0.3 m.
   // 틀을 안 그리고 SLAM 지도가 있으면 지도·C1·로봇견이 모두 들어오게 자동으로 맞춘다.
   function viewTarget(a) {
     const arenaBox = [-0.3, -0.3, a.width + 0.3, a.height + 0.3];
-    if (a.show_walls !== false || !S.map) return arenaBox;
-    const m = S.map, r = (m.rot * Math.PI) / 180, cs = Math.cos(r), sn = Math.sin(r);
+    const cm = curMap();
+    if (a.show_walls !== false || !cm) return arenaBox;
+    const m = cm.m, r = (m.rot * Math.PI) / 180, cs = Math.cos(r), sn = Math.sin(r);
     const mw = m.w * m.res, mh = m.h * m.res;
     const pts = [[0, 0], [mw, 0], [0, mh], [mw, mh]].map(([u, v]) => [m.origin[0] + cs * u - sn * v, m.origin[1] + sn * u + cs * v]);
     if (m.pose) pts.push(m.pose);
     for (const n of DOGS) { const d = S.dogs[n]?.msg; if (d && typeof d.x === "number") pts.push([d.x, d.y]); }
+    if (sampleOn()) for (const n of DOGS) if (S.sample.dogs?.[n]) pts.push(S.sample.dogs[n]);
     let x0 = Math.min(...pts.map((p) => p[0])) - 0.4, x1 = Math.max(...pts.map((p) => p[0])) + 0.4;
     let y0 = Math.min(...pts.map((p) => p[1])) - 0.4, y1 = Math.max(...pts.map((p) => p[1])) + 0.4;
     const MIN = 2;   // 너무 작은 지도는 최소 2 m 범위로 (확대가 지나치지 않게)
@@ -453,14 +467,15 @@
     }
 
     // SLAM 지도: origin(이미지 왼쪽 아래 모서리)에서 rot 만큼 돌려 붙인다. 아레나 밖으로 나가도 그대로 그림
-    if (S.map && S.mapImg) {
-      const m = S.map, [X0, Y0] = P(m.origin[0], m.origin[1]);
+    const sample = sampleOn(), cm = curMap();
+    if (cm) {
+      const m = cm.m, [X0, Y0] = P(m.origin[0], m.origin[1]);
       g.save();
       g.translate(X0, Y0);
       g.rotate((-m.rot * Math.PI) / 180);   // 캔버스는 y 가 아래로 → 반시계 각도는 음수 회전
       g.imageSmoothingEnabled = false;
-      g.globalAlpha = Date.now() - S.mapSeen < 3000 ? 1 : 0.6;
-      g.drawImage(S.mapImg, 0, -m.h * m.res * sc, m.w * m.res * sc, m.h * m.res * sc);
+      g.globalAlpha = sample ? 0.75 : cm.live ? 1 : 0.6;
+      g.drawImage(cm.img, 0, -m.h * m.res * sc, m.w * m.res * sc, m.h * m.res * sc);
       g.restore();
     }
 
@@ -504,6 +519,7 @@
 
     const pos = {};
     for (const n of DOGS) { const m = S.dogs[n]?.msg; if (m && typeof m.x === "number") pos[n] = P(m.x, m.y); }
+    if (sample) for (const n of DOGS) if (S.sample.dogs?.[n]) pos[n] = P(S.sample.dogs[n][0], S.sample.dogs[n][1]);
 
     // 침입자: 이동 경로 + 포위 반경(0.6 m) + 깜빡이는 점
     const intr = S.intruder && Date.now() - S.intruder.seen < STALE_MS ? S.intruder : null;
@@ -547,8 +563,9 @@
     const r = Math.max(9 * px, Math.min(15 * px, 0.13 * sc));
     for (const n of [...DOGS].reverse()) {
       if (!pos[n]) continue;
-      const d = S.dogs[n], [X, Y] = pos[n], hd = ((d.msg.heading_deg ?? 0) * Math.PI) / 180;
-      g.globalAlpha = posFresh(d) ? 1 : 0.35;
+      const d = S.dogs[n], sp = sample ? S.sample.dogs[n] : null, [X, Y] = pos[n];
+      const hd = (((sp ? sp[2] : d.msg.heading_deg) ?? 0) * Math.PI) / 180;
+      g.globalAlpha = sp ? 0.85 : posFresh(d) ? 1 : 0.35;
       g.strokeStyle = COLOR[n]; g.lineWidth = 2.5 * px;
       line(g, [X, Y], [X + Math.cos(hd) * r * 2, Y - Math.sin(hd) * r * 2]);
       if (n === "A") { g.lineWidth = 1.5 * px; circ(g, X, Y, r + 4 * px); g.stroke(); }
@@ -564,6 +581,17 @@
     line(g, [sx, sy + 12 * px], [sx + sc, sy + 12 * px]);
     g.fillStyle = T.muted; g.font = `${10 * px}px ${FONT}`;
     g.fillText("1 m", sx + sc + 5 * px, sy + 16 * px);
+
+    // 샘플 표시: 실제 데이터로 오해하지 않게 지도 왼쪽 위에 배지
+    if (sample) {
+      const text = S.sample.label || "샘플 화면 · 실제 데이터 아님";
+      g.font = `700 ${12 * px}px ${FONT}`;
+      const tw = g.measureText(text).width, bx = 12 * px, by = 12 * px, bh = 24 * px;
+      g.fillStyle = "rgba(255,183,77,.16)"; g.strokeStyle = "rgba(255,183,77,.7)"; g.lineWidth = 1 * px;
+      g.beginPath(); g.roundRect(bx, by, tw + 20 * px, bh, 6 * px); g.fill(); g.stroke();
+      g.fillStyle = "#ffb74d"; g.textBaseline = "middle"; g.fillText(text, bx + 10 * px, by + bh / 2);
+      g.textBaseline = "alphabetic";
+    }
   }
 
   // ── 카메라: 서버가 스트림을 받고 있으면 실시간 영상, 끊기면 camera 메시지 스냅샷 ──
@@ -608,5 +636,11 @@
     S.arena = a;
     requestAnimationFrame(frame);
     connect();
+    // 샘플 화면 (arena.json 의 "sample" 을 지우면 안 보임). 못 읽어도 대시보드는 그대로
+    if (a.sample) fetch(a.sample).then((r) => r.json()).then((s) => {
+      const img = new Image();
+      img.onload = () => { S.sample = s; S.sampleImg = img; };
+      img.src = s.map.png;
+    }).catch(() => {});
   });
 })();

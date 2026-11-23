@@ -1,0 +1,32 @@
+{
+ "_comment": "Dashboard sample shown only while no real map, LiDAR scan or dog position has arrived. Map: real C1 SLAM map from 2026-11-23 (desk area). Dog positions are illustrative, not measured.",
+ "label": "샘플 화면 · 실제 데이터 아님",
+ "map": {
+  "res": 0.04,
+  "w": 122,
+  "h": 101,
+  "origin": [
+   5.16,
+   -0.61
+  ],
+  "rot": 90,
+  "png": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHoAAABlCAYAAACC2feqAAAFEElEQVR42u2dy64bIQyG8yx9sL57d11V3XXZ6iyiRiMwvvwGDD/SSDk5SYbhGxvfYF4vNrZV7fuPv9+eR+v91uc5epOgZEC2HqSyOWgEZEIHw5VUbBR0D750cxE0GO5I8p6f9Ugzem5nA6lTyw0wksyv9vPXn9+fffj6+31I72XYDARsBK05PuFZjgztQNANyO/BXgG5BZ2gg9Z0T80+B9l6s6AgVwK9jaegPamkQrW/q1HL0hxdBfTIQ1jS79EJpYHWQm8BtH5vV9BSNO9Tiy03IiUVHTWaenAkg6o3CL1zrILdgzrq75I+W+fPyM0QMeJWgrbaHyMtVAJ0b9C1360AuudOSoGa5/ho+7s1aK/1vCvoUXZMCga9x0LT36V2hQS6ZUC1fOqRsRaFnAm6BbU1TXmih5qpaynoaJx6pKpQoBHBG63Pn9lXb84ABnoUEMkIsXqkJAO2pJYj2mdZAKVnUCAGCT3wmti3Nj7Qeh/Rd8kr0UYlp0l0lirMlOiebTDDUNSCXmqBZ0h0FmhknDzrWrURven+dCXQEdiozBsC+pJwbVXQozj7Tn3eokiiBXqXgZIGbSeg20OuBLrKobXwlyXECRpnLG6XHydojPRK8W6CvkRtbw16V8t7JwkuVZQo+agE287mlaw6pUTrfPaWNJeETND/JbiserbklWfleXdXz2VVNEHb056U6APn4KMX8RG0fmFAWdiaC79hju5dd7R0iqCLpT2vAH2DiyVJ9HGgpdKXk6R6NO/21oUd51pVB+2pMnmd3iKrFXeV1GP94JNBWysnveuurwRtiRLtFMggzcKgLf0hTSDoWbCviFbdLNFewARdyBiL3mikWcjqjpyfNIu6V94+kGrhgIllribVQFJjt8iYJdFCV6wwaO7YnwT6pJSlNBb0pQ/OTbfGYvTe8aC5aqOw6rfEmQm18A1g2W/DU8HBm2Qj+KPOWDdCQ+y6Vw1YCfjaLYm1F/WEeoNU98bUciNMAd3rjMcok3YAvlVda5+52dKmLUGDSrbXzWp9ZnZO+wStkFZZowXt3Q2XoOMZvBKgaX3jV3hCVHhvM9URtBvi4zvl5cOge8aBBfSoxotg7eXOUMgRQ0qj4mmc+dS4llPIp37/32N1EzRWjaeC1hpVWqPNG22jcQaywmeB1sK+PV4uZRWhETavEaGVSKrxWCk0PJTqDftZy3UJN1bzHgbtTVcSdDHQ6E1Se343YS8EnbEb7ujJeauerUXQCc+VkKRamy8/HXZJ0FmwT3a/loGOroHyfkcTXz+9JDkVdMuKRpTGoL5zC+h0ifauffIWJo5WVNxmnE2T6Kc0o0Bn7BnGYgSQRHsiZN55N8MwvKEYASbRyIVtlnQmQU8wxiLFfV4LHC3VVW+UqVa3txjda5SN/GoLsOohVivoUHXoqtWdCNi95zVXsN4lyGl+tBU6Yl9O1N6eM/YI7Y3T8/UzbNtbldGrwk2R6JZbZX0Ce0RzWH7nM2hi7Y/3CfMrD3hR/7OawdIZy4k1O/pqYGv6NFoCUwkyFPQIRibo02C3tFXvdevvkR2xBHREg2jAeGFLbtfzISq96+i933IPpdfeXAJ0+e1nUMMr0Qip9lyE1ofXrFKpEEeHrZ32uFpIQNHfsqxNXr2OeiT9KW6vNlqFgoP06TMfuiJF8zRqe6vWUm0ZeWZUgQISdESTlWuoaNEq0MjfuQJ0dO5C16qRzIagZ8/LbGxsbOe1f7HNvigdUANBAAAAAElFTkSuQmCC"
+ },
+ "dogs": {
+  "A": [
+   3.4,
+   1.6,
+   90.0
+  ],
+  "B": [
+   3.4,
+   1.25,
+   90.0
+  ],
+  "C": [
+   3.4,
+   0.9,
+   90.0
+  ]
+ }
+}

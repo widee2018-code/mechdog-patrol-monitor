@@ -1,9 +1,10 @@
 {
-  "_comment": "Arena layout in metres. Origin (0,0) is the bottom-left corner, x to the right, y up. Shared by the dashboard and the simulator. show_walls false = do not draw the arena frame; the dashboard auto-fits the view to the SLAM map.",
+  "_comment": "Arena layout in metres. Origin (0,0) is the bottom-left corner, x to the right, y up. Shared by the dashboard and the simulator. show_walls false = do not draw the arena frame; the dashboard auto-fits the view to the SLAM map. sample = map + dog positions shown only until real data arrives (remove to hide).",
   "width": 6.0,
   "height": 4.0,
   "lidar_origin": [3.0, 0.15],
   "show_walls": false,
+  "sample": "sample_map.json",
   "exits": [],
   "obstacles": [],
   "zones": [
