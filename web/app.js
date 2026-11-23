@@ -55,6 +55,8 @@
   const battLevel = (v) => (v < 6.6 ? "alert" : v < 6.8 ? "warn" : "ok");
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const fresh = (d) => d && Date.now() - d.seen < STALE_MS;
+  // 로봇견 자신(dog_cmd.py)이 보낸 메시지 기준. brain·SLAM 이 보내는 위치 메시지로는 "연결됨"이 되지 않는다
+  const selfFresh = (d) => d && Date.now() - (d.selfSeen ?? 0) < STALE_MS;
   const elapsed = () => (S.incidentStart ? (Date.now() - S.incidentStart) / 1000 : 0);
 
   $("steps").innerHTML = MISSIONS.map((m) => `<li data-k="${m.key}"><span class="en">${m.key}</span>${m.ko}</li>`).join("");
@@ -84,7 +86,9 @@
       // 부분 업데이트를 합친다: brain은 x/y/heading·따라가기 상태, 로봇견은 front_cm/rssi/battery를 보낸다
       const prev = S.dogs[m.from];
       // ready 는 marker_follow.py 만 보낸다. state 는 dog_cmd.py 도 보내서 덮어쓰므로 ready 받은 시각을 따로 둔다
-      S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now(), readySeen: "ready" in m ? Date.now() : prev?.readySeen };
+      // 로봇견 자신이 보낸 메시지(front_cm·rssi 가 있음)는 따로 시각을 둔다 (서버 self_ts 와 같은 기준)
+      S.dogs[m.from] = { msg: { ...prev?.msg, ...m }, seen: Date.now(), readySeen: "ready" in m ? Date.now() : prev?.readySeen,
+        selfSeen: "front_cm" in m || "rssi" in m ? Date.now() : prev?.selfSeen };
     },
     lidar(m) { S.lidar = m; S.lidarSeen = Date.now(); },
     map(m) {
@@ -171,8 +175,8 @@
   function readyItems(n) {
     const d = S.dogs[n], m = d?.msg || {}, cam = S.cams[n];
     const items = [
-      d ? { label: "로봇견 연결", st: fresh(d) ? "ok" : "bad", val: fresh(d) ? `${m.rssi ?? "—"} dBm` : "끊김" }
-        : { label: "로봇견 연결", st: "bad", val: "데이터 없음" },
+      selfFresh(d) ? { label: "로봇견 연결", st: "ok", val: `${m.rssi ?? "—"} dBm` }
+        : { label: "로봇견 연결", st: "bad", val: d?.selfSeen ? "끊김" : "데이터 없음" },
       typeof m.battery_v === "number"
         ? { label: "배터리", st: m.battery_v >= 6.8 ? "ok" : "bad", val: `${m.battery_v.toFixed(2)} V` }
         : { label: "배터리", st: "na", val: "값 없음" },

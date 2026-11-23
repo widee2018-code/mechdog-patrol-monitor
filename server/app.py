@@ -157,7 +157,9 @@ def ingest(msg: dict) -> None:
             latest[key]["self_ts"] = msg["ts"]
         if "ready" in msg:   # marker_follow.py 준비 확인: 따라가기를 시작하면 ready 를 그만 보낸다
             latest[key]["ready_ts"] = msg["ts"]
-        if msg["from"] in offline:
+        # 로봇견이 직접 보낸 적이 있으면, 다시 온라인도 로봇견 자신의 메시지로만 판단한다
+        # (SLAM·brain 위치 메시지가 계속 오면 오프라인 ↔ 온라인 알림이 반복되므로)
+        if msg["from"] in offline and ("self_ts" not in latest[key] or latest[key]["self_ts"] == msg["ts"]):
             offline.discard(msg["from"])
             ingest({"type": "event", "from": "monitor", "level": "info", "text": f"Dog {msg['from']} 다시 온라인"})
     else:
@@ -174,7 +176,9 @@ async def watch_dogs() -> None:
         now = time.time()
         for key, msg in list(latest.items()):
             name = msg.get("from")
-            if key.startswith("dog:") and name not in offline and now - msg["ts"] > DOG_TIMEOUT:
+            # 로봇견이 직접 보낸 적이 있으면 그 시각(self_ts) 기준: SLAM 위치만 계속 와도 로봇견이 꺼진 걸 알린다
+            last = msg.get("self_ts", msg["ts"]) if key.startswith("dog:") else 0
+            if key.startswith("dog:") and name not in offline and now - last > DOG_TIMEOUT:
                 offline.add(name)
                 ingest({"type": "event", "from": "monitor", "level": "warn",
                         "text": f"Dog {name} 오프라인 ({DOG_TIMEOUT:.0f}초간 데이터 없음)"})

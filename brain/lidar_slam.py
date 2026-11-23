@@ -12,6 +12,7 @@ C1을 USB로 꽂고 들고 천천히 걸으면, 스캔끼리 맞춰서(스캔 �
     python brain/lidar_slam.py                     # 지도 창 띄우기 (s 저장, q 끝내기)
     python brain/lidar_slam.py --hub 127.0.0.1     # + 대시보드에 지도·현재 스캔·C1 위치 표시
     python brain/lidar_slam.py --hub 127.0.0.1 --no-window   # 창 없이 대시보드로만 (Pi·SSH용, Ctrl+C 로 끝)
+    python brain/lidar_slam.py --hub 127.0.0.1 --dog A       # C1을 A 등에 얹었을 때: SLAM 위치를 Dog A 위치로도 보냄
     python brain/lidar_slam.py --seconds 20        # 창 없이 20초 돌리고 지도 저장
 
 대시보드 전송 (--hub):
@@ -220,6 +221,11 @@ def push(mapper: Mapper, arena: Arena, sender: Sender, args, grid, path, state: 
         pts = to_points(rev, hd, 0.05, args.max, 0, args.flip)
         sender.udp_send({"type": "lidar", "from": "pi", "ts": round(now, 3), "origin": [round(x, 3), round(y, 3)],
                          "heading_deg": round(hd, 1), "points": pts})
+        if args.dog:
+            # C1 이 로봇견 등에 있으면 SLAM 위치 = 로봇견 위치. 위치만 보내서 로봇견이 직접 보내는
+            # 배터리·센서·state 값을 덮어쓰지 않는다 (허브가 dog 메시지를 합침)
+            sender.udp_send({"type": "dog", "from": args.dog, "ts": round(now, 3),
+                             "x": round(x, 3), "y": round(y, 3), "heading_deg": round(hd, 1)})
     if now - state.get("map", 0) >= 1.0:
         state["map"] = now
         msg = map_message(grid, path, mapper, arena, args.send_res)
@@ -308,6 +314,9 @@ def main() -> None:
     g.add_argument("--mount", type=float, default=90.0, help="시작할 때 C1 정면의 아레나 각도 (반시계, 90=위)")
     g.add_argument("--flip", action="store_true", help="좌우 반전 (lidar_bridge --tune 에서 반전을 켰다면)")
     g.add_argument("--send-res", type=float, default=0.04, help="대시보드로 보내는 지도 칸 크기 m")
+    g.add_argument("--dog", choices=["A", "B", "C"],
+                   help="C1 을 얹은 로봇견: SLAM 위치를 그 개의 dog 메시지(x, y, heading_deg)로도 5 Hz 전송. "
+                        "C1 정면을 개 머리 방향과 맞춰 얹고, 시작할 때 개 위치·방향을 --origin·--mount 로")
     args = ap.parse_args()
 
     port = args.port or find_port()
@@ -330,9 +339,12 @@ def main() -> None:
     mapper = Mapper(lidar, args.map_px, args.map_m, args.max, args.flip)
     arena = Arena(args.origin, args.mount, args.map_m)
     sender = Sender(args.hub, args.http_port, args.udp_port, args.token) if args.hub else None
+    if args.dog and not sender:
+        sys.exit("--dog 는 --hub 와 같이 써야 합니다")
     if sender:
         print(f"대시보드로 전송: 지도 {sender.url} (1초), 스캔 udp://{args.hub}:{args.udp_port} (5 Hz) · "
-              f"시작 위치 {args.origin}, 방향 {args.mount:g}°" + (", 반전" if args.flip else ""))
+              f"시작 위치 {args.origin}, 방향 {args.mount:g}°" + (", 반전" if args.flip else "")
+              + (f" · Dog {args.dog} 위치로도 보냄" if args.dog else ""))
     th = threading.Thread(target=mapper.run, daemon=True)
     th.start()
     out = Path(args.out)
