@@ -21,12 +21,14 @@ Pi 에서 (모니터 서버가 CAMERAS="A=http://<카메라-IP>:81/stream" 으�
 import argparse
 import json
 import socket
+import threading
 import time
+import urllib.request
 
 import cv2
 from ultralytics import YOLO
 
-from marker_follow import LatestFrame, MONITOR_PORT
+from marker_follow import MONITOR_HTTP, LatestFrame, MONITOR_PORT
 from pose_rules import RANK, Classifier
 
 EDGES = [(5, 6), (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12), (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
@@ -46,8 +48,58 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--kp-conf", type=float, default=0.5, help="몸 점 신뢰도가 이보다 낮으면 안 보이는 점으로 보고, 그 점을 쓰는 규칙은 건너뜀")
     p.add_argument("--rate", type=float, default=8.0, help="최대 추론 횟수 (Hz). 속도 규칙은 시각으로 계산해서 낮춰도 된다")
     p.add_argument("--no-detect", action="store_true", help="detect 메시지는 보내지 않음 (person_detect.py 를 따로 돌릴 때)")
+    p.add_argument("--blur-ratio", type=float, default=0.5,
+                   help="선명도가 최근 프레임 중간값의 이 비율보다 낮으면 흐린 프레임으로 보고 행동 판단에서 뺌 (0 = 끔)")
+    p.add_argument("--settle", type=float, default=1.0,
+                   help="카메라를 단 로봇견이 멈춘 뒤 이 시간(초) 동안은 아직 움직이는 중으로 봄 (흔들림이 가라앉을 때까지)")
     p.add_argument("--show", action="store_true", help="카메라 화면 창 띄우기 (q: 종료)")
     return p.parse_args()
+
+
+class Sharpness:
+    """흐린 프레임 고르기. 선명도 = 라플라시안 분산 (가장자리가 뚜렷할수록 큼).
+    카메라·조명·장면마다 값의 크기가 달라서 고정값 대신 최근 프레임들의 중간값과 비교한다."""
+
+    def __init__(self, ratio: float, keep: int = 30):
+        self.ratio, self.keep, self.recent = ratio, keep, []
+
+    def blurry(self, frame) -> tuple[bool, float]:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if gray.shape[1] > 320:   # 줄여서 재면 빠르고, 흔들림 블러를 보기에는 충분하다
+            gray = cv2.resize(gray, (320, int(gray.shape[0] * 320 / gray.shape[1])), interpolation=cv2.INTER_AREA)
+        s = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        ref = sorted(self.recent)[len(self.recent) // 2] if len(self.recent) >= 5 else None
+        self.recent = (self.recent + [s])[-self.keep:]
+        return bool(self.ratio > 0 and ref is not None and s < self.ratio * ref), s
+
+
+class CamMotion:
+    """카메라를 단 로봇견이 움직이는 중인지, 모니터 서버 /api/dogs 의 state 로 0.3초마다 확인한다.
+    moving(dog_cmd.py) · follow·search(marker_follow.py) 를 움직임으로 보고, 멈춘 뒤 settle 초까지 움직이는 중으로 둔다.
+    --monitor 가 없거나 서버가 응답하지 않으면 모름 → 움직이지 않는 것으로 본다 (예전과 같은 판단)."""
+
+    MOVING = {"moving", "follow", "search"}
+
+    def __init__(self, monitor: str | None, name: str, settle: float):
+        self.url = f"http://{monitor}:{MONITOR_HTTP}/api/dogs" if monitor else None
+        self.name, self.settle = name, settle
+        self.until = 0.0
+        if self.url:
+            threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        while True:
+            try:
+                with urllib.request.urlopen(self.url, timeout=1) as r:
+                    state = json.load(r)["dogs"].get(self.name, {}).get("state")
+                if state in self.MOVING:
+                    self.until = time.time() + self.settle
+            except Exception:
+                pass
+            time.sleep(0.3)
+
+    def moving(self) -> bool:
+        return time.time() < self.until
 
 
 def top_action(active):
@@ -82,7 +134,9 @@ def main() -> None:
     people: dict[int, Classifier] = {}   # 추적 번호 -> 판정기
     last_seen: dict[int, float] = {}
     last_label: dict[int, str] = {}      # 터미널에는 행동이 바뀔 때만 찍는다
-    seen, last_new, last_log, runs = 0, time.time(), time.time(), 0
+    sharp = Sharpness(a.blur_ratio)
+    cam_motion = CamMotion(a.monitor, a.name, a.settle)
+    seen, last_new, last_log, runs, blurred = 0, time.time(), time.time(), 0, 0
     while True:
         t0 = time.time()
         seq, frame = cam.get()
@@ -94,6 +148,10 @@ def main() -> None:
             continue
         seen, last_new = seq, t0
         fh, fw = frame.shape[:2]
+        # 흐린 프레임: 사람 박스·추적은 계속하되, 몸 점이 튀어 속도가 잘못 나오므로 행동 판단(pose)에는 넣지 않는다
+        blurry, _ = sharp.blurry(frame)
+        blurred += blurry
+        moving = cam_motion.moving()
 
         # persist=True: 프레임 사이에 추적 상태를 이어 가서 같은 사람에게 같은 번호를 붙인다
         r = model.track(frame, imgsz=a.imgsz, conf=a.conf, persist=True, verbose=False)[0]
@@ -105,12 +163,12 @@ def main() -> None:
             for track, box, conf, xyn, kc in zip(ids, r.boxes.xyxyn.tolist(), r.boxes.conf.tolist(),
                                                  r.keypoints.xyn.tolist(), r.keypoints.conf.tolist()):
                 boxes.append([round(v, 3) for v in box] + [round(conf, 2), track])
-                if track is None:   # 추적 번호가 붙기 전(처음 한두 프레임)은 이전 자세와 비교할 수 없다
+                if track is None or blurry:   # 추적 번호가 붙기 전(처음 한두 프레임)은 이전 자세와 비교할 수 없다
                     continue
                 vis = [c >= a.kp_conf for c in kc]
                 # 규칙은 화면 높이 단위 좌표를 쓴다 (가로세로 비율 때문에 각도가 틀어지지 않게)
                 k = [(x * fw / fh, y) for x, y in xyn]
-                out = people.setdefault(track, Classifier()).classify(t0, k, vis)
+                out = people.setdefault(track, Classifier()).classify(t0, k, vis, cam_moving=moving)
                 last_seen[track] = t0
                 top = top_action(out["active"])
                 msg = {"type": "pose", "from": a.name, "track": track, "level": out["risk"], "confidence": round(conf, 2),
@@ -135,8 +193,9 @@ def main() -> None:
             people.pop(track, None), last_seen.pop(track, None), last_label.pop(track, None)
 
         if t0 - last_log >= 10:   # 성능 확인용
-            print(f"[{runs / (t0 - last_log):.1f} 회/초 추론 · 추적 중 {len(people)}명]", flush=True)
-            last_log, runs = t0, 0
+            print(f"[{runs / (t0 - last_log):.1f} 회/초 추론 · 추적 중 {len(people)}명 · 흐린 프레임 {blurred}장 제외"
+                  + (" · 개 이동 중: 돌진·배회 판단 끔" if moving else "") + "]", flush=True)
+            last_log, runs, blurred = t0, 0, 0
 
         if view is not None:
             cv2.imshow("pose_detect", view)

@@ -1,6 +1,12 @@
 """몸 점 17개(YOLO11n-pose, COCO 순서)로 위험 행동 9가지를 판정하는 규칙.
 
 web/mockups/cam_mock.js 의 Classifier 를 그대로 옮긴 것이다. 숫자(기울기 55°, 속도 1.2 등)를 바꾸면 그쪽도 같이 바꾼다.
+
+흔들림 대책 (로봇견에 달린 카메라는 걸을 때 흔들린다):
+- 손목·발목 속도는 화면 기준이 아니라 몸 기준점(body_ref, 어깨·엉덩이 가운데) 기준이다.
+  카메라가 흔들리면 몸 전체가 같이 움직이므로 그 몫이 빠진다 (cam_mock.js 도 같음).
+- 개가 움직이는 동안(cam_moving)은 rush·loiter 를 판단하지 않는다 (pose_detect.py 가 /api/dogs 로 알려 줌).
+- 흐린 프레임은 pose_detect.py 가 판단에 넣지 않는다.
 규칙 설명은 web/mockups/danger_actions.html.
 
 좌표는 화면 높이 단위다: y 는 0~1, x 는 (픽셀 x / 화면 높이). 가로세로 비율이 달라도 각도가 틀어지지 않게 하려는 것이다.
@@ -50,6 +56,19 @@ def box_of(k):
     return [max(0, x0 - pad_x), max(0, y0 - pad_y), x1 + pad_x, min(1, y1 + 0.02)]
 
 
+def body_ref(k, vis=None):
+    """몸 기준점: 속도를 이 점 기준으로 재면 카메라 흔들림(몸 전체가 같이 움직인 몫)이 빠진다.
+    어깨·엉덩이 가운데 → 엉덩이 가운데 → 어깨 가운데 순으로, 보이는 점으로 고른다. 다 안 보이면 None(화면 기준)."""
+    ok = (lambda idx: True) if vis is None else (lambda idx: all(vis[i] for i in idx))
+    if ok((5, 6, 11, 12)):
+        return lambda p: mid(mid(p[5], p[6]), mid(p[11], p[12]))
+    if ok((11, 12)):
+        return lambda p: mid(p[11], p[12])
+    if ok((5, 6)):
+        return lambda p: mid(p[5], p[6])
+    return None
+
+
 def features(k):
     sh, hp = mid(k[5], k[6]), mid(k[11], k[12])
     box = box_of(k)
@@ -69,8 +88,10 @@ class Classifier:
         self.last_dir = 0
         self.dir_changes = []
 
-    def classify(self, t, k, vis=None):
+    def classify(self, t, k, vis=None, cam_moving=False):
         """t: 초, k: 몸 점 17개 [(x, y)], vis: 몸 점마다 보이는지 (없으면 모두 보임).
+        cam_moving: 카메라를 단 로봇견이 움직이는 중. 화면 속 크기·위치 변화가 카메라 때문일 수 있어
+        rush(돌진)·loiter(배회)를 판단하지 않는다.
         반환: {"active": [{id, ko, level, why, held}], "risk": 가장 높은 위험도, "f": 몸 특징, "m": 규칙에 쓴 숫자}"""
         f = features(k)
         hist = self.hist
@@ -89,8 +110,13 @@ class Classifier:
         H = max(0.1, f["body"])
         upright = f["torso"] < 40 and p1["f"]["torso"] < 40   # 서 있는 동안만 판단하는 동작용
 
-        def speed(i):   # 초당 키의 몇 배
-            return dist(k[i], p03["k"][i]) / dt / H
+        ref = body_ref(k, vis)
+        c_now, c_then = (ref(k), ref(p03["k"])) if ref else ((0.0, 0.0), (0.0, 0.0))
+
+        def speed(i):   # 초당 키의 몇 배. 몸 기준점에 대한 속도라 카메라가 흔들려 몸 전체가 같이 움직인 몫은 빠진다
+            now = (k[i][0] - c_now[0], k[i][1] - c_now[1])
+            then = (p03["k"][i][0] - c_then[0], p03["k"][i][1] - c_then[1])
+            return dist(now, then) / dt / H
 
         motion = sum(speed(i) for i in (5, 6, 9, 10, 11, 12, 15, 16)) / 8
         raw, why = {}, {}
@@ -114,7 +140,7 @@ class Classifier:
         why["kick"] = f"발목 높이 > 무릎 · 발목 속도 {max(speed(15), speed(16)):.1f}"
         grow = (f["body"] - p1["f"]["body"]) / max(0.05, p1["f"]["body"])
         legs_straight = p1["f"]["kneeL"] > 140 and p1["f"]["kneeR"] > 140   # 웅크렸다 일어서는 것과 구분
-        raw["rush"] = grow > 0.25 and upright and legs_straight
+        raw["rush"] = grow > 0.25 and upright and legs_straight and not cam_moving   # 개가 다가가도 커 보이므로
         why["rush"] = f"몸 크기 1초에 {grow * 100:.0f}% 커짐"
 
         def arm_out(s, w):
@@ -129,13 +155,17 @@ class Classifier:
         # 배회: 가로 방향이 바뀐 횟수. 팔다리 흔들림이 아닌 골반 위치로 걷는 방향을 본다
         vx = f["hipX"] - p1["f"]["hipX"]
         d = 0 if abs(vx) < 0.02 else (1 if vx > 0 else -1)
-        if d and self.last_dir and d != self.last_dir:
-            self.dir_changes.append(t)
-        if d:
-            self.last_dir = d
+        if cam_moving:
+            # 개가 돌면 사람이 옆으로 움직인 것처럼 보인다: 방향 바뀜을 세지 않고, 멈춘 뒤 처음부터 다시 본다
+            self.last_dir = 0
+        else:
+            if d and self.last_dir and d != self.last_dir:
+                self.dir_changes.append(t)
+            if d:
+                self.last_dir = d
         self.dir_changes = [x for x in self.dir_changes if t - x < 20]
         walking = abs(vx) > 0.03 and upright   # 지금도 옆으로 걷는 중일 때만
-        raw["loiter"] = len(self.dir_changes) >= 3 and walking
+        raw["loiter"] = len(self.dir_changes) >= 3 and walking and not cam_moving
         why["loiter"] = f"20초 안 방향 바꿈 {len(self.dir_changes)}번"
 
         if vis is not None:

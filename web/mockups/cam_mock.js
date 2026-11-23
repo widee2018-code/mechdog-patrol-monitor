@@ -157,7 +157,11 @@
       const dt = Math.max(1e-3, t - p03.t);
       const H = Math.max(0.1, f.body);
       const upright = f.torso < 40 && p1.f.torso < 40;   // 서 있는 동안만 판단하는 동작용
-      const speed = (i) => dist(k[i], p03.k[i]) / dt / H;   // 초당 키의 몇 배
+      // 초당 키의 몇 배. 몸 기준점(어깨·엉덩이 가운데)에 대한 속도라 카메라 흔들림(몸 전체가 같이 움직인 몫)은 빠진다
+      // (brain/pose_rules.py 의 body_ref 와 같음. 가짜 데이터는 모든 점이 보이므로 어깨·엉덩이 가운데만 쓴다)
+      const ref = (p) => mid(mid(p[5], p[6]), mid(p[11], p[12]));
+      const cNow = ref(k), cThen = ref(p03.k);
+      const speed = (i) => dist([k[i][0] - cNow[0], k[i][1] - cNow[1]], [p03.k[i][0] - cThen[0], p03.k[i][1] - cThen[1]]) / dt / H;
       const motion = [5, 6, 9, 10, 11, 12, 15, 16].reduce((s, i) => s + speed(i), 0) / 8;
       const raw = {};
       const why = {};
