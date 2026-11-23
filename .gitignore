@@ -30,3 +30,6 @@ firmware/secrets.py
 
 # Local archive of old documents
 archive/
+
+# Raspberry Pi 5 handling notes (local only)
+PI5_HANDLING.md
