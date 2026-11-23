@@ -41,14 +41,15 @@ CAM_HFOV = 62.0    # 카메라 가로 화각 (brain/marker_follow.py --hfov)
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 MAX_EVENTS = 200
 MAX_EVIDENCE = 24
+MAX_FACES = 30      # 추론 탭 '얼굴 기록': 새로 연 화면에도 최근 얼굴 사진이 보이게 메모리에만 기억 (서버를 끄면 사라짐, 디스크·Supabase 저장 안 함)
 DOG_TIMEOUT = 3.0   # 이 시간(초) 동안 메시지가 없으면 로봇견을 오프라인으로 표시
 INGEST_TOKEN = os.environ.get("INGEST_TOKEN", "")
 
 # "최신 값 하나"가 아니라 목록으로 보관하는 메시지 종류.
-HISTORY_TYPES = {"event": MAX_EVENTS}
+HISTORY_TYPES = {"event": MAX_EVENTS, "face": MAX_FACES}
 
 latest: dict[str, dict] = {}       # "dog:A" -> 마지막 로봇견 메시지, "lidar:pi" -> 마지막 스캔, ...
-history: dict[str, list] = {"event": [], "evidence": []}
+history: dict[str, list] = {"event": [], "evidence": [], "face": []}
 clients: set[WebSocket] = set()
 offline: set[str] = set()          # 이미 오프라인으로 알린 로봇견
 
@@ -503,7 +504,7 @@ async def ws_endpoint(ws: WebSocket):
     clients.add(ws)
     # 새로 연 대시보드가 비어 있지 않도록 현재 상태를 다시 보낸다.
     now = time.time()
-    for msg in [*history["event"], *history["evidence"], *latest.values()]:
+    for msg in [*history["event"], *history["evidence"], *history["face"], *latest.values()]:
         if msg["type"] == "detect" and now - msg["ts"] > DETECT_HOLD:
             continue   # 끝난 발견을 다시 보내면 새 화면에 "발견" 불이 잠깐 켜진다
         await ws.send_text(json.dumps(msg))

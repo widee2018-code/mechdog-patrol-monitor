@@ -8,6 +8,10 @@
     pose    사람마다 프레임마다. 위험 행동이 있으면 action(가장 위험한 것) 과 level, 없으면 action 없음
             {"type": "pose", "from": "A", "track": 3, "action": "fall", "level": "high", "why": "몸 기울기 72° ...",
              "actions": [...], "confidence": 0.81, "box": [x1, y1, x2, y2], "keypoints": [[x, y, 신뢰도] x 17]}
+    face    사람마다 얼굴 사진 한 장 (더 크게 잡히면 바꿔서 최대 3장). 사진이 커서 HTTP /api/ingest 로 보낸다
+            {"type": "face", "from": "A", "track": 3, "px": 62, "box": [...], "image": "data:image/jpeg;base64,..."}
+            추론 탭 '얼굴 기록'에만 잠시 뜬다: 허브 메모리(최근 30장)에만 있고 서버를 끄면 사라진다.
+            Supabase 에는 저장하지 않는다 (recorder 는 face 메시지를 기록하지 않음). --no-faces 로 끔
     좌표는 모두 화면 비율 0~1.
 
 노트북 웹캠으로 연습 (메시지는 터미널에만 표시):
@@ -19,7 +23,9 @@ Pi 에서 (모니터 서버가 CAMERAS="A=http://<카메라-IP>:81/stream" 으�
         --camera http://<서버-IP>:8000/api/camera/A/stream --monitor <서버-IP>
 """
 import argparse
+import base64
 import json
+import os
 import socket
 import threading
 import time
@@ -52,6 +58,11 @@ def parse_args() -> argparse.Namespace:
                    help="선명도가 최근 프레임 중간값의 이 비율보다 낮으면 흐린 프레임으로 보고 행동 판단에서 뺌 (0 = 끔)")
     p.add_argument("--settle", type=float, default=1.0,
                    help="카메라를 단 로봇견이 멈춘 뒤 이 시간(초) 동안은 아직 움직이는 중으로 봄 (흔들림이 가라앉을 때까지)")
+    p.add_argument("--no-faces", action="store_true",
+                   help="얼굴 사진(face 메시지)을 보내지 않음. 보내면 추론 탭 '얼굴 기록'에만 잠시 뜬다 (서버 메모리, Supabase 저장 안 함)")
+    p.add_argument("--face-min-px", type=int, default=40, help="얼굴 너비가 이보다 작으면 사진을 남기지 않음 (알아보기 어려움)")
+    p.add_argument("--token", default=os.environ.get("INGEST_TOKEN", ""),
+                   help="허브의 INGEST_TOKEN (설정했을 때만). 얼굴 사진은 HTTP /api/ingest 로 보낸다")  # allow-secret: 환경 변수 이름일 뿐
     p.add_argument("--show", action="store_true", help="카메라 화면 창 띄우기 (q: 종료)")
     return p.parse_args()
 
@@ -102,6 +113,77 @@ class CamMotion:
         return time.time() < self.until
 
 
+class FaceShots:
+    """사람(추적 번호)마다 얼굴 사진을 잘라 face 메시지로 보낸다. 얼굴 판정 모델이 아직 없어
+    머리 몸 점(코·눈·귀)으로 얼굴 부분을 어림한다 (web/infer.js 의 faceRect 와 같은 계산).
+    한 사람에 한 장이 기본이고, 얼굴이 1.3배 이상 크게 잡히면 더 좋은 사진으로 바꿔 보낸다 (사람당 최대 3장, 2초 간격).
+    사진은 UDP 한 개(약 8 KB)에 안 들어가므로 HTTP /api/ingest 로, 화면이 멈추지 않게 별도 스레드에서 보낸다."""
+
+    OUT_PX = 160     # 보내는 사진 크기 (정사각형)
+    MAX_PER = 3
+    GAP_SEC = 2.0
+    BETTER = 1.3
+
+    def __init__(self, monitor: str | None, token: str, name: str, min_px: int, kp_conf: float):
+        self.url = f"http://{monitor}:{MONITOR_HTTP}/api/ingest" if monitor else None
+        self.headers = {"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {})}
+        self.name, self.min_px, self.kp_conf = name, min_px, kp_conf
+        self.sent: dict[int, dict] = {}   # track -> {n, px, t}
+        self.warned = False
+
+    def crop(self, frame, xyn, kc):
+        """머리 몸 점으로 얼굴 정사각형을 자른다. (사진, 얼굴 너비 px, 박스 0~1) 또는 None."""
+        fh, fw = frame.shape[:2]
+        pts = [(xyn[i][0] * fw, xyn[i][1] * fh) for i in range(5) if kc[i] >= self.kp_conf]
+        if len(pts) < 2:
+            return None
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+        px = max(max(xs) - min(xs), max(ys) - min(ys)) * 1.6   # 귀~귀(또는 눈~눈) 거리로 어림한 얼굴 너비
+        if px < self.min_px:
+            return None
+        side = px * 1.6
+        x0, y0 = int(max(0, cx - px * 0.8)), int(max(0, cy - px * 0.75))
+        x1, y1 = int(min(fw, x0 + side)), int(min(fh, y0 + side))
+        if x1 - x0 < self.min_px or y1 - y0 < self.min_px:   # 화면 가장자리에 거의 잘린 얼굴
+            return None
+        img = cv2.resize(frame[y0:y1, x0:x1], (self.OUT_PX, self.OUT_PX), interpolation=cv2.INTER_AREA)
+        return img, px, [round(x0 / fw, 3), round(y0 / fh, 3), round(x1 / fw, 3), round(y1 / fh, 3)]
+
+    def offer(self, t: float, track: int, frame, xyn, kc) -> None:
+        if not self.url:
+            return
+        s = self.sent.get(track)
+        if s and (s["n"] >= self.MAX_PER or t - s["t"] < self.GAP_SEC):
+            return
+        got = self.crop(frame, xyn, kc)
+        if not got:
+            return
+        img, px, box = got
+        if s and px < s["px"] * self.BETTER:   # 이미 보낸 사진보다 크게 나아진 게 아니면 보내지 않는다
+            return
+        ok, jpg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not ok:
+            return
+        self.sent[track] = {"n": (s["n"] if s else 0) + 1, "px": px, "t": t}
+        msg = {"type": "face", "from": self.name, "track": track, "ts": round(t, 3), "px": round(px),
+               "box": box, "image": "data:image/jpeg;base64," + base64.b64encode(jpg.tobytes()).decode()}
+        threading.Thread(target=self._post, args=(msg,), daemon=True).start()
+
+    def _post(self, msg: dict) -> None:
+        try:
+            req = urllib.request.Request(self.url, json.dumps(msg).encode(), self.headers, method="POST")
+            urllib.request.urlopen(req, timeout=3).read()
+            self.warned = False
+        except Exception as e:
+            if not self.warned:
+                print(f"얼굴 사진 전송 실패 ({self.url}): {e}", flush=True)
+                self.warned = True
+
+    def forget(self, track: int) -> None:
+        self.sent.pop(track, None)
+
+
 def top_action(active):
     """확정된 위험 행동 중 가장 위험한 것. 같으면 danger_actions.html 순서가 앞선 것."""
     real = [a for a in active if a["level"] != "pending"]
@@ -136,6 +218,7 @@ def main() -> None:
     last_label: dict[int, str] = {}      # 터미널에는 행동이 바뀔 때만 찍는다
     sharp = Sharpness(a.blur_ratio)
     cam_motion = CamMotion(a.monitor, a.name, a.settle)
+    faces = None if a.no_faces else FaceShots(a.monitor, a.token, a.name, a.face_min_px, a.kp_conf)
     seen, last_new, last_log, runs, blurred = 0, time.time(), time.time(), 0, 0
     while True:
         t0 = time.time()
@@ -170,6 +253,8 @@ def main() -> None:
                 k = [(x * fw / fh, y) for x, y in xyn]
                 out = people.setdefault(track, Classifier()).classify(t0, k, vis, cam_moving=moving)
                 last_seen[track] = t0
+                if faces:   # 흐린 프레임은 위에서 이미 건너뛰었다
+                    faces.offer(t0, track, frame, xyn, kc)
                 top = top_action(out["active"])
                 msg = {"type": "pose", "from": a.name, "track": track, "level": out["risk"], "confidence": round(conf, 2),
                        "actions": [{"id": x["id"], "level": x["level"], "why": x["why"]} for x in out["active"]],
@@ -191,6 +276,8 @@ def main() -> None:
 
         for track in [n for n, ts in last_seen.items() if t0 - ts > FORGET_SEC]:
             people.pop(track, None), last_seen.pop(track, None), last_label.pop(track, None)
+            if faces:
+                faces.forget(track)
 
         if t0 - last_log >= 10:   # 성능 확인용
             print(f"[{runs / (t0 - last_log):.1f} 회/초 추론 · 추적 중 {len(people)}명 · 흐린 프레임 {blurred}장 제외"

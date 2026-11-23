@@ -21,6 +21,13 @@
 .live { font-size: 11px; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
 .live.on { color: var(--ok); border-color: rgba(62,207,142,.4); }
 .hint { margin: 0; font-size: 12px; color: var(--muted); }
+.half > .card { margin-top: 12px; }
+.faces { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; max-height: 420px; overflow: auto; }
+.fc { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 6px; font-size: 12px; min-width: 0; }
+.fc.now { border-color: var(--info); box-shadow: 0 0 0 1px var(--info); }
+.fc img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 7px; display: block; background: #000; }
+.fc .n { font-weight: 700; margin: 5px 0 1px; display: flex; justify-content: space-between; gap: 4px; }
+.fc .s { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .pages { position: fixed; right: 14px; bottom: 14px; z-index: 50; display: flex; gap: 4px; padding: 5px; border-radius: 999px;
   background: rgba(20,24,32,.92); box-shadow: 0 4px 18px rgba(0,0,0,.35); font: 700 14px var(--font, system-ui, sans-serif); }
 .pages a { padding: 8px 18px; border-radius: 999px; text-decoration: none; color: #d6dde8; }
@@ -31,7 +38,7 @@
 </head>
 <body>
 <header class="top">
-  <div class="brand"><b>추론</b><small>왼쪽 얼굴 추론 · 오른쪽 행동 추론 · 같은 Dog <span id="camName">A</span> 카메라</small></div>
+  <div class="brand"><b>추론</b><small>왼쪽 얼굴 기록 · 오른쪽 행동 추론 · 같은 Dog <span id="camName">A</span> 카메라</small></div>
   <span class="live" id="conn">연결 끊김</span><span class="live" id="camLive">영상 —</span>
   <a href="mockups/danger_actions.html" style="margin-left:auto;color:var(--info);font-size:12.5px">위험 행동 목록 →</a>
   <a href="mockups/combo2.html" style="color:var(--muted);font-size:12.5px">가짜 데이터 시안</a>
@@ -39,10 +46,12 @@
 <div class="band" id="band" aria-live="polite"></div>
 <div class="halves">
   <section class="half" aria-label="얼굴 추론">
-    <div class="hh"><b>👤 얼굴 추론</b><small>머리 몸 점으로 얼굴 부분을 잘라 크게 보여 줘요</small></div>
+    <div class="hh"><b>👤 얼굴 추론</b><small>머리 몸 점으로 얼굴 부분을 잘라 크게 보여 주고, 사람마다 사진 한 장을 기록해요</small></div>
     <div class="cam"><canvas id="cvF"></canvas><span class="tag" id="tagF">—</span></div>
-    <div id="kb"></div>
-    <p class="hint" id="faceHint">얼굴 판정(face 메시지)이 아직 없어요. 얼굴 등록과 판정(3·4단계)을 하면 칸반이 채워져요. 지금은 얼굴이 몇 px로 잡히는지만 보여 줘요 (40px 미만이면 판정 보류).</p>
+    <div class="card"><h3><span>얼굴 기록</span><span class="muted" id="faceN">0명</span></h3>
+      <div class="faces" id="faces"></div>
+      <p class="hint" id="faceHint">아직 기록된 얼굴이 없어요. pose_detect.py가 얼굴을 40px 이상으로 잡으면 사람마다 사진이 한 장씩 올라와요 (더 크게 잡히면 더 좋은 사진으로 바뀜). 사진은 서버 메모리에만 잠시 있고, 서버를 끄면 사라져요 (Supabase에 저장하지 않음).</p>
+    </div>
   </section>
   <section class="half" aria-label="행동 추론">
     <div class="hh"><b>🏃 행동 추론</b><small>위험 행동이 켜질 때마다 한 줄</small></div>

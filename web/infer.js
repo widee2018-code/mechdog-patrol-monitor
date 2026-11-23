@@ -1,14 +1,17 @@
 // 추론 화면: hub /ws 의 pose · face 메시지와 /api/camera/<이름>/stream 영상으로 그린다 (docs/message_schema.md).
-// 위험 행동 목록 · 범인 조건 · 그리기 도구는 시안의 cam_mock.js 를 같이 쓴다 (가짜 데이터 부분은 쓰지 않음).
+// 위험 행동 목록 · 그리기 도구는 시안의 cam_mock.js 를 같이 쓴다 (가짜 데이터 부분은 쓰지 않음).
+// 얼굴: face 메시지(brain/pose_detect.py 가 머리 몸 점으로 자른 사진)를 사람마다 한 장씩 '얼굴 기록'에 보여 준다.
+//       사진은 허브 메모리(최근 30장)와 이 화면에만 잠시 있다. 서버를 끄면 사라지고, Supabase 에는 저장하지 않는다.
+//       범인·미등록 판정은 하지 않는다.
 (function () {
   "use strict";
   const M = window.CamMock;
   const CAM = new URLSearchParams(location.search).get("cam") || "A";   // infer.html?cam=B
   const STALE_MS = 1000;      // 이 시간 동안 pose 가 안 오면 그 사람은 화면에서 지운다
   const KP_CONF = 0.5;        // 몸 점 신뢰도가 이보다 낮으면 안 보이는 점 (brain/pose_detect.py --kp-conf)
-  const FACE_MIN_PX = 40;     // 얼굴이 이보다 작으면 판정 보류 (cam_mock.js FACE_RULE.minPx)
+  const FACE_MIN_PX = 40;     // 얼굴이 이보다 작으면 사진을 남기지 않음 (brain/pose_detect.py --face-min-px)
+  const SAME_PERSON_SEC = 60; // 같은 추적 번호라도 이보다 오래 떨어져 온 얼굴은 다른 사람(새 카드)으로 본다
   const RISK_COL = { none: "#3ecf8e", low: "#f5b942", mid: "#ff8a3d", high: "#ff5a52" };
-  const V = M.COMBO_VERDICT;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const fmt = (ms) => new Date(ms).toLocaleTimeString("en-GB", { hour12: false });   // 17:22:38 (관제실 app.js 와 같음)
@@ -17,8 +20,10 @@
     connected: false, camOnline: false,
     pose: new Map(),     // track -> { m(마지막 pose 메시지), seen }
     lastAct: new Map(),  // track -> 마지막으로 기록한 action (바뀔 때만 행동 기록에 한 줄)
-    people: new Map(),   // track -> { state(face verdict), first, last, acts:Set, hue, why }
-    log: [],             // { ms, kind: act|culprit, level, text }
+    acts: new Map(),     // track -> 켜졌던 위험 행동 id Set (얼굴 카드에 같이 보여 줌)
+    faces: new Map(),    // 카드 키 -> { track, img, px, first, last }  ('얼굴 기록', 사람마다 한 장)
+    faceVer: 0,          // 얼굴 기록이 바뀔 때마다 1씩 (목록을 바뀔 때만 다시 그리려고)
+    log: [],             // { ms, level, text }
   };
   $("camName").textContent = CAM;
 
@@ -29,36 +34,45 @@
     const prev = S.lastAct.get(m.track);
     if (m.action && m.action !== prev) {
       const d = M.DANGER_BY_ID[m.action];
-      addLog(now, "act", m.level, `사람 #${m.track} ${d ? d.ko : m.action}${M.RESCUE_IDS.includes(m.action) ? " · 구조 필요할 수 있음" : ""}${m.why ? ` (${m.why})` : ""}`);
-      const p = S.people.get(m.track);
-      if (p) p.acts.add(m.action);
+      addLog(now, m.level, `사람 #${m.track} ${d ? d.ko : m.action}${M.RESCUE_IDS.includes(m.action) ? " · 구조 필요할 수 있음" : ""}${m.why ? ` (${m.why})` : ""}`);
+      if (!S.acts.has(m.track)) S.acts.set(m.track, new Set());
+      S.acts.get(m.track).add(m.action);
+      S.faceVer++;
     }
     S.lastAct.set(m.track, m.action || null);
   }
+  // 얼굴 사진: 같은 사람(추적 번호, 1분 안)이면 카드의 사진을 더 좋은(큰) 것으로 바꾸고, 아니면 새 카드
   function onFace(m) {
-    const now = Date.now();
-    const p = S.people.get(m.track) || { first: now, acts: new Set(), hue: (m.track * 67) % 360 };
-    const was = p.state;
-    Object.assign(p, { state: m.verdict, last: now, why: m.why, box: m.box });
-    S.people.set(m.track, p);
-    if (m.verdict === "culprit" && was !== "culprit") addLog(now, "culprit", "high", `🚨 범인 · 사람 #${m.track}${m.why ? ` (${m.why})` : ""}`);
+    const ms = (m.ts ?? Date.now() / 1000) * 1000;
+    let key = null;
+    for (const [k, f] of S.faces) if (f.track === m.track && Math.abs(ms - f.last) < SAME_PERSON_SEC * 1000) key = k;
+    const f = key ? S.faces.get(key) : { track: m.track, first: ms };
+    // 사진은 순서가 바뀌어 도착할 수 있으므로 늦게 온 것이 아니라 얼굴이 더 크게(선명하게) 잡힌 것을 남긴다
+    if (!f.img || (m.px ?? 0) >= (f.px ?? 0)) Object.assign(f, { img: m.image, px: m.px });
+    f.first = Math.min(f.first, ms);
+    f.last = Math.max(f.last ?? ms, ms);
+    S.faces.set(key || `${m.track}@${ms}`, f);
+    while (S.faces.size > 30) S.faces.delete(S.faces.keys().next().value);   // 허브 MAX_FACES 와 같음
+    S.faceVer++;
   }
-  function addLog(ms, kind, level, text) {
-    S.log.unshift({ ms, kind, level, text });
+  function addLog(ms, level, text) {
+    S.log.unshift({ ms, level, text });
     if (S.log.length > 60) S.log.pop();
   }
 
   function connect() {
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
-    ws.onopen = () => { S.connected = true; };
+    // 다시 연결되면 얼굴 기록을 비우고 허브가 가진 것만 다시 받는다: 서버를 껐다 켜면 열려 있던 화면에서도 사라지게
+    ws.onopen = () => { S.connected = true; S.faces.clear(); S.faceVer++; };
     ws.onclose = () => { S.connected = false; setTimeout(connect, 1500); };
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
       if (m.from !== CAM) return;
-      // 새로 연결하면 서버가 마지막 메시지를 다시 보낸다. 오래된 것은 지금 상태가 아니므로 건너뛴다
-      if ((m.type === "pose" || m.type === "face") && Date.now() / 1000 - (m.ts ?? 0) > 2) return;
+      // 새로 연결하면 서버가 마지막 메시지를 다시 보낸다. 오래된 pose 는 지금 상태가 아니므로 건너뛴다
+      // (얼굴 사진은 기록이라 지난 것도 받는다: 서버가 최근 30장을 다시 보내 줌)
+      if (m.type === "pose" && Date.now() / 1000 - (m.ts ?? 0) > 2) return;
       if (m.type === "pose" && m.track != null) onPose(m);
-      else if (m.type === "face" && m.track != null && V[m.verdict]) onFace(m);
+      else if (m.type === "face" && m.track != null && m.image) onFace(m);
     };
   }
 
@@ -113,7 +127,7 @@
     }
   }
 
-  // 얼굴 화면: 머리 몸 점(코 · 눈 · 귀)으로 얼굴 부분을 영상에서 잘라 크게. face 메시지에 box 가 있으면 그것을 쓴다
+  // 얼굴 화면: 머리 몸 점(코 · 눈 · 귀)으로 얼굴 부분을 영상에서 잘라 크게 (pose_detect.py FaceShots.crop 과 같은 계산)
   function faceRect(m, iw, ih) {
     const k = m.keypoints || [], pts = [0, 1, 2, 3, 4].filter((i) => k[i] && k[i][2] >= KP_CONF).map((i) => [k[i][0] * iw, k[i][1] * ih]);
     if (pts.length < 2) return null;
@@ -130,32 +144,26 @@
     if (!S.camOnline || !img.naturalWidth) return say("영상 없음"), "—";
     if (!m) return say("사람 없음"), "—";
     const iw = img.naturalWidth, ih = img.naturalHeight;
-    const fb = S.people.get(m.track)?.box;   // 4단계: face 메시지의 얼굴 박스
-    const r = fb ? { x: fb[0] * iw, y: fb[1] * ih, side: Math.max((fb[2] - fb[0]) * iw, (fb[3] - fb[1]) * ih), px: (fb[2] - fb[0]) * iw } : faceRect(m, iw, ih);
+    const r = faceRect(m, iw, ih);
     if (!r) return say(`#${m.track} 얼굴 안 보임`), `#${m.track} 얼굴 안 보임`;
     const side = Math.min(w, h) * 0.86, x0 = (w - side) / 2, y0 = (h - side) / 2;
     ctx.imageSmoothingEnabled = r.px >= 60;   // 작은 얼굴은 픽셀이 깨진 그대로 보여 준다 (판정이 어려운 이유가 보이게)
     ctx.drawImage(img, r.x, r.y, r.side, r.side, x0, y0, side, side);
-    const p = S.people.get(m.track), st = p?.state || (r.px < FACE_MIN_PX ? "hold" : null);
-    const col = st ? V[st].color : "#7d8ba1";
-    const tag = `#${m.track} 얼굴 ${Math.round(r.px)}px${st ? ` · ${V[st].ko}` : ""}`;
-    M.drawBox(ctx, [x0 / w, y0 / h, (x0 + side) / w, (y0 + side) / h], w, h, col, tag, st === "hold");
+    const small = r.px < FACE_MIN_PX, saved = [...S.faces.values()].some((f) => f.track === m.track);
+    const col = small ? "#7d8ba1" : saved ? "#3ecf8e" : "#4ea1ff";
+    const tag = `#${m.track} 얼굴 ${Math.round(r.px)}px${small ? " · 작아서 기록 안 함" : saved ? " · 기록됨" : ""}`;
+    M.drawBox(ctx, [x0 / w, y0 / h, (x0 + side) / w, (y0 + side) / h], w, h, col, tag, small);
     return tag;
   }
 
   // ── 목록 ───────────────────────────────────────────
   function band(m) {
-    const cul = [...S.people.entries()].filter(([, p]) => p.state === "culprit");
-    const p = m && S.people.get(m.track);
     const now = !m ? "카메라에 사람이 없어요"
-      : p?.state === "culprit" ? `🚨 범인 · 사람 #${m.track}${p.why ? ` (${p.why})` : ""}`
       : M.RESCUE_IDS.includes(m.action) ? `🩹 사람 #${m.track} ${M.DANGER_BY_ID[m.action].ko} · 구조가 필요할 수 있어요`
       : m.action ? `사람 #${m.track} ${M.DANGER_BY_ID[m.action]?.ko || m.action}`
       : `사람 #${m.track} · 위험 행동 없음`;
-    $("band").className = `band${p?.state === "culprit" ? " alarm" : ""}`;
-    $("band").innerHTML = `<span class="st">${esc(now)}</span>
-      <span class="rule">범인 규칙: <b>미등록</b> + <b>범인 조건 행동</b> = 범인 등록 · 얼굴 저장, 다시 오면 얼굴로 바로 범인</span>
-      <span class="cul">${cul.length ? cul.map(([t]) => `<span class="chip culprit">범인 #${t}</span>`).join("") : '<span class="chip hold">범인 명단 비어 있음</span>'}</span>`;
+    $("band").className = "band";
+    $("band").innerHTML = `<span class="st">${esc(now)}</span>`;
   }
 
   function dangerList(ps) {
@@ -163,7 +171,7 @@
     if (!el.dataset.ready) {
       el.className = "dl9";
       el.innerHTML = M.DANGERS.map((d) => `<span class="led" data-led="${d.id}"></span><span data-row="${d.id}">${d.ko}</span>
-        <span class="chip ${d.level}">${M.LEVEL[d.level].ko}</span><span class="cr">${M.CULPRIT_IDS.includes(d.id) ? "범인 조건" : M.RESCUE_IDS.includes(d.id) ? '<span style="color:var(--info)">구조</span>' : ""}</span>`).join("");
+        <span class="chip ${d.level}">${M.LEVEL[d.level].ko}</span><span class="cr">${M.CULPRIT_IDS.includes(d.id) ? "위험행동" : M.RESCUE_IDS.includes(d.id) ? '<span style="color:var(--info)">구조</span>' : ""}</span>`).join("");
       el.dataset.ready = "1";
     }
     const acts = ps.flatMap((m) => (m.actions || []).map((a) => ({ ...a, track: m.track })));
@@ -176,39 +184,27 @@
     }
   }
 
-  const COLS = [["culprit", "범인"], ["unknown", "미등록"], ["hold", "보류"]];
-  function kanban(focusTrack) {
-    const el = $("kb");
-    if (!el.dataset.ready) {
-      el.className = "kb";
-      el.innerHTML = COLS.map(([k, t]) => `<section class="col ${k}"><header><span>${t}</span><span class="num" data-c="${k}">0</span></header><div data-l="${k}"></div></section>`).join("");
-      el.dataset.ready = "1";
-    }
-    $("faceHint").hidden = S.people.size > 0;
-    const people = [...S.people.entries()].sort((a, b) => b[1].last - a[1].last);
-    for (const [k] of COLS) {
-      const list = people.filter(([, p]) => p.state === k);
-      el.querySelector(`[data-c="${k}"]`).textContent = list.length;
-      const box = el.querySelector(`[data-l="${k}"]`);
-      if (!list.length) { box.innerHTML = '<div class="empty">없음</div>'; continue; }
-      box.replaceChildren(...list.map(([t, p]) => {
-        const c = document.createElement("div");
-        c.className = `pc ${k}${t === focusTrack ? " now" : ""}`;
-        const acts = [...p.acts].map((id) => M.DANGER_BY_ID[id]?.ko.split(" · ")[0] || id);
-        c.innerHTML = `<canvas width="68" height="68"></canvas><div><div class="n">사람 #${t}</div><span class="chip ${k}">${V[k].ko}</span>
-          <div class="s">${fmt(p.first)}~${fmt(p.last)}${acts.length ? ` · ${esc(acts.join(", "))}` : ""}</div></div>`;
-        // 카드에는 실제 얼굴 대신 얼굴 그림 (시안과 같은 원칙: 사진을 남기지 않는다)
-        const x = c.firstChild.getContext("2d"); x.fillStyle = "#1b2433"; x.fillRect(0, 0, 68, 68);
-        M.drawFaceAvatar(x, [0.28, 0.18, 0.72, 0.7], 68, 68, p.hue);
-        return c;
-      }));
-    }
+  // 얼굴 기록: 사람마다 사진 한 장 (최근 것 먼저). 사진이 바뀌거나 지금 화면의 사람이 바뀔 때만 다시 그린다
+  let drawnFaces = "";
+  function faceList(focusTrack) {
+    const sig = `${S.faceVer}|${focusTrack}`;
+    if (sig === drawnFaces) return;
+    drawnFaces = sig;
+    const list = [...S.faces.values()].sort((a, b) => b.last - a.last);
+    $("faceN").textContent = `${list.length}명`;
+    $("faceHint").hidden = list.length > 0;
+    $("faces").innerHTML = list.map((f) => {
+      const acts = [...(S.acts.get(f.track) || [])].map((id) => M.DANGER_BY_ID[id]?.ko.split(" · ")[0] || id);
+      return `<figure class="fc${f.track === focusTrack ? " now" : ""}" style="margin:0">
+        <img src="${esc(f.img)}" alt="사람 #${esc(f.track)} 얼굴">
+        <div class="n"><span>사람 #${esc(f.track)}</span><span class="muted">${esc(f.px ?? "—")}px</span></div>
+        <div class="s">${fmt(f.first)}${f.last - f.first > 1000 ? `~${fmt(f.last)}` : ""}${acts.length ? ` · ${esc(acts.join(", "))}` : ""}</div></figure>`;
+    }).join("");
   }
 
   function logList() {
     $("evN").textContent = `${S.log.length}건`;
-    $("ev").innerHTML = S.log.slice(0, 40).map((e) => `<li class="${e.kind === "culprit" ? "cul" : ""}"><time>${fmt(e.ms)}</time>${e.kind === "culprit"
-      ? '<span class="chip culprit">범인</span>' : `<span class="chip ${esc(e.level)}">${M.LEVEL[e.level]?.ko || esc(e.level)}</span>`}<span>${esc(e.text)}</span></li>`).join("")
+    $("ev").innerHTML = S.log.slice(0, 40).map((e) => `<li><time>${fmt(e.ms)}</time><span class="chip ${esc(e.level)}">${M.LEVEL[e.level]?.ko || esc(e.level)}</span><span>${esc(e.text)}</span></li>`).join("")
       || '<li class="muted">아직 위험 행동이 없어요.</li>';
   }
 
@@ -223,7 +219,7 @@
   }
   function lists() {
     const ps = live(), m = focus(ps);
-    band(m); dangerList(ps); kanban(m?.track); logList();
+    band(m); dangerList(ps); faceList(m?.track); logList();
     $("conn").textContent = S.connected ? "연결됨" : "연결 끊김";
     $("conn").classList.toggle("on", S.connected);
     $("camLive").textContent = S.camOnline ? `● 영상 ${CAM}` : `영상 ${CAM} 끊김`;
