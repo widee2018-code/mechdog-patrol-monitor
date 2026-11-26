@@ -183,6 +183,8 @@ def ingest(msg: dict) -> None:
             latest[key]["ready_ts"] = msg["ts"]
         if "x" in msg:       # 위치가 마지막으로 온 시각 (마커 체인이 앞 개 위치가 최신인지 본다)
             latest[key]["pos_ts"] = msg["ts"]
+        if "follow" in msg:  # marker_follow.py 따라가기 상태를 받은 시각 (2단 행렬: 앞 개가 최신인지 본다)
+            latest[key]["follow_ts"] = msg["ts"]
         # 로봇견이 직접 보낸 적이 있으면, 다시 온라인도 로봇견 자신의 메시지로만 판단한다
         # (SLAM·brain 위치 메시지가 계속 오면 오프라인 ↔ 온라인 알림이 반복되므로)
         if msg["from"] in offline and ("self_ts" not in latest[key] or latest[key]["self_ts"] == msg["ts"]):

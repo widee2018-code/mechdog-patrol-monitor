@@ -22,9 +22,9 @@
   const STATE_KO = {
     idle: "대기", moving: "움직이는 중", stopped: "멈춤", blocked: "앞이 막힘", fallen: "넘어짐", tower: "관제탑",
     wait: "마커 기다림", follow: "따라가는 중", hold: "잠깐 놓침", search: "마커 찾는 중", gave_up: "따라가기 포기",
-    no_video: "영상 없음",
+    no_video: "영상 없음", wait_back: "뒤 개 기다림",
   };
-  const FOLLOW = new Set(["wait", "follow", "hold", "search", "gave_up", "no_video"]);   // marker_follow.py 상태
+  const FOLLOW = new Set(["wait", "follow", "hold", "search", "gave_up", "no_video", "wait_back"]);   // marker_follow.py 상태
   const STALE_MS = 2500;
   const TRAIL_LEN = 150;
   const FONT = '"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif';
@@ -163,7 +163,8 @@
     const lv = typeof v === "number" ? battLevel(v) : "";
     const extra = n === "A"
       ? `<div class="kv"><span>LiDAR</span><b>${S.lidar && Date.now() - S.lidarSeen < STALE_MS ? `${S.lidar.points.length}점` : "스캔 없음"}</b></div>`
-      : `<div class="kv"><span>앞 개 마커</span><b class="${m.state === "follow" || m.ready ? "ok" : FOLLOW.has(m.state) ? "warn" : ""}">ID ${MARKER_OF[n]} · ${FOLLOW.has(m.state) ? STATE_KO[m.state] : "따라가기 꺼짐"}</b></div>`;
+      // 따라가기 상태는 follow 칸 (state 는 dog_cmd.py 도 보내서 번갈아 덮어씀)
+      : (() => { const fs = m.follow ?? m.state; return `<div class="kv"><span>앞 개 마커</span><b class="${fs === "follow" || m.ready ? "ok" : FOLLOW.has(fs) ? "warn" : ""}">ID ${MARKER_OF[n]} · ${FOLLOW.has(fs) ? STATE_KO[fs] : "따라가기 꺼짐"}</b></div>`; })();
     return `<article class="dog ${d && !fresh(d) ? "stale" : ""}" style="--c:${COLOR[n]}">
       <header><span class="badge">${n}</span><div><b>${ROLE[n]}</b><small>${ROLE_SUB[n]}</small></div>${chip(d)}</header>
       <div class="kv"><span>배터리</span><b class="${lv}">${num(v, 2)} V</b></div>

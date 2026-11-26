@@ -108,6 +108,11 @@ python brain/marker_follow.py --camera http://localhost:8000/api/camera/B/stream
 
 `move(속도, 회전)`의 숫자 단위는 Hiwonder 라이브러리 기준이라 실제 m/s, °/s는 측정해 봐야 합니다(가이드 11절 0단계).
 
+### 걷다 서다 줄이기, 2단 행렬 (#12, #11)
+- **잠깐 놓쳐도 계속 걷기 (`--hold-sec`, 기본 0.3초):** 걸을 때 카메라가 흔들려 마커를 한두 장 놓치면 하던 명령을 0.3초까지 이어서 보냅니다. 그보다 오래 놓치면 예전처럼 정지(`hold`) → 찾기(`search`) → 포기(`gave_up`). 0이면 바로 정지.
+- **뒤 개 기다리기 (`--behind`, B 는 기본 C):** 뒤 개가 마커를 놓치면(`search`·`gave_up`) 앞 개는 멈추고 `wait_back`(뒤 개 기다리는 중)이 됩니다. 뒤 개가 다시 따라가면 이어서 출발하고, `--wait-alert-sec`(기본 5초) 넘게 기다리면 대시보드에 경고. 뒤 개의 `marker_follow.py`가 꺼져 있거나 2초 넘게 소식이 없으면 기다리지 않습니다. `--monitor` 필요, 끄려면 `--behind none`.
+- **정찰견 A (사람 조종):** `python brain/teleop.py --dog <A IP> --name A --monitor <허브 IP> --behind B` 로 켜면 B가 마커를 놓쳤거나 C를 기다리는 동안 **전진만 막히고**(회전·후진은 됨) 창에 `WAIT: Dog B lost marker`가 뜹니다.
+
 ## 다음 단계
 
 - 행렬: A를 `teleop.py`로 조종하고 B가 마커 1, C가 마커 2를 따라가기 (`marker_follow.py`를 두 개 실행)

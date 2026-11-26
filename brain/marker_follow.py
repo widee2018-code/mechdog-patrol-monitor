@@ -43,6 +43,9 @@ CMD_PORT = 9100       # firmware/dog_cmd.py가 명령을 받는 포트
 MONITOR_PORT = 9000   # server/app.py의 UDP 포트
 MONITOR_HTTP = 8000   # server/app.py의 HTTP 포트 (/api/dogs)
 STALE_SEC = 0.5       # 새 프레임이 이 시간 동안 안 오면 영상이 멈춘 것으로 보고 정지
+# 2단 행렬 (#11): 뒤 개가 앞 개 마커를 놓치면 앞 개(들)가 멈춰서 기다린다
+BEHIND = {"A": "B", "B": "C"}                 # 이 개 바로 뒤의 개
+LOST_STATES = {"search", "gave_up", "wait_back"}   # 뒤 개가 이 상태면 앞 개가 기다림 (wait_back = 그 뒤 개를 기다리는 중)
 SONAR_MAX_CM = 300    # 초음파가 이보다 크게 재면(반사 없음, 예: 6142 cm) 믿지 않는다
 
 
@@ -62,6 +65,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-turn", type=int, default=50)
     p.add_argument("--turn-sign", type=int, choices=(1, -1), default=-1,
                    help="MechDog B 실측(2026-11-12)은 -1. 마커 반대쪽으로 돌면 부호를 바꾼다")
+    p.add_argument("--hold-sec", type=float, default=0.3,
+                   help="마커를 잠깐 놓쳐도 이 시간까지는 하던 명령을 그대로 보냄 (걷다 서다 반복 줄이기, 0 = 바로 정지) (초)")
     p.add_argument("--lost-sec", type=float, default=1.5, help="마커를 놓친 뒤 찾기 시작할 때까지 (초)")
     p.add_argument("--search-sec", type=float, default=12.0, help="이 시간 동안 못 찾으면 포기하고 정지 (초)")
     p.add_argument("--search-speed", type=int, default=0, help="찾는 동안 전진 속도 (제자리 회전이 안 되면 40 정도)")
@@ -79,7 +84,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--link-sec", type=float, default=2.0, help="로봇견이 이 시간 안에 상태를 보냈으면 연결된 것으로 봄 (초)")
     p.add_argument("--no-ready-check", action="store_true", help="준비 확인 없이 시작 키로 바로 출발")
     p.add_argument("--no-teleop", action="store_true", help="일시정지(대기·포위) 중에 teleop.py 창을 띄우지 않음")
-    return p.parse_args()
+    p.add_argument("--behind", help="바로 뒤 개 이름. 그 개가 마커를 놓치면(찾는 중·포기) 멈춰서 기다림 "
+                                    "(기본: B 면 C, 그 밖에는 없음. 'none' 이면 기다리지 않음. --monitor 필요)")
+    p.add_argument("--wait-alert-sec", type=float, default=5.0, help="뒤 개를 이보다 오래 기다리면 대시보드에 경고 (초)")
+    a = p.parse_args()
+    if a.behind is None:
+        a.behind = BEHIND.get(a.name)
+    elif a.behind.lower() == "none":
+        a.behind = None
+    return a
 
 
 class LatestFrame:
@@ -206,19 +219,25 @@ class Follower:
         self.state = "wait"           # wait(아직 못 봄) / follow / hold(잠깐 놓침) / search / gave_up
         self.last_seen = 0.0
         self.last_dx = 0.0
+        self.last_cmd = (0, 0)        # 마지막으로 마커를 보고 낸 명령 (잠깐 놓쳤을 때 이어서 보냄)
 
     def step(self, seen: tuple[float, float] | None, now: float) -> tuple[int, int]:
         a = self.a
         if seen is not None:
             dx, dist = seen
             self.state, self.last_seen, self.last_dx = "follow", now, dx
-            return follow_command(dx, dist, a)
+            self.last_cmd = follow_command(dx, dist, a)
+            return self.last_cmd
         if self.last_seen == 0:
             self.state = "wait"
             return 0, 0
         if self.state == "gave_up":
             return 0, 0
         lost_for = now - self.last_seen
+        if self.state == "follow" and lost_for < a.hold_sec:
+            # 걸을 때 카메라가 흔들려 한두 장 놓친 것: 멈추지 않고 하던 명령을 이어서 보낸다 (#12).
+            # 상태도 follow 그대로 둔다 (상태가 바뀔 때마다 타임라인에 이벤트가 남으므로)
+            return self.last_cmd
         if lost_for < a.lost_sec:
             self.state = "hold"       # 프레임 한두 장 놓친 것일 수 있으니 멈춰서 기다린다
         elif lost_for < a.lost_sec + a.search_sec:
@@ -240,6 +259,7 @@ class DogLink:
         self.age: float | None = None   # 로봇견이 마지막으로 보낸 지 몇 초 (모름 = None)
         self.at = 0.0                   # 마지막으로 서버에서 읽은 시각
         self.mission: tuple[str, float] | None = None   # (단계, 바뀐 시각). 대시보드 시작 버튼 → EXPLORE
+        self.follows: dict[str, tuple[str, float]] = {}  # 개 이름 → (따라가기 상태, 몇 초 전에 보냈나)
         if self.url:
             threading.Thread(target=self._run, daemon=True).start()
 
@@ -253,10 +273,19 @@ class DogLink:
                 self.age = body["now"] - dog["self_ts"] if "self_ts" in dog else None
                 if "mission" in body:
                     self.mission = (body["mission"], body["mission_ts"])
+                self.follows = {n: (d["follow"], body["now"] - d["follow_ts"])
+                                for n, d in body["dogs"].items() if "follow" in d and "follow_ts" in d}
                 self.at = time.time()
             except Exception:
                 pass   # 서버가 아직 안 떴거나 예전 서버(/api/dogs 없음): 카메라만으로 판단
             time.sleep(0.5)
+
+    def follow_of(self, name: str | None, link_sec: float) -> str | None:
+        """그 개의 marker_follow.py 상태. 꺼져 있거나 link_sec 넘게 소식이 없으면 None (기다리지 않음)."""
+        if not name or name not in self.follows:
+            return None
+        state, age = self.follows[name]
+        return state if age + (time.time() - self.at) <= link_sec else None
 
     def fresh(self, link_sec: float) -> bool:
         return self.age is not None and self.age + (time.time() - self.at) <= link_sec
@@ -337,7 +366,8 @@ class Teleop:
 
 
 STATE_TEXT = {"paused": "STANDBY (일렬 대기)", "wait": "마커 기다리는 중", "follow": "따라가는 중", "hold": "잠깐 놓침, 정지",
-              "search": "다시 찾는 중", "gave_up": "못 찾음, 정지", "no_video": "영상 끊김, 정지"}
+              "search": "다시 찾는 중", "gave_up": "못 찾음, 정지", "no_video": "영상 끊김, 정지",
+              "wait_back": "뒤 개 기다리는 중"}
 
 
 def draw(frame: np.ndarray, corners: np.ndarray | None, seen, state: str, cmd: tuple[int, int], a,
@@ -433,6 +463,9 @@ def main() -> None:
     teleop = Teleop(a)
     teleop_due = not running   # 대기로 시작하면 바로 teleop.py 창을 띄운다
     cmd, corners, seen = (0, 0), None, None
+    wait_since, wait_alerted = None, False   # 뒤 개를 기다리기 시작한 시각, 경고를 보냈나
+    if a.behind:
+        print(f"2단 행렬: 뒤 Dog {a.behind}가 마커를 놓치면 멈춰서 기다림" + ("" if a.monitor else " (--monitor 가 없어 끔)"))
     try:
         while True:
             t0 = time.time()
@@ -489,6 +522,17 @@ def main() -> None:
                     last_marker = t0
                 if running:
                     cmd = follower.step(seen, t0)
+                    # 2단 행렬 (#11): 뒤 개가 내 마커를 놓쳤으면 멈춰서 기다린다 (마커 추적은 계속)
+                    back = link.follow_of(a.behind, a.link_sec)
+                    if back in LOST_STATES and follower.state in ("follow", "hold"):
+                        follower.state, cmd = "wait_back", (0, 0)
+                        wait_since = wait_since or t0
+                        if not wait_alerted and t0 - wait_since >= a.wait_alert_sec:
+                            to_monitor({"type": "event", "from": a.name, "level": "warn",
+                                        "text": f"Dog {a.name}: 뒤 Dog {a.behind}가 마커를 놓쳐 {a.wait_alert_sec:.0f}초째 기다리는 중"})
+                            wait_alerted = True
+                    else:
+                        wait_since, wait_alerted = None, False
                 else:
                     follower.state, cmd = "paused", (0, 0)   # 마커는 계속 인식하지만 움직이지 않는다
             elif t0 - last_frame_at > STALE_SEC:
@@ -516,11 +560,15 @@ def main() -> None:
                 print(f"[{time.strftime('%H:%M:%S')}] {STATE_TEXT[follower.state]}")
                 level = "warn" if follower.state in ("search", "gave_up") else "info"
                 what = "" if follower.state == "no_video" else f"마커 {a.marker_id} "
-                to_monitor({"type": "event", "from": a.name, "level": level,
-                            "text": f"Dog {a.name}: {what}{STATE_TEXT[follower.state]}"})
+                text = f"Dog {a.name}: {what}{STATE_TEXT[follower.state]}"
+                if follower.state == "wait_back":
+                    text = f"Dog {a.name}: 뒤 Dog {a.behind}가 마커를 놓쳐 기다리는 중"
+                to_monitor({"type": "event", "from": a.name, "level": level, "text": text})
+                to_monitor({"type": "dog", "from": a.name, "follow": follower.state})   # 앞 개가 바로 알 수 있게 바뀔 때 즉시
                 last_state = follower.state
             if t0 - last_print > 0.5:
-                to_monitor({"type": "dog", "from": a.name, "state": follower.state,
+                # follow = 따라가기 상태 (state 는 dog_cmd.py 도 보내 덮어쓰므로 앞 개는 follow 로 판단)
+                to_monitor({"type": "dog", "from": a.name, "state": follower.state, "follow": follower.state,
                             **({"ready": ready.ready} if ready and not running else {})})
                 print(f"  {follower.state:8s} v={cmd[0]:4d} turn={cmd[1]:4d}", end="\r")
                 last_print = t0
