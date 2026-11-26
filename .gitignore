@@ -36,3 +36,6 @@ PI5_HANDLING.md
 
 # SLAM maps saved by brain/lidar_slam.py (local only)
 maps/
+
+# Demo addresses (IPs change per venue): keep local, share demo.env.example
+demo.env

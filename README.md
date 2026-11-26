@@ -107,6 +107,23 @@ mechdog-patrol-monitor/
 └── requirements.txt
 ```
 
+## 시연 실행 (`demo.env` 에 IP 한 번만)
+
+IP가 바뀔 때마다 긴 명령을 고치지 않도록, 주소는 `demo.env`에만 적고 명령은 늘 같게 씁니다. Mac·Windows 모두 됩니다.
+
+```bash
+cp demo.env.example demo.env      # 처음 한 번 (Windows: copy). IP 가 바뀌면 이 파일만 고침, git 에 안 올라감
+python tools/demo.py check        # IP 마다 응답 확인 (허브·로봇견·카메라)
+python tools/demo.py hub          # 허브: CAMERAS 를 CAM_A/B/C 로 만들어 uvicorn 실행
+python tools/demo.py A            # 정찰견 A: teleop.py --dog $DOG_A --name A --monitor $HUB (--behind B)
+python tools/demo.py B            # 확인견 B: marker_follow.py, 마커 1, 허브를 거친 카메라
+python tools/demo.py C            # 확인견 C: marker_follow.py, 마커 2
+python tools/demo.py B --hold-sec 0   # 뒤에 붙인 옵션은 그대로 전달 (같은 옵션은 뒤에 붙인 것이 우선)
+python tools/demo.py B --dry-run      # 실행하지 않고 만들어질 명령만 보기
+```
+
+실행 전에 실제로 돌리는 명령을 한 줄 보여 줍니다. C 가 비어 있으면 B 는 `--behind none`(뒤 개를 기다리지 않음)으로 켜집니다. 늘 붙이는 옵션은 `demo.env`의 `OPTS_B=--max-speed 80`처럼 적습니다.
+
 ## 실제 로봇 연결하기
 
 Pi와 로봇견이 `udp://<모니터-IP>:9000` 으로 [docs/message_schema.md](docs/message_schema.md)의 메시지를 보내도록 설정하고, 시뮬레이터는 끕니다. 대시보드는 바꿀 필요가 없습니다. 실제로 잰 아레나에 맞게 `web/arena.json` 을 수정하세요.
