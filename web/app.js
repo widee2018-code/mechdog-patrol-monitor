@@ -31,7 +31,7 @@
   const T = {
     bg: "#0b1017", floor: "#0f1620", grid: "#18212d", wall: "#8a98ad", obstacle: "#223042", exit: "#ff7b75",
     lidar: "#5ee1ff", muted: "#7d8ba1", alert: "#ff5a52", alertSoft: "rgba(255,90,82,.16)", link: "rgba(210,220,235,.35)",
-    onDog: "#0a0e14",
+    onDog: "#0a0e14", frontier: "#ffb547",
   };
 
   const S = {
@@ -40,6 +40,7 @@
     dogs: {},          // name -> {msg, seen}
     lidar: null, lidarSeen: 0,
     map: null, mapImg: null, mapSeen: 0,   // SLAM 지도 (brain/lidar_slam.py 의 map 메시지)
+    explore: null, exploreSeen: 0,         // frontier 자동 탐사 (brain/frontier_sim.py 의 explore 메시지, #14)
     sample: null, sampleImg: null,         // 실제 데이터가 없을 때만 보이는 샘플 (arena.json 의 sample 파일)
     detect: {},        // name -> 마지막 사람 인식 메시지 (+seen)
     intruder: null, trail: [],
@@ -97,6 +98,7 @@
         posSeen: "x" in m ? Date.now() : prev?.posSeen };
     },
     lidar(m) { S.lidar = m; S.lidarSeen = Date.now(); },
+    explore(m) { S.explore = m; S.exploreSeen = Date.now(); },
     map(m) {
       // PNG 를 다 읽은 뒤에 바꿔야 그리는 중에 지도가 깜빡이지 않는다
       const img = new Image();
@@ -515,6 +517,25 @@
       g.fillStyle = T.lidar; g.beginPath();
       g.moveTo(...tip(0, R * 1.6)); g.lineTo(...tip(2.5, R)); g.lineTo(...tip(-2.5, R)); g.closePath(); g.fill();
       g.font = `700 ${10 * px}px ${FONT}`; g.fillText("C1", X + 10 * px, Y + 14 * px);
+      g.globalAlpha = 1;
+    }
+
+    // frontier 자동 탐사: 갈 후보(주황 점), 계획한 경로(점선), 목표(고리). 끝나면 3초 뒤 흐려짐
+    const ex = S.explore;
+    if (ex && Date.now() - S.exploreSeen < 10000) {
+      g.globalAlpha = Date.now() - S.exploreSeen < 3000 ? 1 : 0.35;
+      g.fillStyle = T.frontier;
+      for (const [x, y] of ex.frontier || []) { const [X, Y] = P(x, y); g.fillRect(X - 1.5 * px, Y - 1.5 * px, 3 * px, 3 * px); }
+      if (ex.path?.length > 1) {
+        g.strokeStyle = T.frontier; g.lineWidth = 2 * px; g.setLineDash([6 * px, 5 * px]); g.beginPath();
+        ex.path.forEach(([x, y], i) => (i ? g.lineTo(...P(x, y)) : g.moveTo(...P(x, y))));
+        g.stroke(); g.setLineDash([]);
+      }
+      if (ex.goal) {
+        const [X, Y] = P(...ex.goal);
+        g.strokeStyle = T.frontier; g.lineWidth = 2 * px; circ(g, X, Y, 7 * px); g.stroke();
+        g.fillStyle = T.frontier; g.font = `700 ${10 * px}px ${FONT}`; g.fillText("탐사 목표", X + 10 * px, Y - 8 * px);
+      }
       g.globalAlpha = 1;
     }
 

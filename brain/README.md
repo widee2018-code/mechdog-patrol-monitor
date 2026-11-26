@@ -157,3 +157,21 @@ python brain/contain_demo.py run --dog <C IP> --name C --out 0.5 --forward 0.4 -
 - 복귀는 같은 길을 거꾸로 밟습니다. 추측 항법이라 오차가 쌓이므로 `--camera`를 주면 복귀 끝에 앞 개 마커(B는 1, C는 2)가 화면 가운데 오도록 제자리에서 조금씩 돌아 방향을 맞춥니다(짧게 돌고 → 멈춰서 보고 → 반복). 복귀 방향에서 최대 ±15°(`--center-max`)까지만 돌고, 가운데 허용 범위는 `--center-tol`(기본 0.1 ≈ 3°)입니다.
 - 실측 보정: 포위 3번째 회전은 `--turn-in`(기본 100°), 복귀 첫 회전은 `--turn-back`(기본 190°)으로 계산값(90°, 180°) 대신 직접 정합니다. 오차가 크면 이 값들과 `--forward`, `--out`, 보정값(`calibrate`)을 확인하세요.
 
+## frontier 자동 탐사 (#14, 1·2단계 + 시뮬레이터)
+정찰견 A가 SLAM 지도에서 **아직 안 본 곳과 맞닿은 빈 칸(frontier)** 을 골라 스스로 가게 하는 기능입니다. 지금은 1단계(frontier 찾기)와 2단계(경로 계획)까지 되어 있고, 실물 A를 움직이는 3단계는 아직 없습니다.
+
+- **`frontier.py`**: 지도를 4 cm 칸으로 줄이고 벽을 몸 반지름(0.18 m)만큼 부풀린 다음, frontier 덩어리를 찾습니다. 로봇 위치에서 Dijkstra(목표가 여러 개인 A*)로 경로 비용을 구하고, `경로 길이 − gain × 덩어리 길이`가 가장 작은 곳을 목표로 고릅니다. 벽 가까운 칸은 비용을 더 줘서 가운데로 다니게 하고, 경로는 꺾이는 점(waypoint)만 남깁니다. 한 번 계획하는 데 약 10 ms 걸립니다.
+  ```bash
+  python brain/frontier.py maps/slam_20261123_145614.npy              # 저장된 지도에서 확인 (그림 저장)
+  python brain/frontier.py maps/slam_....npy --at 5.2 6.4              # 로봇 위치를 지도 m 로
+  ```
+- **`frontier_sim.py`**: 가짜 세상에 가짜 C1을 쏴서 지도를 쌓고, 실물 계획처럼 "0.6 m 걷기 → 0.8초 멈춤·스캔 → 다시 계획"을 반복합니다. 목표에 가도 frontier가 안 사라지거나 막히면 그 자리는 빼고 다른 곳으로 갑니다. 기본 세상은 방 3개와 상자 4개, `--world`를 주면 저장한 SLAM 지도를 세상으로 씁니다. 위치는 정확하다고 가정합니다(SLAM 오차 없음).
+  ```bash
+  uvicorn server.app:app --port 8000                          # 허브
+  python brain/frontier_sim.py --hub 127.0.0.1 --speed 2      # 창 + 대시보드 (지도, Dog A, 주황 점선 경로, 탐사 목표)
+  python brain/frontier_sim.py --no-window                    # 창 없이 최대 속도, 결과 그림만 maps/ 에
+  python brain/frontier_sim.py --world maps/slam_....npy      # 실제 지도를 세상으로
+  ```
+- 결과 (2026-11-26): 기본 세상에서 목표 8곳, 108초(0.2 m/s 가정), 걸은 거리 15.4 m, 지도 99%. 11-23 실제 지도 3장을 세상으로 쓰면 83~90%이고, 남은 칸은 몸이 못 들어가는 빔 틈입니다.
+- 남은 단계: 3) 실물 A가 `lidar_slam.py` 위치로 경로 따라 걷기, 4) B·C가 SLAM 지도에 벽으로 찍히지 않게 하기, 5) EXPLORE일 때만 탐사하고 SUSPECT이거나 B가 기다리면(#11) 정지.
+
