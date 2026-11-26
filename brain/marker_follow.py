@@ -63,6 +63,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-speed", type=int, default=120)
     p.add_argument("--back-speed", type=int, default=40)
     p.add_argument("--max-turn", type=int, default=50)
+    p.add_argument("--turn-deadband", type=float, default=0.15,
+                   help="서 있을 때 마커가 화면 가운데에서 이만큼(화면 반폭 비율, 0.15 ≈ ±5°) 안이면 돌지 않고 완전히 정지")
     p.add_argument("--turn-sign", type=int, choices=(1, -1), default=-1,
                    help="MechDog B 실측(2026-11-12)은 -1. 마커 반대쪽으로 돌면 부호를 바꾼다")
     p.add_argument("--hold-sec", type=float, default=0.3,
@@ -208,6 +210,9 @@ def follow_command(dx: float, dist: float, a: argparse.Namespace) -> tuple[int, 
         speed *= max(0.0, 1 - abs(dx))   # 마커가 옆으로 많이 벗어나면 먼저 돌고 나서 걷는다
         if speed < a.min_speed:
             speed = 0.0
+    # 서 있을 때 작은 회전값은 제자리걸음만 하며 몸이 흔들려 마커가 화면에서 벗어난다 → 가운데 근처면 완전히 선다
+    if speed == 0 and abs(dx) < a.turn_deadband:
+        turn = 0
     return int(speed), int(turn)
 
 

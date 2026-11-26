@@ -110,6 +110,7 @@ python brain/marker_follow.py --camera http://localhost:8000/api/camera/B/stream
 
 ### 걷다 서다 줄이기, 2단 행렬 (#12, #11)
 - **잠깐 놓쳐도 계속 걷기 (`--hold-sec`, 기본 0.3초):** 걸을 때 카메라가 흔들려 마커를 한두 장 놓치면 하던 명령을 0.3초까지 이어서 보냅니다. 그보다 오래 놓치면 예전처럼 정지(`hold`) → 찾기(`search`) → 포기(`gave_up`). 0이면 바로 정지.
+- **서 있을 때 제자리걸음 막기 (`--turn-deadband`, 기본 0.15 ≈ ±5°):** 목표 거리 안이라 속도가 0일 때 작은 회전값이 나가면 MechDog이 제자리걸음을 하다 마커가 화면 밖으로 벗어납니다(11-26 실측). 마커가 화면 가운데 근처면 회전도 0으로 보내 완전히 섭니다. 걸을 때는 영향 없음.
 - **뒤 개 기다리기 (`--behind`, B 는 기본 C):** 뒤 개가 마커를 놓치면(`search`·`gave_up`) 앞 개는 멈추고 `wait_back`(뒤 개 기다리는 중)이 됩니다. 뒤 개가 다시 따라가면 이어서 출발하고, `--wait-alert-sec`(기본 5초) 넘게 기다리면 대시보드에 경고. 뒤 개의 `marker_follow.py`가 꺼져 있거나 2초 넘게 소식이 없으면 기다리지 않습니다. `--monitor` 필요, 끄려면 `--behind none`.
 - **정찰견 A (사람 조종):** `python brain/teleop.py --dog <A IP> --name A --monitor <허브 IP> --behind B` 로 켜면 B가 마커를 놓쳤거나 C를 기다리는 동안 **전진만 막히고**(회전·후진은 됨) 창에 `WAIT: Dog B lost marker`가 뜹니다.
 
