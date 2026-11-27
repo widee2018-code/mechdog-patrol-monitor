@@ -191,7 +191,8 @@ def main() -> None:
     ap.add_argument("--speed", type=float, default=1.0, help="배속 (--no-window 이고 --hub 가 없으면 최대 속도)")
     ap.add_argument("--seconds", type=float, default=900, help="시뮬레이션 시간 상한 (초)")
     ap.add_argument("--max", type=float, default=8.0, help="LiDAR 최대 거리 m")
-    ap.add_argument("--v", type=float, default=0.20, help="걷는 속도 m/s (MechDog 실측 전 가정)")
+    ap.add_argument("--v", type=float, default=0.057, help="걷는 속도 m/s (실측 11-27: teleop 속도 90, 0.5 m / 8.8 s, 짐 300~400 g 과 같음)")
+    ap.add_argument("--w", type=float, default=13.0, help="제자리 회전 속도 °/s (실측 11-27: 360° / 28 s)")
     ap.add_argument("--step", type=float, default=0.6, help="한 번에 걷는 거리 m (그다음 멈춰서 다시 계획)")
     ap.add_argument("--pause", type=float, default=0.8, help="멈춰서 스캔하는 시간 (초)")
     ap.add_argument("--radius", type=float, default=0.18, help="계획할 때 몸 반지름 m")
@@ -209,7 +210,7 @@ def main() -> None:
     world = load_world(a.world) if a.world else default_world()
     known = np.full((MAP_PX, MAP_PX), UNKNOWN, np.uint8)
     lidar = Lidar(world, max_m=a.max)
-    rb = Robot(world, *START, 0.0, v=a.v)
+    rb = Robot(world, *START, 0.0, v=a.v, w_deg=a.w)
     planner = Planner(CELL, radius=a.radius, gain=a.gain)
     hub = Hub(a) if a.hub else None
     # 커버리지 분모: 시작점과 이어진 실제 빈 칸 전체
@@ -229,7 +230,7 @@ def main() -> None:
 
     dt, t = 0.1, 0.0
     state, plan, pause_until, walked = "plan", None, 0.0, 0.0
-    blacklist, goals, last_goal, goal_t0 = [], 0, None, 0.0
+    blacklist, goals, last_goal, goal_t0, give_up = [], 0, None, 0.0, 60.0
     scan = lidar.update(known, rb.x, rb.y, rb.th)
     updates, last_draw, wall0 = 1, 0.0, time.time()
     if hub:
@@ -250,6 +251,8 @@ def main() -> None:
                 if not last_goal or math.dist(g_, last_goal) > 0.15:
                     goals += 1
                     goal_t0 = t
+                    # 포기 시간: 경로를 실측 속도로 걷는 시간의 2배 + 회전·멈춤 여유 (느린 실물에서 먼 목표를 버리지 않게)
+                    give_up = max(60.0, 2 * plan.goal.cost_m / a.v + 60)
                 last_goal = g_
                 new = goal_t0 == t
                 state, walked, wp = "walk", 0.0, 1
@@ -269,8 +272,8 @@ def main() -> None:
                 wp += 1
             if wp >= len(plan.path) or walked >= a.step:
                 state, pause_until = "pause", t + a.pause
-            elif t - goal_t0 > 60:
-                print(f"[{t:5.1f}s] 60초 넘게 못 감 → 이 목표 제외")
+            elif t - goal_t0 > give_up:
+                print(f"[{t:5.1f}s] {give_up:.0f}초 넘게 못 감 → 이 목표 제외")
                 blacklist.append(last_goal)
                 state, pause_until = "pause", t + a.pause
         elif state == "pause":
