@@ -9,7 +9,7 @@ Pi 관제탑과 로봇견들이 보내는 JSON 메시지(UDP 또는 HTTP POST)�
 열린 영상 스트림 때문에 Ctrl+C 종료가 멈추지 않도록 --timeout-graceful-shutdown 을 붙인다:
     CAMERAS="A=http://192.168.0.20:81/stream" uvicorn server.app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 2
 
-대시보드를 외부(터널)에 공개할 때는 INGEST_TOKEN 을 설정한다. 그러면 HTTP POST /api/ingest 는
+공개 주소(터널, cf-connecting-ip 헤더)를 거친 POST /api/ingest 는 항상 403. 같은 공유기 안에서도 막으려면 INGEST_TOKEN 을 설정한다. 그러면 HTTP POST /api/ingest 는
 "Authorization: Bearer <토큰>" 헤더가 있어야 받는다. UDP는 터널을 거치지 않으므로 그대로 받는다.
 """
 
@@ -370,7 +370,11 @@ async def revalidate_web(request: Request, call_next):
 
 @app.post("/api/ingest")
 async def http_ingest(request: Request):
-    """UDP와 같지만, 데이터그램 하나에 들어가지 않는 큰 데이터(예: 카메라 JPEG)용."""
+    """UDP와 같지만, 데이터그램 하나에 들어가지 않는 큰 데이터(예: 카메라 JPEG)용.
+    로봇견·Pi·노트북은 모두 같은 공유기 안에서 직접 보내므로, 공개 주소(터널)를 거친 요청은 토큰과 상관없이 거절한다
+    (안 그러면 mission·detect 메시지로 로봇을 간접 조종하거나 사이렌을 울릴 수 있음)."""
+    if request.headers.get("cf-connecting-ip"):
+        raise HTTPException(403, "공개 주소에서는 데이터를 넣을 수 없음")
     if INGEST_TOKEN:
         given = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
         if not secrets.compare_digest(given, INGEST_TOKEN):
