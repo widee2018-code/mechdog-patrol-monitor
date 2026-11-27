@@ -410,7 +410,7 @@
       ? ` · 침입자 (${S.intruder.x.toFixed(2)}, ${S.intruder.y.toFixed(2)}) m · 신뢰도 ${num(S.intruder.confidence, 2)}` : "";
     const slam = S.map ? ` · SLAM 지도 ${Date.now() - S.mapSeen < 3000 ? "갱신 중" : "멈춤"} (${S.map.updates}회)` : "";
     $("mapmeta").textContent = sampleOn()
-      ? "샘플 화면 (11-23 C1 SLAM 지도 + 예시 위치) · 로봇견·LiDAR가 연결되면 실제 데이터로 바뀜"
+      ? S.sample.meta || "샘플 화면 (C1 SLAM 지도 + 예시 위치) · 로봇견·LiDAR가 연결되면 실제 데이터로 바뀜"
       : lidar + slam + intr;
     $("dogs").innerHTML = DOGS.map(dogCard).join("");
     banner();
@@ -503,6 +503,12 @@
       g.globalAlpha = sample ? 0.75 : cm.live ? 1 : 0.6;
       g.drawImage(cm.img, 0, -m.h * m.res * sc, m.w * m.res * sc, m.h * m.res * sc);
       g.restore();
+    }
+    // 기본 화면(지난 탐사)의 초음파 장애물: 빨간 점 (tools/snapshot_map.py 가 저장)
+    if (sample && S.sample.sonar?.length) {
+      g.globalAlpha = 0.85; g.fillStyle = T.alert;
+      for (const [x, y] of S.sample.sonar) { const [X, Y] = P(x, y); circ(g, X, Y, 2.5 * px); g.fill(); }
+      g.globalAlpha = 1;
     }
 
     g.fillStyle = T.obstacle;
