@@ -43,6 +43,11 @@ class Frontier:
     size_m: float       # 덩어리 길이 (칸 수 × 칸 크기)
     cost_m: float       # 로봇에서 경로 비용 (벽 근처 가중 포함), 못 가면 inf
     cells: np.ndarray   # 덩어리 칸들 (N, 2) 지도 m, 그림용
+    turn_deg: float = 0.0   # 그 목표로 가려면 지금 방향에서 처음에 틀어야 하는 각 (plan 에 th 를 줬을 때)
+
+
+def direction_ko(turn_deg: float) -> str:
+    return "앞" if turn_deg < 45 else "옆" if turn_deg < 120 else "뒤 (U턴)"
 
 
 @dataclass
@@ -58,12 +63,16 @@ class Plan:
 
 class Planner:
     def __init__(self, cell_m: float = 0.02, res: float = 0.04, radius: float = 0.18, clear: float = 0.35,
-                 wall_cost: float = 3.0, min_size: float = 0.20, gain: float = 1.0):
+                 wall_cost: float = 3.0, min_size: float = 0.20, gain: float = 1.0,
+                 turn_w: float = 0.64, back_deg: float = 120.0, back_pen: float = 2.0):
         self.cell = cell_m
         self.f = max(1, round(res / cell_m))
         self.res = self.f * cell_m
         self.radius, self.clear, self.wall_cost = radius, clear, wall_cost
         self.min_size, self.gain = min_size, gain
+        # 방향 비용 (뒤따르는 확인견이 따라오기 쉽게 앞쪽 우선): 처음 틀어야 하는 각 1 rad 당 turn_w m
+        # (0.64 → 90° = 1 m 더 먼 것과 같음), back_deg 넘게 뒤면 back_pen m 더 (앞·옆이 없을 때만 뒤로)
+        self.turn_w, self.back_deg, self.back_pen = turn_w, back_deg, back_pen
         r = max(1, math.ceil(radius / self.res))
         self.kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
 
@@ -92,9 +101,10 @@ class Planner:
 
     # ── 계획 ────────────────────────────────────────────────────
     def plan(self, grid: np.ndarray, x: float, y: float, blacklist=(), rank: int = 0,
-             prefer: tuple[float, float] | None = None) -> Plan:
+             prefer: tuple[float, float] | None = None, th: float | None = None) -> Plan:
         """rank = 점수 몇 번째 후보를 목표로 (0 = 가장 좋은 곳, 후보 수를 넘으면 처음부터 다시).
-        prefer = 이 점(사람이 고른 목표) 0.5 m 안의 후보가 있으면 그걸 목표로. 없으면 plan.goal = None, note = "gone"."""
+        prefer = 이 점(사람이 고른 목표) 0.5 m 안의 후보가 있으면 그걸 목표로. 없으면 plan.goal = None, note = "gone".
+        th = 로봇 머리 방향 rad (지도 기준 반시계). 주면 점수에 방향 비용을 더한다 (없으면 예전처럼 거리·폭만)."""
         t0 = time.perf_counter()
         L = self.layers(grid)
         if L is None:
@@ -148,7 +158,13 @@ class Planner:
                 continue
             if len(bl) and (np.hypot(*(fr.cells[:, None, :] - bl[None]).transpose(2, 0, 1)) < 0.3).any():
                 continue
-            cands.append((fr.cost_m - self.gain * size, fr, (int(rc[j, 0]), int(rc[j, 1])), rc, cs))
+            score = fr.cost_m - self.gain * size
+            if th is not None:
+                fr.turn_deg = self._first_turn(parent, (int(rc[j, 0]), int(rc[j, 1])), w, x, y, th, r0, c0)
+                score += self.turn_w * math.radians(fr.turn_deg)
+                if fr.turn_deg > self.back_deg:
+                    score += self.back_pen
+            cands.append((score, fr, (int(rc[j, 0]), int(rc[j, 1])), rc, cs))
 
         cands.sort(key=lambda c: c[0])
         plan.ranked = [c[1] for c in cands]
@@ -167,7 +183,7 @@ class Planner:
                 _, plan.rank, j = min(near)
                 fr, rc, cs = cands[plan.rank][1], cands[plan.rank][3], cands[plan.rank][4]
                 gx, gy = fr.cells[j]
-                best = Frontier(float(gx), float(gy), fr.size_m, float(cs[j]) * self.res, fr.cells)
+                best = Frontier(float(gx), float(gy), fr.size_m, float(cs[j]) * self.res, fr.cells, fr.turn_deg)
                 best_cell = (int(rc[j, 0]), int(rc[j, 1]))
             elif cands:
                 plan.note = "gone"   # 고른 곳이 이제 다 보였거나 사라짐
@@ -215,6 +231,18 @@ class Planner:
                     parent[v] = u
                     heapq.heappush(pq, (nd, v))
         return np.array(cost).reshape(h, w), parent
+
+    def _first_turn(self, parent, cell, w, x, y, th, r0, c0, ahead: float = 0.5) -> float:
+        """경로를 따라 ahead m 쯤 간 점의 방향과 지금 머리 방향의 차이 ° (0~180)."""
+        cells = self._trace(parent, cell, w)
+        tx, ty = self.to_m(*cells[-1], r0, c0)
+        for r, c in cells[1:]:
+            px, py = self.to_m(r, c, r0, c0)
+            if math.hypot(px - x, py - y) >= ahead:
+                tx, ty = px, py
+                break
+        e = math.atan2(ty - y, tx - x) - th
+        return abs(math.degrees((e + math.pi) % (2 * math.pi) - math.pi))
 
     @staticmethod
     def _trace(parent, cell, w):

@@ -293,7 +293,7 @@
     else if (S.mission === "CONFIRM") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 침입자 확인 · 경과 ${fmtDur(elapsed())}`; }
     else if (S.mission === "CONTAIN") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 포위 중 · 확인견 B·C는 키보드로 조종 (teleop) · 경과 ${fmtDur(elapsed())}`; }
     else if (S.mission === "HANDOVER") { cls = "alert"; html = `<span class="ico">●</span>포위 유지 중 · 증거 사진 ${S.evidenceKeys.size}장 · 상황이 끝나면 재정렬하세요 (${fmtDur(elapsed())})`; }
-    else if (S.explore?.state === "propose" && Date.now() - S.exploreSeen < 5000) { cls = "warn"; html = `<span class="ico">▲</span>Dog ${esc(S.explore.from || "A")} 탐사 방향 제안 ${(S.explore.rank || []).join("/")} · 탐사 창에서 y = 가기, n = 다음`; }
+    else if (S.explore?.state === "propose" && Date.now() - S.exploreSeen < 5000) { cls = "warn"; html = `<span class="ico">▲</span>Dog ${esc(S.explore.from || "A")} 탐사 방향 제안 ${(S.explore.rank || []).join("/")}${S.explore.dir ? ` (${esc(S.explore.dir)})` : ""} · 탐사 창에서 y = 가기, n = 다음`; }
     else if (exploreBlocked()) { cls = "alert"; html = `<span class="ico">■</span>Dog ${esc(S.explore.from || "A")} 길막힘 · 탐사 멈춤 · teleop 으로 옮기거나 길을 치운 뒤 탐사 창에서 g`; }
     if (!html) { b.hidden = true; b.dataset.k = ""; return; }
     if (b.dataset.k === html) return;
@@ -554,6 +554,9 @@
         ex.path.forEach(([x, y], i) => (i ? g.lineTo(...P(x, y)) : g.moveTo(...P(x, y))));
         g.stroke(); g.setLineDash([]);
       }
+      g.fillStyle = T.alert;   // 초음파로 찍은 장애물 (C1 이 못 본 것)
+      for (const [x, y] of ex.sonar || []) { const [X, Y] = P(x, y); circ(g, X, Y, 2.5 * px); g.fill(); }
+      g.fillStyle = T.frontier;
       if (ex.state === "blocked" && ex.at) {   // 길막힘 위치: 빨간 X
         const [X, Y] = P(...ex.at), r = 9 * px;
         g.globalAlpha = 1; g.strokeStyle = T.alert; g.lineWidth = 3 * px; g.beginPath();
@@ -564,7 +567,7 @@
         const [X, Y] = P(...ex.goal);
         g.strokeStyle = T.frontier; g.lineWidth = 2 * px; circ(g, X, Y, 7 * px); g.stroke();
         g.fillStyle = T.frontier; g.font = `700 ${10 * px}px ${FONT}`;
-        g.fillText(ex.state === "propose" ? `제안 ${(ex.rank || []).join("/")} · y 가기 · n 다음` : "탐사 목표", X + 10 * px, Y - 8 * px);
+        g.fillText(ex.state === "propose" ? `제안 ${(ex.rank || []).join("/")}${ex.dir ? " " + ex.dir : ""} · y 가기 · n 다음` : "탐사 목표", X + 10 * px, Y - 8 * px);
       }
       g.globalAlpha = 1;
     }

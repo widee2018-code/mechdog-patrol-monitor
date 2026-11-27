@@ -179,6 +179,15 @@ python brain/contain_demo.py run --dog <C IP> --name C --out 0.5 --forward 0.4 -
   python brain/frontier_drive.py --hub 127.0.0.1                                  # 명령 없이 계산·표시만
   python brain/frontier_drive.py --dog 192.168.0.18 --name B --hub 127.0.0.1      # 실물 (이름은 로봇견 secrets.py 의 NAME)
   ```
+- **뒤따르는 확인견 배려 (`frontier_drive.py` 기본):**
+  - **앞쪽 우선:** 점수에 처음 틀어야 하는 각을 더해요(90° = 1 m 더 먼 것, `--turn-weight`). 120° 넘게 뒤인 목표는 2 m를 더해서(`--back-penalty`) 앞·옆이 없을 때만 골라요. 제안·로그·대시보드 배너에 `앞`/`옆`/`뒤 (U턴)`을 표시해요.
+  - **나눠서 돌기:** 제자리 회전은 한 번에 45°까지만 하고(`--turn-chunk`), 2초 서 있어요(`--turn-pause`). 그동안 B가 마커를 놓쳤으면 `--behind B`로 더 기다려요.
+  - **넓게 U턴:** 목표가 100° 넘게 뒤(`--arc-deg`)이고 도는 쪽 옆 0.7 m·앞 0.35 m에 벽이 없으면(`--arc-room`), 제자리 대신 걸으면서 돌아요(`--arc-turn`). 자리가 없으면 45°씩 제자리.
+  - 예전처럼: `--turn-weight 0 --back-penalty 0 --turn-chunk 0 --arc-room 0`
+- **초음파로 피하기 (`frontier_drive.py`, `--hub` 필요):** 허브의 `front_cm`을 0.5초마다 읽어요. C1이 못 본 장애물(낮은 상자, 스캔 높이 아래)도 피해요.
+  - 45 cm 안(`--sonar-mark`)에 잡히면 개 머리 앞 그 자리에 폭 10 cm 장애물을 (C1 지도에 이미 있는 물체 10 cm 안이면 빼고) **계획용 지도**에 찍고(5분 기억, `--sonar-keep`), 처음 잡힌 순간 서서 피해 가는 길로 다시 계획해요. 창·대시보드에 빨간 점으로 보여요.
+  - 40 cm 안이면 천천히(`--sonar-slow`, 속도 60), 25 cm 안(`--sonar-stop`)이면 12 cm 뒤로 물러나서(`--sonar-back`) 다시 계획해요. 같은 곳에서 3번이면 그 목표는 빼요. 초음파 점 때문에만 갈 길이 없어지면 "탐사 완료"가 아니라 길막힘으로 서요(g = 점 지우고 다시).
+  - 창 제목에 `sonar 32cm`. 펌웨어의 20 cm 전진 막기는 그대로예요. 끄려면 `--sonar-mark 0 --sonar-stop 0`.
 - **지도 깔끔하게 (`lidar_slam.py`, `frontier_drive.py` 공통):**
   - **정리한 지도 표시 (기본):** 창·대시보드·저장 PNG는 작은 벽 조각(흔들림·의자 다리·잡음)을 지우고, 빈 공간의 빗살 틈을 메운 지도예요. 원본은 `--raw-view`로 보고, 저장할 때 `_raw.png`와 `.npy`로도 남아요. frontier 계획은 원본 격자를 그대로 써요.
   - **서 있을 때만 지도에 그리기 (`frontier_drive` 기본):** 걷거나 도는 동안과 멈춘 뒤 0.5초(`--still-sec`)는 위치만 계산하고 지도에는 안 그려요. 예전처럼 하려면 `--map-moving`을 붙여요.
