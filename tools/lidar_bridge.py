@@ -81,11 +81,20 @@ class RPLidar:
         return {"model": b[0], "firmware": f"{b[2]}.{b[1]:02d}", "hardware": b[3], "serial": b[4:20].hex().upper()}
 
     def health(self) -> tuple[str, int]:
-        self.stop()
-        self._cmd(CMD_GET_HEALTH)
-        size, _ = self._descriptor()
-        b = self.ser.read(size)
-        return HEALTH_NAMES.get(b[0], str(b[0])), struct.unpack("<H", b[1:3])[0]
+        # 방금 끈 스캔 데이터가 남아 있으면 첫 응답이 잘린다 → 몇 번 다시 묻기
+        for _ in range(3):
+            self.stop()
+            time.sleep(0.2)
+            self.ser.reset_input_buffer()
+            self._cmd(CMD_GET_HEALTH)
+            try:
+                size, _ = self._descriptor()
+            except IOError:
+                continue
+            b = self.ser.read(size)
+            if len(b) >= 3:
+                return HEALTH_NAMES.get(b[0], str(b[0])), struct.unpack("<H", b[1:3])[0]
+        raise IOError("C1 상태 응답이 없음 — 다른 프로그램(lidar_bridge·lidar_slam)이 포트를 쓰는지 확인, 아니면 USB 를 뽑았다 다시 꽂기")
 
     def scans(self):
         """한 바퀴마다 [(angle_cw_deg, dist_m, quality), ...] 를 내보낸다."""

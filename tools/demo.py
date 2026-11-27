@@ -142,6 +142,8 @@ def main() -> None:
     if not args or args[0] in ("-h", "--help"):
         print(__doc__)
         return
+    if "#" in args:   # zsh 는 기본으로 줄 끝 # 주석을 인자로 넘김 → 그 뒤는 버림
+        args = args[:args.index("#")]
     cmd, extra = args[0], args[1:]
     if cmd.upper() in DOGS:
         cmd = cmd.upper()
