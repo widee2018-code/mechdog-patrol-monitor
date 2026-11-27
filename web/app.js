@@ -98,7 +98,11 @@
         posSeen: "x" in m ? Date.now() : prev?.posSeen };
     },
     lidar(m) { S.lidar = m; S.lidarSeen = Date.now(); },
-    explore(m) { S.explore = m; S.exploreSeen = Date.now(); },
+    explore(m) {
+      const was = S.explore?.state === "blocked" && Date.now() - S.exploreSeen < 5000;
+      S.explore = m; S.exploreSeen = Date.now();
+      if (m.state === "blocked" && !was) blockedAlert(m.from);   // 길막힘이 새로 시작될 때 한 번만
+    },
     map(m) {
       // PNG 를 다 읽은 뒤에 바꿔야 그리는 중에 지도가 깜빡이지 않는다
       const img = new Image();
@@ -289,9 +293,28 @@
     else if (S.mission === "CONFIRM") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 침입자 확인 · 경과 ${fmtDur(elapsed())}`; }
     else if (S.mission === "CONTAIN") { cls = "alert"; html = `<span class="ico">●</span>사건 #${S.incident} 포위 중 · 확인견 B·C는 키보드로 조종 (teleop) · 경과 ${fmtDur(elapsed())}`; }
     else if (S.mission === "HANDOVER") { cls = "alert"; html = `<span class="ico">●</span>포위 유지 중 · 증거 사진 ${S.evidenceKeys.size}장 · 상황이 끝나면 재정렬하세요 (${fmtDur(elapsed())})`; }
+    else if (S.explore?.state === "propose" && Date.now() - S.exploreSeen < 5000) { cls = "warn"; html = `<span class="ico">▲</span>Dog ${esc(S.explore.from || "A")} 탐사 방향 제안 ${(S.explore.rank || []).join("/")} · 탐사 창에서 y = 가기, n = 다음`; }
+    else if (exploreBlocked()) { cls = "alert"; html = `<span class="ico">■</span>Dog ${esc(S.explore.from || "A")} 길막힘 · 탐사 멈춤 · teleop 으로 옮기거나 길을 치운 뒤 탐사 창에서 g`; }
     if (!html) { b.hidden = true; b.dataset.k = ""; return; }
     if (b.dataset.k === html) return;
     b.dataset.k = html; b.hidden = false; b.className = `banner ${cls}`; b.innerHTML = html;
+  }
+
+  // ── 길막힘 (frontier_drive.py 가 explore state "blocked" 를 보냄) ─────────
+  // frontier 탐사 중 몸이 막혀 갈 곳이 없으면 정찰견이 서고 사람을 부른다. 짧은 삐 3번 + 팝업 (사이렌과 구분)
+  const exploreBlocked = () => S.explore?.state === "blocked" && Date.now() - S.exploreSeen < 5000;
+  function blockedAlert(from = "A") {
+    const ctx = siren.ctx;   // 소리는 🔔 사이렌 알림을 켠 화면에서만 (브라우저가 클릭 전에는 소리를 막음)
+    if (ctx) {
+      for (let i = 0; i < 3; i++) {
+        const osc = ctx.createOscillator(), gain = ctx.createGain(), t0 = ctx.currentTime + i * 0.25;
+        osc.type = "sine"; osc.frequency.value = 520; gain.gain.value = 0.08;
+        osc.connect(gain).connect(ctx.destination); osc.start(t0); osc.stop(t0 + 0.15);
+      }
+    }
+    if ("Notification" in window && Notification.permission === "granted") {
+      try { new Notification(`⛔ Dog ${from} 길막힘`, { body: "탐사가 멈췄습니다. 수동으로 옮긴 뒤 다시 시작하세요.", tag: `blocked-${from}` }); } catch (e) {}
+    }
   }
 
   // ── 사이렌 (#6) ─────────────────────────────────────────────
@@ -531,10 +554,17 @@
         ex.path.forEach(([x, y], i) => (i ? g.lineTo(...P(x, y)) : g.moveTo(...P(x, y))));
         g.stroke(); g.setLineDash([]);
       }
+      if (ex.state === "blocked" && ex.at) {   // 길막힘 위치: 빨간 X
+        const [X, Y] = P(...ex.at), r = 9 * px;
+        g.globalAlpha = 1; g.strokeStyle = T.alert; g.lineWidth = 3 * px; g.beginPath();
+        g.moveTo(X - r, Y - r); g.lineTo(X + r, Y + r); g.moveTo(X + r, Y - r); g.lineTo(X - r, Y + r); g.stroke();
+        g.fillStyle = T.alert; g.font = `700 ${11 * px}px ${FONT}`; g.fillText("길막힘", X + 12 * px, Y - 10 * px);
+      }
       if (ex.goal) {
         const [X, Y] = P(...ex.goal);
         g.strokeStyle = T.frontier; g.lineWidth = 2 * px; circ(g, X, Y, 7 * px); g.stroke();
-        g.fillStyle = T.frontier; g.font = `700 ${10 * px}px ${FONT}`; g.fillText("탐사 목표", X + 10 * px, Y - 8 * px);
+        g.fillStyle = T.frontier; g.font = `700 ${10 * px}px ${FONT}`;
+        g.fillText(ex.state === "propose" ? `제안 ${(ex.rank || []).join("/")} · y 가기 · n 다음` : "탐사 목표", X + 10 * px, Y - 8 * px);
       }
       g.globalAlpha = 1;
     }

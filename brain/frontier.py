@@ -52,6 +52,8 @@ class Plan:
     path: list[tuple[float, float]] = field(default_factory=list)   # waypoint, 로봇 → 목표 (지도 m)
     note: str = ""
     ms: float = 0.0
+    ranked: list[Frontier] = field(default_factory=list)   # 갈 수 있는 후보, 점수 좋은 순 (goal = 그중 하나)
+    rank: int = 0                                           # goal 이 ranked 의 몇 번째인지
 
 
 class Planner:
@@ -89,7 +91,10 @@ class Planner:
         return (c0 + (np.asarray(c) + 0.5) * self.f) * self.cell, (r0 + (np.asarray(r) + 0.5) * self.f) * self.cell
 
     # ── 계획 ────────────────────────────────────────────────────
-    def plan(self, grid: np.ndarray, x: float, y: float, blacklist=()) -> Plan:
+    def plan(self, grid: np.ndarray, x: float, y: float, blacklist=(), rank: int = 0,
+             prefer: tuple[float, float] | None = None) -> Plan:
+        """rank = 점수 몇 번째 후보를 목표로 (0 = 가장 좋은 곳, 후보 수를 넘으면 처음부터 다시).
+        prefer = 이 점(사람이 고른 목표) 0.5 m 안의 후보가 있으면 그걸 목표로. 없으면 plan.goal = None, note = "gone"."""
         t0 = time.perf_counter()
         L = self.layers(grid)
         if L is None:
@@ -127,7 +132,7 @@ class Planner:
         plan = Plan()
         n, labels = cv2.connectedComponents(front.astype(np.uint8), connectivity=8)
         bl = np.array(blacklist, float).reshape(-1, 2)
-        best, best_score, best_cell = None, math.inf, None
+        cands = []   # (점수, frontier, 칸)
         for i in range(1, n):
             rc = np.argwhere(labels == i)
             size = len(rc) * self.res
@@ -143,11 +148,36 @@ class Planner:
                 continue
             if len(bl) and (np.hypot(*(fr.cells[:, None, :] - bl[None]).transpose(2, 0, 1)) < 0.3).any():
                 continue
-            score = fr.cost_m - self.gain * size
-            if score < best_score:
-                best, best_score, best_cell = fr, score, (int(rc[j, 0]), int(rc[j, 1]))
+            cands.append((fr.cost_m - self.gain * size, fr, (int(rc[j, 0]), int(rc[j, 1])), rc, cs))
 
-        if best is None:
+        cands.sort(key=lambda c: c[0])
+        plan.ranked = [c[1] for c in cands]
+        best = best_cell = None
+        if prefer is not None:
+            # 고른 점 0.5 m 안의 갈 수 있는 frontier 칸 중 고른 점에 가장 가까운 칸으로 간다.
+            # (C1 거리 끝이 긴 띠 하나로 이어지면, 띠의 '가장 싼 칸'은 엉뚱한 방향일 수 있음)
+            near = []
+            for i, c in enumerate(cands):
+                dd = np.hypot(*(c[1].cells - prefer).T)
+                dd[~np.isfinite(c[4])] = np.inf
+                j = int(np.argmin(dd))
+                if dd[j] < 0.5:
+                    near.append((float(dd[j]), i, j))
+            if near:
+                _, plan.rank, j = min(near)
+                fr, rc, cs = cands[plan.rank][1], cands[plan.rank][3], cands[plan.rank][4]
+                gx, gy = fr.cells[j]
+                best = Frontier(float(gx), float(gy), fr.size_m, float(cs[j]) * self.res, fr.cells)
+                best_cell = (int(rc[j, 0]), int(rc[j, 1]))
+            elif cands:
+                plan.note = "gone"   # 고른 곳이 이제 다 보였거나 사라짐
+        elif cands:
+            plan.rank = rank % len(cands)
+            best, best_cell = cands[plan.rank][1], cands[plan.rank][2]
+
+        if best is None and plan.note == "gone":
+            pass
+        elif best is None:
             plan.note = "갈 수 있는 frontier 없음 → 탐사 완료" if plan.frontiers or not front.any() else "frontier 가 전부 너무 작음"
         else:
             plan.goal = best

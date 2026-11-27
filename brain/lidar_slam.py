@@ -62,15 +62,46 @@ MIN_POINTS = 150  # 1° 칸 중 이보다 적게 찬 바퀴는 버림 (시작 �
 UNKNOWN = 127     # BreezySLAM 지도에서 아직 안 본 칸의 값 (0 = 벽, 255 = 빈 공간)
 
 
+def scan_array(bins: dict[int, tuple[float, float]], max_mm: float) -> list[int]:
+    """1° 칸별 거리 → BreezySLAM 360칸 배열.
+
+    - max_mm 보다 먼 점 → 0 (= "max_mm 까지 비어 있음"): 그 방향은 max 까지 빈 공간, 그 너머는 모름으로 남아 frontier 가 됨.
+      (예전처럼 점을 버리면 BreezySLAM 이 이웃 벽 거리로 메워서, 열린 쪽에 가짜 벽 고리가 생겨 frontier 가 막혔음)
+    - 점이 없는 칸 (반사 없음): 양쪽 이웃이 둘 다 벽이면 직선으로 메우고, 한쪽이라도 '멀다(0)'면 0.
+    """
+    d = [-1] * 360                          # -1 = 아직 없음
+    for k, (_, mm) in bins.items():
+        d[k] = 0 if mm > max_mm else int(mm)
+    known = [k for k in range(360) if d[k] >= 0]
+    out = list(d)
+    for i, k in enumerate(known):
+        nk = known[(i + 1) % len(known)]
+        gap = (nk - k) % 360
+        for j in range(1, gap):
+            a, b = d[k], d[nk]
+            out[(k + j) % 360] = 0 if a == 0 or b == 0 else int(a + (b - a) * j / gap)
+    return out
+
+
 class Mapper:
     """LiDAR 읽기 + SLAM 을 별도 스레드에서 돌리고, 최신 지도·위치를 꺼내 쓰게 한다."""
 
-    def __init__(self, lidar: RPLidar, map_px: int, map_m: float, max_m: float, flip: bool):
+    def __init__(self, lidar: RPLidar, map_px: int, map_m: float, max_m: float, flip: bool,
+                 hole_mm: int = 600, quality: int = 50):
         self.lidar = lidar
         self.map_px, self.map_m = map_px, map_m
         self.max_mm = max_m * 1000
         self.flip = flip
-        self.slam = RMHC_SLAM(Laser(360, 10, 360, int(self.max_mm)), map_px, map_m)
+        # hole_mm: 벽 한 점을 지도에 그리는 두께 (작을수록 벽이 얇고 또렷, 너무 작으면 매칭이 미끄러질 수 있음)
+        # quality: 한 번 스캔이 지도를 바꾸는 세기 0~255 (작을수록 잡음이 덜 남지만 지도가 천천히 생김)
+        # "max 보다 멂(0)" 광선을 BreezySLAM 은 no_detection 거리 + hole_mm/2 까지 빈 공간으로 칠한다.
+        # max 그대로 주면 max ~ max+hole/2 에 있던 (예전에 그린) 벽을 지나간 뒤 지워 버림 → hole/2 만큼 짧게.
+        no_det = int(max(self.max_mm - hole_mm / 2, hole_mm / 2 + 100))
+        self.slam = RMHC_SLAM(Laser(360, 10, 360, no_det), map_px, map_m,
+                              map_quality=quality, hole_width_mm=hole_mm)
+        # False 이면 위치만 계산하고 지도에는 안 그림 (걷는 중 흔들린 스캔이 벽을 번지게 하지 않도록)
+        self.map_on = True
+        self.map_skipped = 0
         self.mapbytes = bytearray(map_px * map_px)
         self.lock = threading.Lock()
         self.path: list[tuple[float, float, float]] = []
@@ -87,23 +118,28 @@ class Mapper:
                     return
                 # BreezySLAM 은 한 바퀴에 scan_size(360)점까지만 받는다 (넘으면 C 코드에서 메모리 넘침 → 강제 종료).
                 # C1 은 한 바퀴 약 460점이라 1° 칸마다 칸 가운데에 가장 가까운 각도의 점 하나만 남긴다.
-                bins: dict[int, tuple[float, float, float]] = {}
+                # BreezySLAM 은 입력 각도 a 를 센서 정면 기준 반시계 (a - 180)° 로 쓴다.
+                # C1 은 시계 방향이라 a_in = 180 - a_cw 로 바꿔야 지도가 좌우로 뒤집히지 않는다 (--flip 이면 반대).
+                # BreezySLAM 칸 k = 그 각도 k° 이므로 각도 목록 없이 360칸 배열로 바로 준다.
+                bins: dict[int, tuple[float, float]] = {}
                 for a, d, _ in rev:
                     mm = d * 1000
-                    if not (0 < mm <= self.max_mm):
-                        continue
-                    k = int(a) % 360
-                    off = abs(a - (k + 0.5))
+                    if mm <= 0:
+                        continue          # 반사 없음: 아래에서 이웃으로 메움
+                    t = (180 + a) % 360 if self.flip else (180 - a) % 360
+                    k = int(round(t)) % 360
+                    off = abs(t - round(t))
                     if k not in bins or off < bins[k][0]:
-                        bins[k] = (off, a, mm)
+                        bins[k] = (off, mm)
                 if len(bins) < MIN_POINTS:
                     self.skipped += 1
                     continue
-                # BreezySLAM 은 입력 각도 a 를 센서 정면 기준 반시계 (a - 180)° 로 쓴다.
-                # C1 은 시계 방향이라 a_in = 180 - a_cw 로 바꿔야 지도가 좌우로 뒤집히지 않는다 (--flip 이면 반대).
-                pts = sorted(((180 + a) % 360 if self.flip else (180 - a) % 360, mm) for _, a, mm in bins.values())
+                dist = scan_array(bins, self.max_mm)
                 with self.lock:
-                    self.slam.update([d for _, d in pts], scan_angles_degrees=[a for a, _ in pts])
+                    on = self.map_on
+                    self.slam.update(dist, should_update_map=on)
+                    if not on:
+                        self.map_skipped += 1
                     self.path.append(self.slam.getpos())
                     self.last_rev = rev
                     self.updates += 1
@@ -115,6 +151,31 @@ class Mapper:
             self.slam.getmap(self.mapbytes)
             grid = np.frombuffer(bytes(self.mapbytes), dtype=np.uint8).reshape(self.map_px, self.map_px)
             return grid.copy(), list(self.path)
+
+
+# ── 지도 정리 (보기용) ─────────────────────────────────────────────
+
+def clean_view(grid: np.ndarray, wall: int = 60, free: int = 180, min_cells: int = 15) -> np.ndarray:
+    """보기용으로 정리한 지도: 벽 = 0, 빈 공간 = 255, 모름 = 127.
+
+    - 벽: 아주 어두운 칸(< wall)만, 그중 min_cells 칸보다 작은 덩어리(흔들림·다리·잡음 점)는 버림
+    - 빈 공간: 밝은 칸(> free)의 빗살 틈을 메우고 외딴 점은 지움
+    - 그 사이 회색(확실하지 않은 칸)은 모름으로
+    원본 격자(.npy, frontier 계획)는 그대로 두고 화면·대시보드·PNG 에만 쓴다.
+    """
+    import cv2
+    w = (grid < wall).astype(np.uint8)
+    n, lab, st, _ = cv2.connectedComponentsWithStats(w, connectivity=8)
+    keep = np.zeros(n, bool)
+    keep[1:] = st[1:, cv2.CC_STAT_AREA] >= min_cells
+    w = keep[lab]
+    f = (grid > free).astype(np.uint8)
+    f = cv2.morphologyEx(f, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    f = cv2.morphologyEx(f, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    out = np.full_like(grid, UNKNOWN)
+    out[f > 0] = 255
+    out[w] = 0
+    return out
 
 
 # ── 대시보드로 보내기 ──────────────────────────────────────────────
@@ -150,7 +211,9 @@ def png_rgba(img: np.ndarray) -> bytes:
             + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 
-def map_message(grid: np.ndarray, path, mapper: Mapper, arena: Arena, send_res: float) -> dict | None:
+def map_message(grid: np.ndarray, path, mapper: Mapper, arena: Arena, send_res: float, raw: bool = False) -> dict | None:
+    if not raw:
+        grid = clean_view(grid)
     cell = mapper.map_m / mapper.map_px
     f = max(1, round(send_res / cell))
     rs, cs = crop(grid, pad=2 * f)
@@ -228,7 +291,7 @@ def push(mapper: Mapper, arena: Arena, sender: Sender, args, grid, path, state: 
                              "x": round(x, 3), "y": round(y, 3), "heading_deg": round(hd, 1)})
     if now - state.get("map", 0) >= 1.0:
         state["map"] = now
-        msg = map_message(grid, path, mapper, arena, args.send_res)
+        msg = map_message(grid, path, mapper, arena, args.send_res, getattr(args, "raw_view", False))
         if msg:
             sender.http_send(msg)
 
@@ -265,17 +328,20 @@ def crop(grid: np.ndarray, pad: int = 20) -> tuple[slice, slice]:
 
 
 def save(grid, path, map_px, map_m, out_dir: Path) -> Path:
+    """<stem>.npy = 원본 격자, <stem>.png = 정리한 지도, <stem>_raw.png = 원본 지도."""
     import matplotlib.pyplot as plt
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = out_dir / f"slam_{datetime.now():%Y%m%d_%H%M%S}"
     np.save(f"{stem}.npy", grid)
     rs, cs = crop(grid)
-    fig, ax = plt.subplots(figsize=(7, 7))
-    draw(ax, grid, path, map_px, map_m, f"{map_m:g} m 지도 · 칸 {map_m / map_px * 100:.1f} cm · SLAM {len(path)}회")
-    ax.set_xlim(cs.start or 0, cs.stop or map_px)
-    ax.set_ylim(rs.start or 0, rs.stop or map_px)
-    fig.savefig(f"{stem}.png", dpi=120, bbox_inches="tight")
-    plt.close(fig)
+    for img, suffix, kind in ((clean_view(grid), "", "정리"), (grid, "_raw", "원본")):
+        fig, ax = plt.subplots(figsize=(7, 7))
+        draw(ax, img, path, map_px, map_m,
+             f"{map_m:g} m 지도 ({kind}) · 칸 {map_m / map_px * 100:.1f} cm · SLAM {len(path)}회")
+        ax.set_xlim(cs.start or 0, cs.stop or map_px)
+        ax.set_ylim(rs.start or 0, rs.stop or map_px)
+        fig.savefig(f"{stem}{suffix}.png", dpi=120, bbox_inches="tight")
+        plt.close(fig)
     return Path(f"{stem}.png")
 
 
@@ -301,6 +367,9 @@ def main() -> None:
     ap.add_argument("--map-m", type=float, default=12.0, help="지도 한 변 m (시작점이 가운데)")
     ap.add_argument("--map-px", type=int, default=600, help="지도 한 변 칸 수 (12 m / 600 = 2 cm)")
     ap.add_argument("--max", type=float, default=8.0, help="이보다 먼 점은 버림 m")
+    ap.add_argument("--hole", type=int, default=600, help="벽 두께 mm (BreezySLAM hole_width, 작을수록 또렷 · 300 정도 시도)")
+    ap.add_argument("--quality", type=int, default=50, help="스캔 한 번이 지도를 바꾸는 세기 0~255 (작을수록 잡음 덜 남음)")
+    ap.add_argument("--raw-view", action="store_true", help="정리 안 한 원본 지도를 화면·대시보드에 표시")
     ap.add_argument("--seconds", type=float, help="창 없이 이 시간만 돌리고 저장 (Pi·SSH용)")
     ap.add_argument("--no-window", action="store_true", help="지도 창 없이 (Ctrl+C 로 끝, 끝낼 때 저장)")
     ap.add_argument("--out", default=str(ROOT / "maps"), help="저장 폴더")
@@ -336,7 +405,7 @@ def main() -> None:
     info = lidar.info()
     status, _ = lidar.health()
     print(f"[{port}] model={info['model']} fw={info['firmware']} 상태={status}")
-    mapper = Mapper(lidar, args.map_px, args.map_m, args.max, args.flip)
+    mapper = Mapper(lidar, args.map_px, args.map_m, args.max, args.flip, args.hole, args.quality)
     arena = Arena(args.origin, args.mount, args.map_m)
     sender = Sender(args.hub, args.http_port, args.udp_port, args.token) if args.hub else None
     if args.dog and not sender:
@@ -377,7 +446,7 @@ def main() -> None:
                     push(mapper, arena, sender, args, grid, path, state)
                 if time.time() - last_draw >= 0.3:
                     last_draw = time.time()
-                    draw(ax, grid, path, args.map_px, args.map_m,
+                    draw(ax, grid if args.raw_view else clean_view(grid), path, args.map_px, args.map_m,
                          f"SLAM {mapper.updates}회 · {pose_text(path, args.map_m)}")
                 if want_save:
                     want_save.clear()
