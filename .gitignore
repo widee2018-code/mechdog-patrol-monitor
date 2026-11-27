@@ -39,3 +39,6 @@ maps/
 
 # Demo addresses (IPs change per venue): keep local, share demo.env.example
 demo.env
+
+# tools/snapshot_map.py 가 남기는 이전 기본 화면 백업
+web/sample_map.prev.json
